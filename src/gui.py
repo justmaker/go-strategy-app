@@ -280,10 +280,25 @@ def init_session_state():
         st.session_state.komi = 7.5
     if 'handicap' not in st.session_state:
         st.session_state.handicap = 0
-    if 'analysis_result' not in st.session_state:
-        st.session_state.analysis_result = None
     if 'analyzer' not in st.session_state:
         st.session_state.analyzer = None
+    if 'analysis_result' not in st.session_state:
+        # Auto-analyze on initial load to show Black's first move suggestions
+        st.session_state.analysis_result = None
+        try:
+            if st.session_state.analyzer is None:
+                st.session_state.analyzer = GoAnalyzer(
+                    config_path=str(PROJECT_ROOT / "config.yaml")
+                )
+            result = st.session_state.analyzer.analyze(
+                board_size=st.session_state.get('board_size', 9),
+                moves=None,
+                handicap=st.session_state.get('handicap', 0),
+                komi=st.session_state.get('komi', 7.5),
+            )
+            st.session_state.analysis_result = result
+        except Exception:
+            pass  # Silently fail if KataGo not available
     if 'last_click' not in st.session_state:
         st.session_state.last_click = None
 
@@ -437,29 +452,7 @@ def main():
             st.session_state.analysis_result = None
             st.rerun()
         
-        st.markdown("---")
-        
-        # Analysis button
-        if st.button("Ask KataGo", type="primary", use_container_width=True):
-            with st.spinner("Analyzing..."):
-                try:
-                    if st.session_state.analyzer is None:
-                        st.session_state.analyzer = GoAnalyzer(
-                            config_path=str(PROJECT_ROOT / "config.yaml")
-                        )
-                    
-                    result = st.session_state.analyzer.analyze(
-                        board_size=st.session_state.board_size,
-                        moves=st.session_state.moves if st.session_state.moves else None,
-                        handicap=st.session_state.handicap,
-                        komi=st.session_state.komi,
-                    )
-                    st.session_state.analysis_result = result
-                    st.rerun()
-                    
-                except Exception as e:
-                    st.error(f"Analysis failed: {e}")
-        
+
         st.markdown("---")
         st.header("Cache Stats")
         
@@ -573,7 +566,7 @@ def main():
                     f"Score: {score_sign}{move.score_lead:.1f}"
                 )
         else:
-            st.info("Click 'Ask KataGo' to analyze")
+            st.info("Place a stone to see analysis")
         
         st.markdown("---")
         

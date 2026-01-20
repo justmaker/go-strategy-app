@@ -2,14 +2,33 @@
 Configuration management for Go Strategy Analysis Tool.
 
 Loads configuration from config.yaml and provides typed access.
+Supports both Mac (Darwin) and Linux platforms with automatic detection.
 """
 
 import os
+import platform
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 import yaml
+
+
+def get_platform() -> str:
+    """
+    Detect the current operating system.
+    
+    Returns:
+        'mac' for macOS/Darwin, 'linux' for Linux
+    """
+    system = platform.system().lower()
+    if system == 'darwin':
+        return 'mac'
+    elif system == 'linux':
+        return 'linux'
+    else:
+        # Default to linux for other Unix-like systems
+        return 'linux'
 
 
 @dataclass
@@ -101,10 +120,38 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
     if not katago_data:
         raise ValueError("Missing 'katago' section in config")
     
+    # Detect platform and get platform-specific config
+    current_platform = get_platform()
+    project_root = Path(__file__).parent.parent
+    
+    # Check for multi-platform config (has 'mac' or 'linux' subsections)
+    if 'mac' in katago_data or 'linux' in katago_data:
+        platform_data = katago_data.get(current_platform, {})
+        if not platform_data:
+            raise ValueError(f"No config found for platform '{current_platform}'")
+        
+        katago_path = platform_data.get("katago_path", "")
+        model_path = platform_data.get("model_path", "")
+        cfg_path = platform_data.get("config_path", "")
+    else:
+        # Legacy single-platform config (backward compatibility)
+        katago_path = katago_data.get("katago_path", "")
+        model_path = katago_data.get("model_path", "")
+        cfg_path = katago_data.get("config_path", "")
+    
+    # Resolve relative paths to absolute paths
+    def resolve_path(p: str) -> str:
+        if not p:
+            return p
+        path = Path(p)
+        if not path.is_absolute():
+            path = project_root / path
+        return str(path.resolve())
+    
     katago_config = KataGoConfig(
-        katago_path=katago_data.get("katago_path", ""),
-        model_path=katago_data.get("model_path", ""),
-        config_path=katago_data.get("config_path", ""),
+        katago_path=resolve_path(katago_path),
+        model_path=resolve_path(model_path),
+        config_path=resolve_path(cfg_path),
     )
     
     # Parse analysis config (optional, has defaults)
