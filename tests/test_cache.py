@@ -193,7 +193,7 @@ class TestAnalysisCache:
             model_name="kata1-b10",
         )
         
-        result = cache.get("hash123")
+        result = cache.get("hash123", komi=7.5)
         
         assert result is not None
         assert result.board_hash == "hash123"
@@ -206,7 +206,7 @@ class TestAnalysisCache:
     
     def test_get_missing(self, cache):
         """Test getting non-existent entry."""
-        result = cache.get("nonexistent")
+        result = cache.get("nonexistent", komi=7.5)
         assert result is None
     
     def test_count(self, cache, sample_moves):
@@ -308,11 +308,11 @@ class TestAnalysisCache:
         assert cache.count() == 2
         
         # Verify checking for specific visits gets the right one
-        res_100 = cache.get("hash123", required_visits=100)
+        res_100 = cache.get("hash123", komi=7.5, required_visits=100)
         assert res_100.engine_visits == 100
         assert res_100.model_name == "old-model"
         
-        res_200 = cache.get("hash123", required_visits=200)
+        res_200 = cache.get("hash123", komi=7.5, required_visits=200)
         assert res_200.engine_visits == 200
         assert res_200.model_name == "new-model"
         
@@ -330,7 +330,7 @@ class TestAnalysisCache:
         )
 
         assert cache.count() == 2
-        res_updated = cache.get("hash123", required_visits=200)
+        res_updated = cache.get("hash123", komi=7.5, required_visits=200)
         assert res_updated.model_name == "newest-model"
     
     def test_stats(self, cache, sample_moves):
@@ -397,7 +397,7 @@ class TestCachePersistence:
         # Create new instance
         cache2 = AnalysisCache(db_path=temp_db)
         
-        result = cache2.get("persistent_hash")
+        result = cache2.get("persistent_hash", komi=7.5)
         
         assert result.board_hash == "persistent_hash"
         assert len(result.top_moves) == 3
@@ -432,7 +432,7 @@ class TestCacheStats:
             model_name="test",
         )
         
-        counts = cache.get_visit_counts(19)
+        counts = cache.get_visit_counts(19, komi=7.5)
         
         # Verify counts for size 19
         assert len(counts) == 3
@@ -441,8 +441,97 @@ class TestCacheStats:
         assert counts[500] == 3
         
         # Verify size 9
-        counts_9 = cache.get_visit_counts(9)
+        counts_9 = cache.get_visit_counts(9, komi=7.5)
         assert counts_9[100] == 1
+
+
+class TestCacheMerge:
+    """Tests for database merging functionality."""
+    
+    def test_merge_db(self, cache, sample_moves, temp_db):
+        """Test merging another database into the main cache."""
+        import sqlite3
+        
+        # 1. Create a "source" database with some data
+        # We need a separate file for the source DB
+        fd, source_path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        
+        try:
+            source_cache = AnalysisCache(db_path=source_path)
+            
+            # Entry A: Unique to Source (New Hash)
+            source_cache.put(
+                board_hash="hash_source_only",
+                moves_sequence="B[Q16]",
+                board_size=19,
+                komi=7.5,
+                top_moves=sample_moves,
+                engine_visits=100,
+                model_name="source_model"
+            )
+            
+            # Entry B: Conflict (Same Hash, Same Visits) -> Should Merge
+            # Modify sample moves slightly for source
+            source_moves_b = [
+                MoveCandidate(move="Q3", winrate=0.60, score_lead=1.0, visits=45), # Higher than sample (0.523)
+                MoveCandidate(move="K10", winrate=0.40, score_lead=-0.5, visits=10) # New move
+            ]
+            source_cache.put(
+                board_hash="hash_conflict",
+                moves_sequence="",
+                board_size=19,
+                komi=7.5,
+                top_moves=source_moves_b,
+                engine_visits=100,
+                model_name="source_model"
+            )
+            
+            # 2. Setup Local Cache
+            # Entry B: Local version
+            cache.put(
+                board_hash="hash_conflict",
+                moves_sequence="",
+                board_size=19,
+                komi=7.5,
+                top_moves=sample_moves, # Has Q3 (0.523), R4, C16
+                engine_visits=100,
+                model_name="local_model"
+            )
+            
+            # 3. Perform Merge
+            stats = cache.merge_database(source_path)
+            
+            assert stats['inserted'] == 1
+            assert stats['merged'] == 1
+            assert stats['errors'] == 0
+            
+            # 4. Verify Results
+            
+            # Check Inserted (hash_source_only)
+            res_new = cache.get("hash_source_only", komi=7.5)
+            assert res_new is not None
+            assert res_new.model_name == "source_model"
+            
+            # Check Merged (hash_conflict)
+            res_merged = cache.get("hash_conflict", komi=7.5)
+            assert res_merged is not None
+            assert "merged" in res_merged.model_name
+            
+            # Verify Averaging Logic for "Q3"
+            # Local: 0.523, Source: 0.60 -> Avg: 0.5615
+            q3_move = next(m for m in res_merged.top_moves if m.move == "Q3")
+            assert 0.56 < q3_move.winrate < 0.562
+            
+            # Verify Union Logic (R4 from Local, K10 from Source should both exist)
+            all_moves = {m.move for m in res_merged.top_moves}
+            assert "Q3" in all_moves
+            assert "R4" in all_moves # From Local
+            assert "K10" in all_moves # From Source
+            
+        finally:
+            if os.path.exists(source_path):
+                os.unlink(source_path)
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

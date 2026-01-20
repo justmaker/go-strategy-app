@@ -462,7 +462,10 @@ def main():
         
         # Show cached data availability
         if st.session_state.analyzer:
-            visit_stats = st.session_state.analyzer.get_visit_stats(st.session_state.board_size)
+            visit_stats = st.session_state.analyzer.get_visit_stats(
+                st.session_state.board_size,
+                st.session_state.komi
+            )
             if visit_stats:
                 st.caption("Cached Data Availability:")
                 # Create a small clean table/text
@@ -483,6 +486,48 @@ def main():
         if st.session_state.analysis_result and st.session_state.analysis_result.engine_visits != st.session_state.visits:
             st.session_state.analysis_result = None
             st.rerun()
+        
+        if st.session_state.analyzer:
+             with st.expander("Data Management"):
+                st.caption("Manage cached analysis data.")
+                
+                # 1. Download Current DB
+                from src.config import get_db_path
+                db_path = get_db_path(st.session_state.analyzer.config)
+                if db_path.exists():
+                     with open(db_path, "rb") as f:
+                        st.download_button(
+                            label="Download Database",
+                            data=f,
+                            file_name="analysis.db",
+                            mime="application/x-sqlite3"
+                        )
+                
+                # 2. Upload and Merge
+                uploaded_file = st.file_uploader("Merge Database", type=["db", "sqlite", "sql"])
+                if uploaded_file is not None:
+                     if st.button("Merge Uploaded Data"):
+                        with st.spinner("Merging data..."):
+                            import tempfile
+                            import os
+                            
+                            # Save uploaded file to temp
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp_file:
+                                tmp_file.write(uploaded_file.getvalue())
+                                tmp_path = tmp_file.name
+                            
+                            try:
+                                # Perform merge
+                                stats = st.session_state.analyzer.cache.merge_database(tmp_path)
+                                st.success(f"Merge Complete! Inserted: {stats['inserted']}, Merged: {stats['merged']}, Errors: {stats['errors']}")
+                                # Refresh stats display
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Merge failed: {e}")
+                            finally:
+                                # Cleanup
+                                if os.path.exists(tmp_path):
+                                    os.unlink(tmp_path)
         
         st.markdown("---")
         

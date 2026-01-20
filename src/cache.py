@@ -116,7 +116,7 @@ CREATE INDEX IF NOT EXISTS idx_board_hash ON analysis_cache(board_hash);
 """
 
 CREATE_UNIQUE_INDEX_SQL = """
-CREATE UNIQUE INDEX IF NOT EXISTS idx_board_hash_visits ON analysis_cache(board_hash, engine_visits);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_board_hash_visits_komi ON analysis_cache(board_hash, engine_visits, komi);
 """
 
 
@@ -250,6 +250,32 @@ class AnalysisCache:
                     except Exception as e:
                         print(f"Warning: Failed to seed/migrate database: {e}")
             
+            # Check for migration to include Komi in unique index
+            needs_komi_migration = False
+            try:
+                # Check if current unique index includes komi
+                cursor = conn.execute("PRAGMA index_list('analysis_cache')")
+                for row in cursor:
+                    if row['unique']:
+                        idx_name = row['name']
+                        cols = conn.execute(f"PRAGMA index_info('{idx_name}')").fetchall()
+                        col_names = [c['name'] for c in cols]
+                        if 'board_hash' in col_names and 'engine_visits' in col_names:
+                             if 'komi' not in col_names:
+                                 needs_komi_migration = True
+                                 break
+            except Exception:
+                pass
+            
+            if needs_komi_migration:
+                print("Migrating database to support Komi in unique index...")
+                try:
+                    conn.execute("DROP INDEX IF EXISTS idx_board_hash_visits")
+                    conn.execute(CREATE_UNIQUE_INDEX_SQL)
+                    print("Index migration successful.")
+                except Exception as e:
+                    print(f"Index migration failed: {e}")
+
             conn.commit()
     
     def _get_connection(self) -> sqlite3.Connection:
@@ -258,12 +284,13 @@ class AnalysisCache:
         conn.row_factory = sqlite3.Row
         return conn
     
-    def get(self, board_hash: str, required_visits: Optional[int] = None) -> Optional[AnalysisResult]:
+    def get(self, board_hash: str, komi: float, required_visits: Optional[int] = None) -> Optional[AnalysisResult]:
         """
         Retrieve cached analysis result.
         
         Args:
             board_hash: Zobrist hash of the board position
+            komi: Komi value to match
             required_visits: If specified, match this exact visit count.
                            If None, return the result with the highest visit count.
             
@@ -275,20 +302,20 @@ class AnalysisCache:
                 SELECT board_hash, moves_sequence, board_size, komi,
                        analysis_result, engine_visits, model_name, created_at
                 FROM analysis_cache
-                WHERE board_hash = ? AND engine_visits = ?
+                WHERE board_hash = ? AND komi = ? AND engine_visits = ?
             """
-             params = (board_hash, required_visits)
+             params = (board_hash, komi, required_visits)
         else:
             # Get the one with highest visits
             query = """
                 SELECT board_hash, moves_sequence, board_size, komi,
                        analysis_result, engine_visits, model_name, created_at
                 FROM analysis_cache
-                WHERE board_hash = ?
+                WHERE board_hash = ? AND komi = ?
                 ORDER BY engine_visits DESC
                 LIMIT 1
             """
-            params = (board_hash,)
+            params = (board_hash, komi)
         
         with self._get_connection() as conn:
             cursor = conn.execute(query, params)
@@ -445,12 +472,13 @@ class AnalysisCache:
             'db_path': str(self.db_path),
         }
     
-    def get_visit_counts(self, board_size: int) -> Dict[int, int]:
+    def get_visit_counts(self, board_size: int, komi: float) -> Dict[int, int]:
         """
-        Get count of entries for each visit count, for a specific board size.
+        Get count of entries for each visit count, for a specific board size and komi.
         
         Args:
             board_size: The board size to filter by
+            komi: The komi value to filter by
             
         Returns:
             Dictionary mapping counts {visit_count: number_of_entries}
@@ -458,18 +486,116 @@ class AnalysisCache:
         query = """
             SELECT engine_visits, COUNT(*) as cnt
             FROM analysis_cache
-            WHERE board_size = ?
+            WHERE board_size = ? AND komi = ?
             GROUP BY engine_visits
             ORDER BY cnt DESC
         """
         
         counts = {}
         with self._get_connection() as conn:
-            cursor = conn.execute(query, (board_size,))
+            cursor = conn.execute(query, (board_size, komi))
             for row in cursor:
                 counts[row['engine_visits']] = row['cnt']
                 
         return counts
+
+    def merge_database(self, source_db_path: str) -> Dict[str, int]:
+        """
+        Merge another SQLite database into this one.
+        Logic:
+          - If (hash, visits) matches:
+             - Parse stats from both.
+             - Average winrate and score_lead for matching moves.
+             - Update local entry.
+          - If not matches:
+             - Insert new entry.
+             
+        Args:
+            source_db_path: Path to the source database file.
+            
+        Returns:
+            Dict with stats: {'inserted': int, 'merged': int, 'errors': int}
+        """
+        stats = {'inserted': 0, 'merged': 0, 'errors': 0}
+        
+        try:
+            # Connect to source database
+            with sqlite3.connect(source_db_path) as source_conn:
+                source_conn.row_factory = sqlite3.Row
+                
+                # Iterate over all entries in source
+                query = "SELECT * FROM analysis_cache"
+                cursor = source_conn.execute(query)
+                
+                for row in cursor:
+                    try:
+                        # Check if exists in local DB
+                        existing = self.get(row['board_hash'], komi=row['komi'], required_visits=row['engine_visits'])
+                        
+                        source_moves = json.loads(row['analysis_result'])
+                        top_moves = [MoveCandidate.from_dict(m) for m in source_moves]
+                        
+                        if existing:
+                            # Merge logic: Average stats for matching moves
+                            merged_moves = []
+                            existing_map = {m.move: m for m in existing.top_moves}
+                            
+                            for new_move in top_moves:
+                                if new_move.move in existing_map:
+                                    # Average
+                                    old_move = existing_map[new_move.move]
+                                    avg_mv = MoveCandidate(
+                                        move=new_move.move,
+                                        winrate=(old_move.winrate + new_move.winrate) / 2,
+                                        score_lead=(old_move.score_lead + new_move.score_lead) / 2,
+                                        visits=new_move.visits # Visits are same for the entry, so keep same
+                                    )
+                                    merged_moves.append(avg_mv)
+                                else:
+                                    # Keep new unique moves from source? 
+                                    # Or strict average means intersection?
+                                    # Usually we want union.
+                                    merged_moves.append(new_move)
+                            
+                            # Add back moves from existing that weren't in source
+                            source_map_keys = {m.move for m in top_moves}
+                            for old_move in existing.top_moves:
+                                if old_move.move not in source_map_keys:
+                                    merged_moves.append(old_move)
+                                    
+                            # Update local
+                            self.put(
+                                board_hash=row['board_hash'],
+                                moves_sequence=row['moves_sequence'],
+                                board_size=row['board_size'],
+                                komi=row['komi'],
+                                top_moves=merged_moves,
+                                engine_visits=row['engine_visits'],
+                                model_name=f"{row['model_name']}+merged"
+                            )
+                            stats['merged'] += 1
+                        else:
+                            # Insert new
+                            self.put(
+                                board_hash=row['board_hash'],
+                                moves_sequence=row['moves_sequence'],
+                                board_size=row['board_size'],
+                                komi=row['komi'],
+                                top_moves=top_moves,
+                                engine_visits=row['engine_visits'],
+                                model_name=row['model_name']
+                            )
+                            stats['inserted'] += 1
+                            
+                    except Exception as e:
+                        print(f"Error merging row: {e}")
+                        stats['errors'] += 1
+                        
+        except Exception as e:
+            print(f"Failed to open source DB: {e}")
+            stats['errors'] += 1
+            
+        return stats
 
     def __repr__(self) -> str:
         return f"AnalysisCache(db_path={self.db_path}, entries={self.count()})"

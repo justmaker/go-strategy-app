@@ -132,7 +132,7 @@ class GoAnalyzer:
         
         # Check cache (unless force_refresh)
         if not force_refresh:
-            cached = self.cache.get(board_hash, required_visits=current_visits)
+            cached = self.cache.get(board_hash, komi=board.komi, required_visits=current_visits)
             if cached is not None:
                 return cached
         
@@ -201,7 +201,7 @@ class GoAnalyzer:
         
         # Check cache
         if not force_refresh:
-            cached = self.cache.get(board_hash, required_visits=current_visits)
+            cached = self.cache.get(board_hash, komi=board.komi, required_visits=current_visits)
             if cached is not None:
                 return cached
         
@@ -246,9 +246,9 @@ class GoAnalyzer:
         """Get statistics about the analysis cache."""
         return self.cache.get_stats()
     
-    def get_visit_stats(self, board_size: int) -> dict:
+    def get_visit_stats(self, board_size: int, komi: float) -> dict:
         """Get visit count distribution for a board size."""
-        return self.cache.get_visit_counts(board_size)
+        return self.cache.get_visit_counts(board_size, komi)
     
     def clear_cache(self) -> int:
         """
