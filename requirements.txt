@@ -13,3 +13,4 @@ pytest>=7.0
 # - json (serialization)
 # - threading (thread safety)
 # - argparse (CLI)
+tqdm>=4.66.0

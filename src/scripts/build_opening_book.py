@@ -1,128 +1,106 @@
+#!/usr/bin/env python3
+"""
+Script to pre-calculate the opening book for a 9x9 Go board up to depth 10.
+Uses Breadth-First Search (BFS) with pruning.
+"""
 
 import sys
-from collections import deque
-from pathlib import Path
+import collections
+from typing import List, Tuple, Set
 from tqdm import tqdm
 
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+# Add src to path if needed (assuming running from project root)
+import os
+sys.path.append(os.getcwd())
 
 from src.analyzer import GoAnalyzer
-from src.config import load_config
+from src.board import create_board
 
-def build_opening_book():
-    """
-    Generate an opening book for 9x9 Go.
+def main():
+    print("Starting 9x9 Opening Book Generation...")
     
-    Configuration:
-    - Board Size: 9x9
-    - Depth: 10 plies
-    - Branching: Top 3 moves
-    - Pruning: Drop > 10% winrate
-    """
-    print("=" * 50)
-    print("Starting 9x9 Opening Book Generator")
-    print("=" * 50)
-    
-    # internal constants
-    BOARD_SIZE = 9
-    MAX_DEPTH = 10
-    TOP_N = 3
-    PRUNE_THRESHOLD = 0.10  # 10% winrate drop
-    
-    # Load config and initialize analyzer
-    try:
-        config = load_config()
-        analyzer = GoAnalyzer(config=config)
-        analyzer.start()
-    except Exception as e:
-        print(f"Error initializing: {e}")
-        return
-
-    # Queue for BFS: (moves_list, depth)
-    # moves_list example: ["B C5", "W G5"]
-    queue = deque([([], 0)])
-    
-    # Track items to avoid cycles and transpositions
-    processed_hashes = set()
-    
-    print(f"Settings: Size={BOARD_SIZE}, Depth={MAX_DEPTH}, Branching={TOP_N}")
-    print("Press Ctrl+C to stop early (results are saved to DB automatically).")
-    
-    pbar = tqdm(desc="Positions Analyzed", unit="pos")
-    
-    try:
-        while queue:
-            current_moves, depth = queue.popleft()
-            
-            # Analyze position
-            # This automatically caches the result in SQLite
-            result = analyzer.analyze(
-                board_size=BOARD_SIZE,
-                moves=current_moves,
-                komi=7.5, # Standard komi
-                force_refresh=False
-            )
-            
-            # Check for transpositions
-            if result.board_hash in processed_hashes:
-                # We've already expanded this position from a different (likely shorter) path
-                continue
-            
-            processed_hashes.add(result.board_hash)
-            pbar.update(1)
-            
-            # Stop expansion if we reached max depth
-            if depth >= MAX_DEPTH:
-                continue
+    # Initialize Analyzer
+    # GoAnalyzer handles caching automatically.
+    # It will use the configuration from config.yaml (default visits, etc.)
+    with GoAnalyzer() as analyzer:
+        
+        # BFS Queue: (list_of_moves_gtp_strings, depth)
+        # Start with empty board
+        queue = collections.deque()
+        queue.append(([], 0))
+        
+        # Keep track of visited positions to handle transpositions
+        visited_hashes: Set[str] = set()
+        
+        # Progress bar
+        # Since we don't know total nodes, we just count up
+        pbar = tqdm(desc="Nodes Processed", unit="node")
+        
+        nodes_count = 0
+        
+        try:
+            while queue:
+                moves, depth = queue.popleft()
                 
-            # No moves available (game over or error)
-            if not result.top_moves:
-                continue
-            
-            # Determine best winrate for pruning
-            best_winrate = result.top_moves[0].winrate
-            
-            # Determine next player color
-            # If empty, B. If last was B, W. If last was W, B.
-            next_player = "B"
-            if current_moves:
-                last_color = current_moves[-1].split()[0]
-                next_player = "W" if last_color == "B" else "B"
-            
-            # Branching logic
-            candidates_count = 0
-            for move in result.top_moves[:TOP_N]:
-                if move.move.upper() == "PASS" or move.move.upper() == "RESIGN":
+                # Check depth limit
+                if depth >= 10:
                     continue
                 
-                # Pruning: Skip if winrate drops too much
-                # Note: Winrate is always from perspective of player-to-move in our abstraction
-                if (best_winrate - move.winrate) > PRUNE_THRESHOLD:
+                # Create board state to get hash and next player
+                # (We do this before analysis to check visited_hashes)
+                board = create_board(size=9, moves=moves)
+                board_hash = board.compute_hash()
+                
+                if board_hash in visited_hashes:
+                    continue
+                visited_hashes.add(board_hash)
+                
+                # Perform Analysis
+                # logic: analyze() checks cache, if miss runs KataGo, then saves to cache.
+                try:
+                    result = analyzer.analyze(
+                        board_size=9,
+                        moves=moves,
+                        # visits=None takes from config (likely enough for opening book, e.g. 500-1000)
+                    )
+                except Exception as e:
+                    print(f"\nError analyzing position: {e}")
                     continue
                 
-                # Create new move sequence
-                new_move_str = f"{next_player} {move.move}"
-                new_sequence = current_moves + [new_move_str]
+                nodes_count += 1
+                pbar.update(1)
                 
-                # Add to queue
-                queue.append((new_sequence, depth + 1))
-                candidates_count += 1
-            
-            # Update status
-            pbar.set_postfix({"Depth": depth, "Q": len(queue)})
-            
-    except KeyboardInterrupt:
-        print("\n\nStopping generator...")
-    except Exception as e:
-        print(f"\n\nError: {e}")
-    finally:
-        analyzer.shutdown()
-        pbar.close()
-        print("\nGenerator finished.")
-        print(f"Total unique positions processed: {len(processed_hashes)}")
-        print("Results saved to database.")
+                # Branching Logic
+                candidate_moves = result.top_moves
+                if not candidate_moves:
+                    continue
+                
+                # 1. Pick Top 3 moves
+                top_3 = candidate_moves[:3]
+                
+                # 2. Pruning: Only follow if winrate is within 10% of best move
+                best_winrate = top_3[0].winrate
+                
+                next_player = board.next_player
+                
+                for move_cand in top_3:
+                    # Check winrate threshold (winrate is 0.0-1.0)
+                    if move_cand.winrate < (best_winrate - 0.10):
+                        continue
+                        
+                    # Construct new path
+                    new_move_str = f"{next_player} {move_cand.move}"
+                    new_moves_list = list(moves)
+                    new_moves_list.append(new_move_str)
+                    
+                    queue.append((new_moves_list, depth + 1))
+                    
+        except KeyboardInterrupt:
+            print("\nProcess interrupted by user.")
+        finally:
+            pbar.close()
+            print(f"\nCompleted. Processed {nodes_count} unique positions.")
+            print(f"Total unique positions in cache: {analyzer.cache.count()}")
 
 if __name__ == "__main__":
-    build_opening_book()
+    main()
