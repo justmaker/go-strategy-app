@@ -19,7 +19,8 @@ katago/katago
 katago/*.bin.gz
 
 # Database
-data/*.db
+*.db
+!src/assets/*.sql
 
 # Logs
 *.log

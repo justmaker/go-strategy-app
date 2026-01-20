@@ -279,7 +279,8 @@ class TestAnalysisCache:
         assert cache.count() == 0
     
     def test_replace_existing(self, cache, sample_moves):
-        """Test replacing existing entry."""
+        """Test replacing existing entry behavior with multi-visit support."""
+        # 1. Insert first entry with 100 visits
         cache.put(
             board_hash="hash123",
             moves_sequence="old",
@@ -289,8 +290,9 @@ class TestAnalysisCache:
             engine_visits=100,
             model_name="old-model",
         )
-        
-        # Replace with new data
+    
+        # 2. Insert SAME hash but DIFFERENT visits (200)
+        # Should create a NEW entry (total 2)
         new_moves = [MoveCandidate(move="E5", winrate=0.6, score_lead=1.0, visits=200)]
         cache.put(
             board_hash="hash123",
@@ -302,14 +304,34 @@ class TestAnalysisCache:
             model_name="new-model",
         )
         
-        assert cache.count() == 1
+        # Expect 2 distinct entries now
+        assert cache.count() == 2
         
-        result = cache.get("hash123")
-        assert result.moves_sequence == "new"
-        assert result.engine_visits == 200
-        assert result.model_name == "new-model"
-        assert len(result.top_moves) == 1
-        assert result.top_moves[0].move == "E5"
+        # Verify checking for specific visits gets the right one
+        res_100 = cache.get("hash123", required_visits=100)
+        assert res_100.engine_visits == 100
+        assert res_100.model_name == "old-model"
+        
+        res_200 = cache.get("hash123", required_visits=200)
+        assert res_200.engine_visits == 200
+        assert res_200.model_name == "new-model"
+        
+        # 3. Insert SAME hash AND SAME visits (200)
+        # Should REPLACE the existing 200-visit entry (total still 2)
+        newer_moves = [MoveCandidate(move="F5", winrate=0.7, score_lead=2.0, visits=200)]
+        cache.put(
+            board_hash="hash123",
+            moves_sequence="newest",
+            board_size=19,
+            komi=7.5,
+            top_moves=newer_moves,
+            engine_visits=200,
+            model_name="newest-model",
+        )
+
+        assert cache.count() == 2
+        res_updated = cache.get("hash123", required_visits=200)
+        assert res_updated.model_name == "newest-model"
     
     def test_stats(self, cache, sample_moves):
         """Test get_stats method."""
@@ -377,10 +399,50 @@ class TestCachePersistence:
         
         result = cache2.get("persistent_hash")
         
-        assert result is not None
         assert result.board_hash == "persistent_hash"
         assert len(result.top_moves) == 3
 
+
+class TestCacheStats:
+    """Tests for cache statistics aggregation."""
+    
+    def test_visit_counts(self, cache, sample_moves):
+        """Test get_visit_counts aggregation."""
+        # Add entries with different visit counts for Board Size 19
+        visits_data = [100, 100, 200, 500, 500, 500]
+        for i, v in enumerate(visits_data):
+            cache.put(
+                board_hash=f"hash_19_{i}",
+                moves_sequence="",
+                board_size=19,
+                komi=7.5,
+                top_moves=sample_moves,
+                engine_visits=v,
+                model_name="test",
+            )
+            
+        # Add entries for Board Size 9 (should be ignored)
+        cache.put(
+            board_hash="hash_9_1",
+            moves_sequence="",
+            board_size=9,
+            komi=7.5,
+            top_moves=sample_moves,
+            engine_visits=100,
+            model_name="test",
+        )
+        
+        counts = cache.get_visit_counts(19)
+        
+        # Verify counts for size 19
+        assert len(counts) == 3
+        assert counts[100] == 2
+        assert counts[200] == 1
+        assert counts[500] == 3
+        
+        # Verify size 9
+        counts_9 = cache.get_visit_counts(9)
+        assert counts_9[100] == 1
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

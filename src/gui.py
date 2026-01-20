@@ -227,10 +227,10 @@ def draw_board_pil(
             draw.ellipse([px - mr, py - mr, px + mr, py + mr], 
                          outline=marker_color, width=2)
     
-    # Draw suggested moves with info labels directly on the point
-    if suggested_moves:
-        # Blue (best), Green (2nd), Yellow (3rd)
-        colors = [(100, 150, 255), (100, 220, 100), (255, 220, 80)]
+    # Draw suggested moves with score loss coloring
+    if suggested_moves and len(suggested_moves) > 0:
+        # Determine best score (from top move)
+        best_score = suggested_moves[0].score_lead
         
         # Load fonts for info text
         try:
@@ -238,19 +238,43 @@ def draw_board_pil(
         except:
             info_font = small_font
         
-        for i, move in enumerate(suggested_moves[:3]):
+        # Draw top moves (up to 5, though usually we only show top few on board to avoid clutter)
+        # User requested coloring based on loss. 
+        # heavily restrict on-board visualization to top 3 or those with low loss to avoid clutter?
+        # The prompt implies we should show the candidates "based on Score Loss". 
+        # Let's show top 5 but filter by loss? Or just top 5.
+        
+        for i, move in enumerate(suggested_moves[:5]):
             if move.move.upper() == "PASS":
                 continue
             col, row = gtp_to_coords(move.move, board_size)
             if col < 0 or (col, row) in occupied:
                 continue
             
-            px, py = board_to_pixel_coords(col, row)
-            r = STONE_RADIUS + 2  # Slightly larger circle to fit text
+            # Calculate score loss
+            loss = best_score - move.score_lead
             
-            # Draw colored circle (larger to fit text)
+            # Determine color
+            # Blue: Best Move (Rank 1 - i==0)
+            # Green: Loss < 1.0
+            # Yellow: Loss < 3.0
+            # Else: Standard (maybe Grey or disable on board?)
+            
+            if i == 0:
+                fill_color = (100, 150, 255) # Blue
+            elif loss < 1.0:
+                fill_color = (100, 220, 100) # Green
+            elif loss < 3.0:
+                fill_color = (255, 220, 80)  # Yellow
+            else:
+                continue # Don't draw moves with high loss on the board to keep it clean
+            
+            px, py = board_to_pixel_coords(col, row)
+            r = STONE_RADIUS + 2
+            
+            # Draw colored circle
             draw.ellipse([px - r, py - r, px + r, py + r], 
-                         fill=colors[i], outline='black', width=1)
+                         fill=fill_color, outline='black', width=1)
             
             # Format winrate and score
             winrate_pct = move.winrate * 100
@@ -259,8 +283,8 @@ def draw_board_pil(
             winrate_text = f"{winrate_pct:.1f}"
             score_text = f"{score_sign}{move.score_lead:.1f}"
             
-            # Draw winrate on top, score on bottom (centered on the point)
-            draw.text((px, py - 5), winrate_text, fill='black', font=info_font, anchor='mm')
+            # Draw text
+            draw.text((px, py - 6), winrate_text, fill='black', font=info_font, anchor='mm')
             draw.text((px, py + 6), score_text, fill='black', font=info_font, anchor='mm')
     
     return img
@@ -295,10 +319,13 @@ def init_session_state():
                 moves=None,
                 handicap=st.session_state.get('handicap', 0),
                 komi=st.session_state.get('komi', 7.5),
+                visits=st.session_state.get('visits', 500),
             )
             st.session_state.analysis_result = result
         except Exception:
             pass  # Silently fail if KataGo not available
+    if 'visits' not in st.session_state:
+        st.session_state.visits = 500 if st.session_state.board_size == 9 else 150 # Approximate default
     if 'last_click' not in st.session_state:
         st.session_state.last_click = None
 
@@ -377,6 +404,31 @@ def main():
             st.session_state.board_size = new_board_size
             st.session_state.moves = []
             st.session_state.analysis_result = None
+            # Update default visits based on board size
+            if st.session_state.analyzer:
+                 st.session_state.visits = st.session_state.analyzer.config.get_visits(new_board_size)
+            
+            # Auto-analyze empty board to show first move suggestions
+            try:
+                if st.session_state.analyzer is None:
+                    st.session_state.analyzer = GoAnalyzer(
+                        config_path=str(PROJECT_ROOT / "config.yaml")
+                    )
+                
+                # Ensure we use the freshly updated visits count
+                current_visits = st.session_state.get('visits', 500)
+                
+                result = st.session_state.analyzer.analyze(
+                    board_size=st.session_state.board_size,
+                    moves=None,
+                    handicap=st.session_state.get('handicap', 0),
+                    komi=st.session_state.get('komi', 7.5),
+                    visits=current_visits,
+                )
+                st.session_state.analysis_result = result
+            except Exception:
+                st.session_state.analysis_result = None
+            
             st.rerun()
         
         # Komi
@@ -386,6 +438,7 @@ def main():
             max_value=20.0,
             value=st.session_state.komi,
             step=0.5,
+            format="%.1f",
         )
         
         # Handicap
@@ -397,6 +450,37 @@ def main():
         if new_handicap != st.session_state.handicap:
             st.session_state.handicap = new_handicap
             st.session_state.moves = []
+            st.session_state.analysis_result = None
+            st.rerun()
+        
+        # Visits Control
+        st.session_state.visits = st.select_slider(
+            "Visits (Analysis Depth)",
+            options=range(50, 5050, 50),
+            value=st.session_state.visits
+        )
+        
+        # Show cached data availability
+        if st.session_state.analyzer:
+            visit_stats = st.session_state.analyzer.get_visit_stats(st.session_state.board_size)
+            if visit_stats:
+                st.caption("Cached Data Availability:")
+                # Create a small clean table/text
+                # Sort by visit count for readability, or by count to show popularity
+                # User asked to see so they can choose.
+                
+                # Check if current selection has data
+                curr_count = visit_stats.get(st.session_state.visits, 0)
+                st.write(f"Current ({st.session_state.visits}): **{curr_count}** entries")
+                
+                with st.expander("See all cached depths"):
+                    # Sort by visit count
+                    sorted_stats = sorted(visit_stats.items())
+                    for v, c in sorted_stats:
+                        st.text(f"{v} visits: {c} entries")
+
+        # Re-analyze if visits changed (handled by rerun/select_slider interactivity)
+        if st.session_state.analysis_result and st.session_state.analysis_result.engine_visits != st.session_state.visits:
             st.session_state.analysis_result = None
             st.rerun()
         
@@ -418,6 +502,7 @@ def main():
                         moves=None,
                         handicap=st.session_state.handicap,
                         komi=st.session_state.komi,
+                        visits=st.session_state.visits,
                     )
                     st.session_state.analysis_result = result
                 except:
@@ -439,6 +524,7 @@ def main():
                             moves=st.session_state.moves if st.session_state.moves else None,
                             handicap=st.session_state.handicap,
                             komi=st.session_state.komi,
+                            visits=st.session_state.visits,
                         )
                         st.session_state.analysis_result = result
                     except:
@@ -526,6 +612,7 @@ def main():
                         moves=st.session_state.moves,
                         handicap=st.session_state.handicap,
                         komi=st.session_state.komi,
+                        visits=st.session_state.visits,
                     )
                     st.session_state.analysis_result = result
                 except Exception as e:
@@ -555,15 +642,34 @@ def main():
             st.caption("Win% = player's chance after move | Score = point lead")
             st.markdown("**Top Moves:**")
             
-            labels = ['A', 'B', 'C', 'D', 'E']
-            for i, move in enumerate(result.top_moves[:5]):
+            best_score = result.top_moves[0].score_lead if result.top_moves else 0
+            
+            for i, move in enumerate(result.top_moves[:10]): # Show more moves in list
                 winrate_pct = move.winrate * 100
                 score_sign = "+" if move.score_lead >= 0 else ""
+                loss = best_score - move.score_lead
                 
+                # Determine color indicator
+                if i == 0:
+                    indicator = "🔵" # Blue for Best
+                    color_style = "color: #4da6ff; font-weight: bold;"
+                elif loss < 1.0:
+                    indicator = "🟢" # Green
+                    color_style = "color: #4dce4d;"
+                elif loss < 3.0:
+                    indicator = "🟡" # Yellow
+                    color_style = "color: #e6e600;"
+                else:
+                    indicator = "⚪"
+                    color_style = "color: #cccccc;"
+                
+                # Format with custom styling
                 st.markdown(
-                    f"**{labels[i]}. {move.move}** - "
-                    f"Win: {winrate_pct:.1f}% | "
-                    f"Score: {score_sign}{move.score_lead:.1f}"
+                    f"<span style='{color_style}'>{indicator} **{i+1}. {move.move}**</span> "
+                    f"| Win: `{winrate_pct:5.1f}%` "
+                    f"| Score: `{score_sign}{move.score_lead:.1f}` "
+                    f"| Loss: `{loss:.1f}`",
+                    unsafe_allow_html=True
                 )
         else:
             st.info("Place a stone to see analysis")

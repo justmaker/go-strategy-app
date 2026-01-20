@@ -1,4 +1,4 @@
-# Go Strategy Analysis Tool
+g# Go Strategy Analysis Tool
 
 A web-based Go (Weiqi/Baduk) strategy analyzer powered by KataGo.
 
@@ -6,18 +6,19 @@ A web-based Go (Weiqi/Baduk) strategy analyzer powered by KataGo.
 
 - **Interactive Board**: Click to place stones on 9x9, 13x13, or 19x19 boards
 - **KataGo Analysis**: Get AI-powered move suggestions with winrate and score estimates
-- **Visual Suggestions**: Top 3 moves displayed directly on the board
-  - Blue = Best move
-  - Green = 2nd best
-  - Yellow = 3rd best
-- **Auto-Analysis**: Automatically analyzes after each move
-- **SQLite Caching**: Caches analysis results for instant replay
+- **Visual Suggestions**: Candidates colored by quality (Score Loss):
+  - 🔵 **Blue**: Best Move
+  - 🟢 **Green**: Loss < 1.0 points
+  - 🟡 **Yellow**: Loss < 3.0 points
+- **Opening Book**: Pre-calculate standard openings (especially 9x9) with pruning logic
+- **Database Tools**: Auto-seeding DB and Git-friendly export tools
 
 ## Requirements
 
 - Python 3.8+
 - KataGo (CPU or GPU version)
 - KataGo neural network model
+- Dependencies: `streamlit`, `matplotlib`, `pyyaml`, `streamlit-image-coordinates`, `pillow`, `tqdm`
 
 ## Installation
 
@@ -31,30 +32,39 @@ cd go-strategy-app
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install streamlit matplotlib pyyaml streamlit-image-coordinates pillow
+pip install -r requirements.txt
+# Or manually: pip install streamlit matplotlib pyyaml streamlit-image-coordinates pillow tqdm
 ```
 
 3. Download KataGo:
-   - Get KataGo from https://github.com/lightvector/KataGo/releases
-   - Download a neural network model from https://katagotraining.org/
-   - Place in `katago/` directory
+   - Run the setup script (Linux/Mac) to download KataGo + Model automatically:
+     ```bash
+     ./setup_katago.sh
+     ```
+   - OR manually place them in the `katago/` directory.
 
-4. Configure `config.yaml`:
-```yaml
-katago:
-  katago_path: "/path/to/katago"
-  model_path: "/path/to/model.bin.gz"
-  config_path: "/path/to/config.cfg"
-```
+4. Configure `config.yaml` (already set up by default script).
 
 ## Usage
 
+### Web Interface
 ```bash
 source venv/bin/activate
-streamlit run src/gui.py --server.address 0.0.0.0 --server.port 8501
+streamlit run src/gui.py
+```
+Access at http://localhost:8501
+
+### Opening Book Generator
+Run this to pre-calculate the 9x9 opening book (Top 3 moves, 10 ply depth):
+```bash
+python3 src/scripts/build_opening_book.py
 ```
 
-Access the web interface at http://localhost:8501
+### Database Management
+Export your current DB to a seed file (for committing to Git):
+```bash
+python3 src/scripts/export_db.py
+```
 
 ## Project Structure
 
@@ -63,9 +73,14 @@ go-strategy-app/
 ├── src/
 │   ├── gui.py           # Streamlit web interface
 │   ├── analyzer.py      # GoAnalyzer orchestration
+│   ├── scripts/         # Helper scripts
+│   │   ├── build_opening_book.py  # 9x9 opening book generator
+│   │   └── export_db.py           # DB to SQL dump utility
+│   ├── assets/          
+│   │   └── seed_data.sql # Initial database seed
 │   ├── katago_gtp.py    # KataGo GTP communication
 │   ├── board.py         # Board state management
-│   ├── cache.py         # SQLite caching
+│   ├── cache.py         # SQLite caching (w/ auto-seeding)
 │   └── config.py        # Configuration loading
 ├── katago/
 │   ├── katago           # KataGo binary (not in git)

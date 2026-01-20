@@ -88,6 +88,7 @@ class GoAnalyzer:
         moves: Optional[List[str]] = None,
         handicap: int = 0,
         komi: Optional[float] = None,
+        visits: Optional[int] = None,
         force_refresh: bool = False,
     ) -> AnalysisResult:
         """
@@ -98,14 +99,11 @@ class GoAnalyzer:
             moves: List of moves in GTP format, e.g., ["B Q16", "W D4"]
             handicap: Number of handicap stones (0-9)
             komi: Komi value (default: 7.5, or 0.5 for handicap games)
+            visits: Specific visit count (overrides config defaults)
             force_refresh: If True, ignore cache and always run KataGo
             
         Returns:
             AnalysisResult with top candidate moves
-            
-        Raises:
-            ValueError: If parameters are invalid
-            KataGoError: If KataGo analysis fails
         """
         # Validate parameters
         if board_size not in (9, 13, 19):
@@ -125,9 +123,16 @@ class GoAnalyzer:
         # Compute hash for caching
         board_hash = board.compute_hash()
         
+        # Determine visits count
+        if visits is None:
+            # Use default from config if not specified
+            current_visits = self.config.get_visits(board_size)
+        else:
+            current_visits = visits
+        
         # Check cache (unless force_refresh)
         if not force_refresh:
-            cached = self.cache.get(board_hash)
+            cached = self.cache.get(board_hash, required_visits=current_visits)
             if cached is not None:
                 return cached
         
@@ -137,14 +142,12 @@ class GoAnalyzer:
         # Set up position in KataGo
         self.katago.setup_position(board)
         
-        # Get appropriate visits count
-        visits = self.config.get_visits(board_size)
         top_n = self.config.analysis.top_moves_count
         
         # Run analysis
         top_moves = self.katago.analyze(
             next_player=board.next_player,
-            visits=visits,
+            visits=current_visits,
             top_n=top_n,
         )
         
@@ -158,7 +161,7 @@ class GoAnalyzer:
             komi=board.komi,
             moves_sequence=board.get_moves_sequence_string(),
             top_moves=top_moves,
-            engine_visits=visits,
+            engine_visits=current_visits,
             model_name=model_name,
             from_cache=False,
         )
@@ -170,18 +173,19 @@ class GoAnalyzer:
             board_size=board_size,
             komi=board.komi,
             top_moves=top_moves,
-            engine_visits=visits,
+            engine_visits=current_visits,
             model_name=model_name,
         )
         
         return result
     
-    def analyze_board(self, board: BoardState, force_refresh: bool = False) -> AnalysisResult:
+    def analyze_board(self, board: BoardState, visits: Optional[int] = None, force_refresh: bool = False) -> AnalysisResult:
         """
         Analyze an existing BoardState object.
         
         Args:
             board: BoardState to analyze
+            visits: Specific visit count
             force_refresh: If True, ignore cache
             
         Returns:
@@ -189,9 +193,15 @@ class GoAnalyzer:
         """
         board_hash = board.compute_hash()
         
+        # Determine visits count
+        if visits is None:
+            current_visits = self.config.get_visits(board.size)
+        else:
+            current_visits = visits
+        
         # Check cache
         if not force_refresh:
-            cached = self.cache.get(board_hash)
+            cached = self.cache.get(board_hash, required_visits=current_visits)
             if cached is not None:
                 return cached
         
@@ -199,12 +209,11 @@ class GoAnalyzer:
         self.start()
         self.katago.setup_position(board)
         
-        visits = self.config.get_visits(board.size)
         top_n = self.config.analysis.top_moves_count
         
         top_moves = self.katago.analyze(
             next_player=board.next_player,
-            visits=visits,
+            visits=current_visits,
             top_n=top_n,
         )
         
@@ -216,7 +225,7 @@ class GoAnalyzer:
             komi=board.komi,
             moves_sequence=board.get_moves_sequence_string(),
             top_moves=top_moves,
-            engine_visits=visits,
+            engine_visits=current_visits,
             model_name=model_name,
             from_cache=False,
         )
@@ -227,7 +236,7 @@ class GoAnalyzer:
             board_size=board.size,
             komi=board.komi,
             top_moves=top_moves,
-            engine_visits=visits,
+            engine_visits=current_visits,
             model_name=model_name,
         )
         
@@ -236,6 +245,10 @@ class GoAnalyzer:
     def get_cache_stats(self) -> dict:
         """Get statistics about the analysis cache."""
         return self.cache.get_stats()
+    
+    def get_visit_stats(self, board_size: int) -> dict:
+        """Get visit count distribution for a board size."""
+        return self.cache.get_visit_counts(board_size)
     
     def clear_cache(self) -> int:
         """

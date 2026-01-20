@@ -100,7 +100,7 @@ class AnalysisResult:
 CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS analysis_cache (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    board_hash TEXT UNIQUE NOT NULL,
+    board_hash TEXT NOT NULL,
     moves_sequence TEXT,
     board_size INTEGER NOT NULL,
     komi REAL NOT NULL,
@@ -113,6 +113,10 @@ CREATE TABLE IF NOT EXISTS analysis_cache (
 
 CREATE_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_board_hash ON analysis_cache(board_hash);
+"""
+
+CREATE_UNIQUE_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_board_hash_visits ON analysis_cache(board_hash, engine_visits);
 """
 
 
@@ -158,10 +162,94 @@ class AnalysisCache:
         self._init_db()
     
     def _init_db(self) -> None:
-        """Initialize database schema."""
+        """Initialize database schema and perform migrations."""
+        # Check if DB existed before connection (which creates it)
+        db_existed = self.db_path.exists() and self.db_path.stat().st_size > 0
+        
         with self._get_connection() as conn:
+            # Check for migration needs (old schema has UNIQUE constraint on board_hash)
+            needs_migration = False
+            try:
+                # Check if board_hash is unique in the current schema
+                cursor = conn.execute("PRAGMA index_list('analysis_cache')")
+                for row in cursor:
+                    # Look for the auto-created unique index or explicit one on board_hash
+                    # In SQLite, a UNIQUE column creates a unique index
+                    if row['unique'] and row['origin'] in ('c', 'u'):
+                        # Check which columns this index covers
+                        idx_name = row['name']
+                        cols = conn.execute(f"PRAGMA index_info('{idx_name}')").fetchall()
+                        if len(cols) == 1 and cols[0]['name'] == 'board_hash':
+                            needs_migration = True
+                            break
+            except Exception:
+                # Table might not exist yet
+                pass
+
+            if needs_migration:
+                print("Migrating database to support multiple visit counts...")
+                try:
+                    conn.execute("ALTER TABLE analysis_cache RENAME TO analysis_cache_old")
+                    conn.execute(CREATE_TABLE_SQL)
+                    conn.execute(CREATE_INDEX_SQL)
+                    conn.execute(CREATE_UNIQUE_INDEX_SQL)
+                    # Copy data
+                    conn.execute("""
+                        INSERT INTO analysis_cache 
+                        (board_hash, moves_sequence, board_size, komi, analysis_result, engine_visits, model_name, created_at)
+                        SELECT board_hash, moves_sequence, board_size, komi, analysis_result, engine_visits, model_name, created_at
+                        FROM analysis_cache_old
+                    """)
+                    conn.execute("DROP TABLE analysis_cache_old")
+                    print("Migration successful.")
+                except Exception as e:
+                    print(f"Migration failed: {e}")
+                    # Try to restore? For now just raise
+                    raise
+
+            # Standard Init
             conn.execute(CREATE_TABLE_SQL)
             conn.execute(CREATE_INDEX_SQL)
+            conn.execute(CREATE_UNIQUE_INDEX_SQL)
+            
+            # Seed if new database
+            if not db_existed and not needs_migration:
+                seed_path = Path(__file__).parent / "assets" / "seed_data.sql"
+                if seed_path.exists():
+                    try:
+                        with open(seed_path, 'r', encoding='utf-8') as f:
+                            conn.executescript(f.read())
+                            
+                        # Post-seed migration check: 
+                        # If the seed file had the old schema, we need to migrate it NOW.
+                        # (Checking the same condition again)
+                        cursor = conn.execute("PRAGMA index_list('analysis_cache')")
+                        seed_needs_migration = False
+                        for row in cursor:
+                            if row['unique']:
+                                idx_name = row['name']
+                                cols = conn.execute(f"PRAGMA index_info('{idx_name}')").fetchall()
+                                if len(cols) == 1 and cols[0]['name'] == 'board_hash':
+                                    seed_needs_migration = True
+                                    break
+                                    
+                        if seed_needs_migration:
+                            print("Migrating seeded database...")
+                            conn.execute("ALTER TABLE analysis_cache RENAME TO analysis_cache_old")
+                            conn.execute(CREATE_TABLE_SQL)
+                            conn.execute(CREATE_INDEX_SQL)
+                            conn.execute(CREATE_UNIQUE_INDEX_SQL)
+                            conn.execute("""
+                                INSERT INTO analysis_cache 
+                                (board_hash, moves_sequence, board_size, komi, analysis_result, engine_visits, model_name, created_at)
+                                SELECT board_hash, moves_sequence, board_size, komi, analysis_result, engine_visits, model_name, created_at
+                                FROM analysis_cache_old
+                            """)
+                            conn.execute("DROP TABLE analysis_cache_old")
+
+                    except Exception as e:
+                        print(f"Warning: Failed to seed/migrate database: {e}")
+            
             conn.commit()
     
     def _get_connection(self) -> sqlite3.Connection:
@@ -170,25 +258,40 @@ class AnalysisCache:
         conn.row_factory = sqlite3.Row
         return conn
     
-    def get(self, board_hash: str) -> Optional[AnalysisResult]:
+    def get(self, board_hash: str, required_visits: Optional[int] = None) -> Optional[AnalysisResult]:
         """
-        Retrieve cached analysis result by board hash.
+        Retrieve cached analysis result.
         
         Args:
             board_hash: Zobrist hash of the board position
+            required_visits: If specified, match this exact visit count.
+                           If None, return the result with the highest visit count.
             
         Returns:
             AnalysisResult if found, None otherwise
         """
-        query = """
-            SELECT board_hash, moves_sequence, board_size, komi,
-                   analysis_result, engine_visits, model_name, created_at
-            FROM analysis_cache
-            WHERE board_hash = ?
-        """
+        if required_visits is not None:
+             query = """
+                SELECT board_hash, moves_sequence, board_size, komi,
+                       analysis_result, engine_visits, model_name, created_at
+                FROM analysis_cache
+                WHERE board_hash = ? AND engine_visits = ?
+            """
+             params = (board_hash, required_visits)
+        else:
+            # Get the one with highest visits
+            query = """
+                SELECT board_hash, moves_sequence, board_size, komi,
+                       analysis_result, engine_visits, model_name, created_at
+                FROM analysis_cache
+                WHERE board_hash = ?
+                ORDER BY engine_visits DESC
+                LIMIT 1
+            """
+            params = (board_hash,)
         
         with self._get_connection() as conn:
-            cursor = conn.execute(query, (board_hash,))
+            cursor = conn.execute(query, params)
             row = cursor.fetchone()
         
         if row is None:
@@ -199,7 +302,6 @@ class AnalysisCache:
             result_data = json.loads(row['analysis_result'])
             top_moves = [MoveCandidate.from_dict(m) for m in result_data]
         except (json.JSONDecodeError, KeyError) as e:
-            # Invalid data in cache, treat as miss
             return None
         
         return AnalysisResult(
@@ -247,6 +349,7 @@ class AnalysisCache:
         """
         
         with self._get_connection() as conn:
+             # This will now upsert based on (board_hash, engine_visits) UNIQUE constraint
             conn.execute(query, (
                 board_hash,
                 moves_sequence,
@@ -342,5 +445,31 @@ class AnalysisCache:
             'db_path': str(self.db_path),
         }
     
+    def get_visit_counts(self, board_size: int) -> Dict[int, int]:
+        """
+        Get count of entries for each visit count, for a specific board size.
+        
+        Args:
+            board_size: The board size to filter by
+            
+        Returns:
+            Dictionary mapping counts {visit_count: number_of_entries}
+        """
+        query = """
+            SELECT engine_visits, COUNT(*) as cnt
+            FROM analysis_cache
+            WHERE board_size = ?
+            GROUP BY engine_visits
+            ORDER BY cnt DESC
+        """
+        
+        counts = {}
+        with self._get_connection() as conn:
+            cursor = conn.execute(query, (board_size,))
+            for row in cursor:
+                counts[row['engine_visits']] = row['cnt']
+                
+        return counts
+
     def __repr__(self) -> str:
         return f"AnalysisCache(db_path={self.db_path}, entries={self.count()})"
