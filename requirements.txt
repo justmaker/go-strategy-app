@@ -1,0 +1,15 @@
+# Go Strategy Analysis Tool - Dependencies
+
+# Configuration file parsing
+pyyaml>=6.0
+
+# Testing (development only)
+pytest>=7.0
+
+# Note: The following are Python standard library modules (no installation needed):
+# - sqlite3 (database)
+# - subprocess (KataGo process)
+# - dataclasses (data structures)
+# - json (serialization)
+# - threading (thread safety)
+# - argparse (CLI)
