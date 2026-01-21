@@ -78,6 +78,30 @@ This document records all opening book generation runs for tracking and reproduc
 
 ---
 
+### Run #3: 19x19 Opening Book (2026-01-22) ✅ COMPLETED
+
+| Parameter | Value |
+|-----------|-------|
+| **Board Size** | 19x19 |
+| **Komi** | 7.5 |
+| **Handicap** | 0 |
+| **Visits** | 100 |
+| **Max Depth** | 10 |
+| **Time Limit** | None |
+| **KataGo Threads** | 2 |
+| **Total Run Time** | 10m 25s |
+| **Nodes Processed** | 1,818 |
+| **Cache Entries (new)** | 1,818 |
+| **Total Database Entries** | 23,307 |
+
+**Notes**:
+- **First run with Symmetry Pruning optimization**
+- Significant reduction in node count due to grouping symmetric moves
+- Visits set to 100 for speed (proof of concept for 19x19 feasibility)
+- GUI updated to recognize 19x19@100v as a valid opening book
+
+---
+
 ## Template for Future Runs
 
 ```markdown
