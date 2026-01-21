@@ -319,13 +319,13 @@ def init_session_state():
                 moves=None,
                 handicap=st.session_state.get('handicap', 0),
                 komi=st.session_state.get('komi', 7.5),
-                visits=st.session_state.get('visits', 500),
+                visits=st.session_state.get('visits', 50),
             )
             st.session_state.analysis_result = result
         except Exception:
             pass  # Silently fail if KataGo not available
     if 'visits' not in st.session_state:
-        st.session_state.visits = 500 if st.session_state.board_size == 9 else 150 # Approximate default
+        st.session_state.visits = 50  # Default to fast analysis
     if 'last_click' not in st.session_state:
         st.session_state.last_click = None
 
@@ -384,6 +384,27 @@ def main():
         layout="wide",
     )
     
+    # Custom CSS to override default red slider color
+    st.markdown("""
+        <style>
+        /* Slider track and thumb */
+        .stSlider [data-baseweb="slider"] {
+            color: #333333;
+        }
+        .stSlider [data-testid="stTickBar"] {
+            color: #333333;
+        }
+        /* Slider value text */
+        .stSlider [data-testid="stThumbValue"] {
+            color: #333333 !important;
+        }
+        /* Select slider text */
+        div[data-baseweb="select"] {
+            color: #333333;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
     init_session_state()
     
     # Title
@@ -416,7 +437,7 @@ def main():
                     )
                 
                 # Ensure we use the freshly updated visits count
-                current_visits = st.session_state.get('visits', 500)
+                current_visits = st.session_state.get('visits', 50)
                 
                 result = st.session_state.analyzer.analyze(
                     board_size=st.session_state.board_size,
@@ -454,10 +475,21 @@ def main():
             st.rerun()
         
         # Visits Control
+        # Define discrete visit levels (non-linear for better UX)
+        visit_levels = [10, 50, 100, 200, 500, 1000, 2000, 5000]
+        
+        # Ensure current visits is valid
+        current_visits = st.session_state.visits
+        if current_visits not in visit_levels:
+            # Snap to nearest valid value
+            current_visits = min(visit_levels, key=lambda x: abs(x - current_visits))
+            st.session_state.visits = current_visits
+        
         st.session_state.visits = st.select_slider(
-            "Visits (Analysis Depth)",
-            options=range(50, 5050, 50),
-            value=st.session_state.visits
+            "Analysis Strength (Visits)",
+            options=visit_levels,
+            value=current_visits,
+            help="10=Debug, 50=Fast, 500+=Strong (Slow on CPU)"
         )
         
         # Show cached data availability
@@ -468,9 +500,6 @@ def main():
             )
             if visit_stats:
                 st.caption("Cached Data Availability:")
-                # Create a small clean table/text
-                # Sort by visit count for readability, or by count to show popularity
-                # User asked to see so they can choose.
                 
                 # Check if current selection has data
                 curr_count = visit_stats.get(st.session_state.visits, 0)
@@ -479,8 +508,30 @@ def main():
                 with st.expander("See all cached depths"):
                     # Sort by visit count
                     sorted_stats = sorted(visit_stats.items())
-                    for v, c in sorted_stats:
-                        st.text(f"{v} visits: {c} entries")
+                    # Use radio button for direct selection
+                    options = [f"{v} visits: {c} entries" for v, c in sorted_stats]
+                    visit_values = [v for v, c in sorted_stats]
+                    
+                    # Find current index
+                    current_idx = 0
+                    if st.session_state.visits in visit_values:
+                        current_idx = visit_values.index(st.session_state.visits)
+                    
+                    selected = st.radio(
+                        "Select visit depth:",
+                        options=options,
+                        index=current_idx,
+                        label_visibility="collapsed"
+                    )
+                    
+                    # Get selected visit value
+                    selected_idx = options.index(selected)
+                    selected_visits = visit_values[selected_idx]
+                    
+                    if selected_visits != st.session_state.visits:
+                        st.session_state.visits = selected_visits
+                        st.session_state.analysis_result = None
+                        st.rerun()
 
         # Re-analyze if visits changed (handled by rerun/select_slider interactivity)
         if st.session_state.analysis_result and st.session_state.analysis_result.engine_visits != st.session_state.visits:
@@ -493,13 +544,22 @@ def main():
                 
                 # 1. Download Current DB
                 from src.config import get_db_path
+                from datetime import datetime
                 db_path = get_db_path(st.session_state.analyzer.config)
                 if db_path.exists():
                      with open(db_path, "rb") as f:
+                        # Generate descriptive filename
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        board_size = st.session_state.board_size
+                        komi = st.session_state.komi
+                        handicap = st.session_state.handicap
+                        visits = st.session_state.visits
+                        filename = f"go_analysis_{board_size}x{board_size}_k{komi}_h{handicap}_v{visits}_{timestamp}.db"
+                        
                         st.download_button(
                             label="Download Database",
                             data=f,
-                            file_name="analysis.db",
+                            file_name=filename,
                             mime="application/x-sqlite3"
                         )
                 
