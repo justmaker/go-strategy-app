@@ -132,6 +132,24 @@ CREATE_UNIQUE_INDEX_SQL = """
 CREATE UNIQUE INDEX IF NOT EXISTS idx_board_hash_visits_komi ON analysis_cache(board_hash, engine_visits, komi);
 """
 
+CREATE_META_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS opening_book_meta (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    board_size INTEGER NOT NULL,
+    komi REAL NOT NULL,
+    handicap INTEGER NOT NULL,
+    visits INTEGER NOT NULL,
+    depth INTEGER NOT NULL,
+    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notes TEXT
+);
+"""
+
+CREATE_META_UNIQUE_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_opening_book_meta ON opening_book_meta(board_size, komi, handicap, visits);
+"""
+
+
 
 # ============================================================================
 # Cache Class
@@ -224,6 +242,8 @@ class AnalysisCache:
             conn.execute(CREATE_TABLE_SQL)
             conn.execute(CREATE_INDEX_SQL)
             conn.execute(CREATE_UNIQUE_INDEX_SQL)
+            conn.execute(CREATE_META_TABLE_SQL)
+            conn.execute(CREATE_META_UNIQUE_INDEX_SQL)
             
             # Seed if new database
             if not db_existed and not needs_migration:
@@ -581,6 +601,33 @@ class AnalysisCache:
                 counts[row['engine_visits']] = row['cnt']
                 
         return counts
+
+    def has_opening_book(self, board_size: int, komi: float, handicap: int, min_visits: int = 300) -> bool:
+        """
+        Check if a complete opening book exists for the given configuration.
+        
+        Args:
+            board_size: Board size
+            komi: Komi
+            handicap: Handicap stones count
+            min_visits: Minimum visits required
+            
+        Returns:
+            True if an opening book record exists
+        """
+        query = """
+            SELECT 1 FROM opening_book_meta 
+            WHERE board_size = ? AND komi = ? AND handicap = ? AND visits >= ?
+            LIMIT 1
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(query, (board_size, komi, handicap, min_visits))
+                return cursor.fetchone() is not None
+        except Exception:
+            # If table doesn't exist yet or other error
+            return False
+
 
     def merge_database(self, source_db_path: str) -> Dict[str, int]:
         """

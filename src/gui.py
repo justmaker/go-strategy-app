@@ -147,9 +147,10 @@ def get_star_points(board_size: int) -> List[Tuple[int, int]]:
 
 def draw_board_pil(
     board_size: int,
-    stones: List[Tuple[str, int, int]],  # List of (color, col, row)
+    stones: List[Tuple[str, int, int, int]],  # List of (color, col, row, move_number) - move_number is 0 for handicap stones
     suggested_moves: Optional[List[MoveCandidate]] = None,
     last_move: Optional[Tuple[int, int]] = None,
+    show_move_numbers: bool = True,
 ) -> Image.Image:
     """
     Draw a Go board as PIL Image for click interaction.
@@ -167,9 +168,17 @@ def draw_board_pil(
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 12)
         small_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 10)
+        move_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 11)
     except:
-        font = ImageFont.load_default()
-        small_font = font
+        try:
+            # Mac fallback
+            font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 12)
+            small_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 10)
+            move_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 11)
+        except:
+            font = ImageFont.load_default()
+            small_font = font
+            move_font = font
     
     # Draw grid lines
     for i in range(board_size):
@@ -209,7 +218,10 @@ def draw_board_pil(
     
     # Draw stones
     occupied = set()
-    for color, col, row in stones:
+    for stone_data in stones:
+        color, col, row = stone_data[0], stone_data[1], stone_data[2]
+        move_number = stone_data[3] if len(stone_data) > 3 else 0
+        
         px, py = board_to_pixel_coords(col, row)
         occupied.add((col, row))
         
@@ -220,8 +232,14 @@ def draw_board_pil(
         draw.ellipse([px - r, py - r, px + r, py + r], 
                      fill=stone_color, outline=outline_color, width=2)
         
-        # Mark last move with a small circle
-        if last_move and (col, row) == last_move:
+        # Draw move number on stone
+        if show_move_numbers and move_number > 0:
+            text_color = 'white' if color == 'B' else 'black'
+            num_text = str(move_number)
+            # Center the text on stone
+            draw.text((px, py), num_text, fill=text_color, font=move_font, anchor='mm')
+        elif last_move and (col, row) == last_move and not show_move_numbers:
+            # Mark last move with a small circle only when move numbers are off
             marker_color = 'white' if color == 'B' else 'black'
             mr = 4
             draw.ellipse([px - mr, py - mr, px + mr, py + mr], 
@@ -304,25 +322,43 @@ def init_session_state():
         st.session_state.komi = 7.5
     if 'handicap' not in st.session_state:
         st.session_state.handicap = 0
+    if 'analyzer' not in st.session_state:
+        st.session_state.analyzer = None
+        
+    # Initialize analyzer if needed (needed for checking opening book)
+    try:
+        if st.session_state.analyzer is None:
+            st.session_state.analyzer = GoAnalyzer(
+                config_path=str(PROJECT_ROOT / "config.yaml")
+            )
+    except Exception:
+        pass
+
     if 'visits' not in st.session_state:
-        # Default to 300 for 9x9/komi7.5/handicap0 (opening book available)
-        # Otherwise default to 50 for fast analysis
-        if (st.session_state.get('board_size', 9) == 9 and 
-            st.session_state.get('komi', 7.5) == 7.5 and 
-            st.session_state.get('handicap', 0) == 0):
+        # Check if opening book exists for current settings
+        has_book = False
+        if st.session_state.analyzer:
+            has_book = st.session_state.analyzer.cache.has_opening_book(
+                board_size=st.session_state.get('board_size', 9),
+                komi=st.session_state.get('komi', 7.5),
+                handicap=st.session_state.get('handicap', 0),
+                min_visits=300
+            )
+            
+        if has_book:
             st.session_state.visits = 300
         else:
             st.session_state.visits = 50
-    if 'analyzer' not in st.session_state:
-        st.session_state.analyzer = None
     if 'analysis_result' not in st.session_state:
         # Auto-analyze on initial load to show Black's first move suggestions
         st.session_state.analysis_result = None
         try:
+            # Re-ensure analyzer is ready
             if st.session_state.analyzer is None:
                 st.session_state.analyzer = GoAnalyzer(
                     config_path=str(PROJECT_ROOT / "config.yaml")
                 )
+            
             result = st.session_state.analyzer.analyze(
                 board_size=st.session_state.get('board_size', 9),
                 moves=None,
@@ -335,32 +371,41 @@ def init_session_state():
             pass  # Silently fail if KataGo not available
     if 'last_click' not in st.session_state:
         st.session_state.last_click = None
+    if 'show_move_numbers' not in st.session_state:
+        st.session_state.show_move_numbers = True  # Default ON like Sabaki
 
 
 
-def get_stones_from_moves(moves: List[str], board_size: int) -> List[Tuple[str, int, int]]:
-    """Parse moves list and return stone positions."""
+def get_stones_from_moves(moves: List[str], board_size: int) -> List[Tuple[str, int, int, int]]:
+    """Parse moves list and return stone positions with move numbers.
+    
+    Returns:
+        List of (color, col, row, move_number) tuples.
+        move_number starts from 1 for the first move.
+    """
     stones = []
+    move_number = 0
     for move_str in moves:
         parts = move_str.strip().split()
         if len(parts) != 2:
             continue
         color = parts[0].upper()
         coord = parts[1].upper()
+        move_number += 1
         
         if coord == "PASS":
             continue
         
         col, row = gtp_to_coords(coord, board_size)
         if col >= 0 and row >= 0:
-            stones.append((color, col, row))
+            stones.append((color, col, row, move_number))
     
     return stones
 
 
-def get_occupied_positions(stones: List[Tuple[str, int, int]]) -> set:
+def get_occupied_positions(stones: List[Tuple[str, int, int, int]]) -> set:
     """Get set of occupied positions."""
-    return {(col, row) for _, col, row in stones}
+    return {(stone[1], stone[2]) for stone in stones}
 
 
 def get_next_player(moves: List[str], handicap: int) -> str:
@@ -480,17 +525,86 @@ def main():
             st.session_state.handicap = new_handicap
             st.session_state.moves = []
             st.session_state.analysis_result = None
+        
+        st.markdown("---")
+        
+        # Control buttons (Clear, Undo, Pass)
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Clear", type="secondary", use_container_width=True):
+                st.session_state.moves = []
+                # Auto-analyze empty board
+                try:
+                    if st.session_state.analyzer is None:
+                        st.session_state.analyzer = GoAnalyzer(
+                            config_path=str(PROJECT_ROOT / "config.yaml")
+                        )
+                    result = st.session_state.analyzer.analyze(
+                        board_size=st.session_state.board_size,
+                        moves=None,
+                        handicap=st.session_state.handicap,
+                        komi=st.session_state.komi,
+                        visits=st.session_state.visits,
+                    )
+                    st.session_state.analysis_result = result
+                except:
+                    st.session_state.analysis_result = None
+                st.rerun()
+        
+        with col2:
+            if st.button("Undo", type="secondary", use_container_width=True):
+                if st.session_state.moves:
+                    st.session_state.moves.pop()
+                    # Auto-analyze after undo
+                    try:
+                        if st.session_state.analyzer is None:
+                            st.session_state.analyzer = GoAnalyzer(
+                                config_path=str(PROJECT_ROOT / "config.yaml")
+                            )
+                        result = st.session_state.analyzer.analyze(
+                            board_size=st.session_state.board_size,
+                            moves=st.session_state.moves if st.session_state.moves else None,
+                            handicap=st.session_state.handicap,
+                            komi=st.session_state.komi,
+                            visits=st.session_state.visits,
+                        )
+                        st.session_state.analysis_result = result
+                    except:
+                        st.session_state.analysis_result = None
+                    st.rerun()
+        
+        # Pass button
+        if st.button("Pass", type="secondary", use_container_width=True):
+            next_player = get_next_player(st.session_state.moves, st.session_state.handicap)
+            st.session_state.moves.append(f"{next_player} PASS")
+            st.session_state.analysis_result = None
             st.rerun()
+        
+        st.markdown("---")
+        
+        # Show Move Numbers toggle
+        st.session_state.show_move_numbers = st.checkbox(
+            "Show Move Numbers",
+            value=st.session_state.show_move_numbers,
+            help="Display move numbers (1, 2, 3...) on stones like Sabaki"
+        )
         
         # Visits Control
         # Define discrete visit levels (non-linear for better UX)
         all_visit_levels = [10, 50, 100, 200, 300, 500, 1000, 2000, 5000]
         
-        # For 9x9 / komi 7.5 / handicap 0, we have pre-calculated opening book at 300 visits
-        # Set minimum to 300 to ensure users get the best cached data
-        if (st.session_state.board_size == 9 and 
-            st.session_state.komi == 7.5 and 
-            st.session_state.handicap == 0):
+        # Check if we have an opening book for this configuration
+        has_book = False
+        if st.session_state.analyzer:
+            has_book = st.session_state.analyzer.cache.has_opening_book(
+                board_size=st.session_state.board_size,
+                komi=st.session_state.komi,
+                handicap=st.session_state.handicap,
+                min_visits=300
+            )
+
+        # If opening book exists, enforce minimum visits to ensure quality
+        if has_book:
             min_visits = 300
             visit_levels = [v for v in all_visit_levels if v >= min_visits]
         else:
@@ -500,16 +614,19 @@ def main():
         current_visits = st.session_state.visits
         if current_visits not in visit_levels:
             # Snap to nearest valid value (at least the minimum)
-            current_visits = min(visit_levels, key=lambda x: abs(x - current_visits))
-            if current_visits < visit_levels[0]:
-                current_visits = visit_levels[0]
+            if visit_levels:
+                current_visits = min(visit_levels, key=lambda x: abs(x - current_visits))
+                if current_visits < visit_levels[0]:
+                    current_visits = visit_levels[0]
+            else:
+                current_visits = 50 # Fallback
             st.session_state.visits = current_visits
-        
+            
         st.session_state.visits = st.select_slider(
             "Analysis Strength (Visits)",
             options=visit_levels,
             value=current_visits,
-            help="300+=Opening Book (9x9), 500+=Strong (Slow on CPU)" if st.session_state.board_size == 9 else "10=Debug, 50=Fast, 500+=Strong (Slow on CPU)"
+            help="300+=Opening Book, 500+=Strong" if has_book else "10=Debug, 50=Fast, 500+=Strong"
         )
         
         # Show cached data availability
@@ -610,61 +727,6 @@ def main():
                                     os.unlink(tmp_path)
         
         st.markdown("---")
-        
-        # Control buttons
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Clear", type="secondary", use_container_width=True):
-                st.session_state.moves = []
-                # Auto-analyze empty board
-                try:
-                    if st.session_state.analyzer is None:
-                        st.session_state.analyzer = GoAnalyzer(
-                            config_path=str(PROJECT_ROOT / "config.yaml")
-                        )
-                    result = st.session_state.analyzer.analyze(
-                        board_size=st.session_state.board_size,
-                        moves=None,
-                        handicap=st.session_state.handicap,
-                        komi=st.session_state.komi,
-                        visits=st.session_state.visits,
-                    )
-                    st.session_state.analysis_result = result
-                except:
-                    st.session_state.analysis_result = None
-                st.rerun()
-        
-        with col2:
-            if st.button("Undo", type="secondary", use_container_width=True):
-                if st.session_state.moves:
-                    st.session_state.moves.pop()
-                    # Auto-analyze after undo
-                    try:
-                        if st.session_state.analyzer is None:
-                            st.session_state.analyzer = GoAnalyzer(
-                                config_path=str(PROJECT_ROOT / "config.yaml")
-                            )
-                        result = st.session_state.analyzer.analyze(
-                            board_size=st.session_state.board_size,
-                            moves=st.session_state.moves if st.session_state.moves else None,
-                            handicap=st.session_state.handicap,
-                            komi=st.session_state.komi,
-                            visits=st.session_state.visits,
-                        )
-                        st.session_state.analysis_result = result
-                    except:
-                        st.session_state.analysis_result = None
-                    st.rerun()
-        
-        # Pass button
-        if st.button("Pass", type="secondary", use_container_width=True):
-            next_player = get_next_player(st.session_state.moves, st.session_state.handicap)
-            st.session_state.moves.append(f"{next_player} PASS")
-            st.session_state.analysis_result = None
-            st.rerun()
-        
-
-        st.markdown("---")
         st.header("Cache Stats")
         
         try:
@@ -703,6 +765,7 @@ def main():
             stones=stones,
             suggested_moves=suggested,
             last_move=last_move,
+            show_move_numbers=st.session_state.show_move_numbers,
         )
         
         # Display clickable image
