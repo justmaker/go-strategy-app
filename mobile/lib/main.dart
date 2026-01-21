@@ -64,7 +64,7 @@ class _AppWrapperState extends State<AppWrapper> {
     try {
       // Configure API endpoint
       // TODO: Make this configurable via settings
-      const apiUrl = 'http://localhost:8000';
+      const apiUrl = 'http://10.20.90.254:8000';
 
       _apiService = ApiService(baseUrl: apiUrl);
       _cacheService = CacheService();
