@@ -250,9 +250,32 @@ database:
 - [x] Phase 2: Cross-Platform API
   - [x] FastAPI REST endpoints
   - [x] Pydantic models (OpenAPI spec)
-- [ ] Phase 3: Mobile Client
-  - [ ] Flutter app for iOS/Android
-  - [ ] Offline-first with local cache sync
+- [x] Phase 3: Mobile Client
+  - [x] Flutter app for iOS/Android/Web
+  - [x] Offline-first with local SQLite cache
+  - [x] Intelligent merge logic for partial calculations
+
+## Flutter Mobile App
+
+The `mobile/` directory contains a Flutter app with:
+
+- **Interactive Go Board**: Custom-painted board with stone placement
+- **AI Analysis**: Real-time move suggestions from KataGo
+- **Offline Support**: Local SQLite cache with sync capability
+- **Cross-Platform**: iOS, Android, and Web support
+
+### Running the Mobile App
+
+```bash
+cd mobile
+flutter pub get
+flutter run
+```
+
+For web:
+```bash
+flutter run -d chrome
+```
 
 ## License
 

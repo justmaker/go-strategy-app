@@ -1,0 +1,38 @@
+name: go_strategy_app
+description: "Go Strategy Analysis App - Powered by KataGo AI"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  
+  # State management
+  provider: ^6.1.2
+  
+  # HTTP client
+  http: ^1.2.1
+  
+  # Local database
+  sqflite: ^2.3.3
+  path: ^1.9.0
+  
+  # JSON serialization
+  json_annotation: ^4.9.0
+  
+  # Utilities
+  collection: ^1.18.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  json_serializable: ^6.8.0
+  build_runner: ^2.4.11
+
+flutter:
+  uses-material-design: true
