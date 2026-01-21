@@ -62,6 +62,10 @@ class AnalysisResult:
     model_name: str
     from_cache: bool = False
     timestamp: Optional[str] = None
+    # New fields for Phase 3 partial calculation support
+    calculation_duration: Optional[float] = None  # Time taken in seconds
+    stopped_by_limit: Optional[bool] = None  # True if stopped by limit, False if converged
+    limit_setting: Optional[str] = None  # e.g., "5s", "100v"
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -75,6 +79,9 @@ class AnalysisResult:
             'model_name': self.model_name,
             'from_cache': self.from_cache,
             'timestamp': self.timestamp,
+            'calculation_duration': self.calculation_duration,
+            'stopped_by_limit': self.stopped_by_limit,
+            'limit_setting': self.limit_setting,
         }
     
     @classmethod
@@ -90,6 +97,9 @@ class AnalysisResult:
             model_name=data['model_name'],
             from_cache=data.get('from_cache', False),
             timestamp=data.get('timestamp'),
+            calculation_duration=data.get('calculation_duration'),
+            stopped_by_limit=data.get('stopped_by_limit'),
+            limit_setting=data.get('limit_setting'),
         )
 
 
@@ -107,7 +117,10 @@ CREATE TABLE IF NOT EXISTS analysis_cache (
     analysis_result TEXT NOT NULL,
     engine_visits INTEGER NOT NULL,
     model_name TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    calculation_duration REAL,
+    stopped_by_limit INTEGER,
+    limit_setting TEXT
 );
 """
 
@@ -276,6 +289,26 @@ class AnalysisCache:
                 except Exception as e:
                     print(f"Index migration failed: {e}")
 
+            # Migration for Phase 3: Add partial calculation columns
+            try:
+                # Check if new columns exist
+                cursor = conn.execute("PRAGMA table_info(analysis_cache)")
+                existing_cols = {row['name'] for row in cursor}
+                
+                new_columns = [
+                    ("calculation_duration", "REAL"),
+                    ("stopped_by_limit", "INTEGER"),
+                    ("limit_setting", "TEXT"),
+                ]
+                
+                for col_name, col_type in new_columns:
+                    if col_name not in existing_cols:
+                        print(f"Adding column {col_name} to analysis_cache...")
+                        conn.execute(f"ALTER TABLE analysis_cache ADD COLUMN {col_name} {col_type}")
+                        
+            except Exception as e:
+                print(f"Warning: Failed to add partial calculation columns: {e}")
+
             conn.commit()
     
     def _get_connection(self) -> sqlite3.Connection:
@@ -300,7 +333,8 @@ class AnalysisCache:
         if required_visits is not None:
              query = """
                 SELECT board_hash, moves_sequence, board_size, komi,
-                       analysis_result, engine_visits, model_name, created_at
+                       analysis_result, engine_visits, model_name, created_at,
+                       calculation_duration, stopped_by_limit, limit_setting
                 FROM analysis_cache
                 WHERE board_hash = ? AND komi = ? AND engine_visits = ?
             """
@@ -309,7 +343,8 @@ class AnalysisCache:
             # Get the one with highest visits
             query = """
                 SELECT board_hash, moves_sequence, board_size, komi,
-                       analysis_result, engine_visits, model_name, created_at
+                       analysis_result, engine_visits, model_name, created_at,
+                       calculation_duration, stopped_by_limit, limit_setting
                 FROM analysis_cache
                 WHERE board_hash = ? AND komi = ?
                 ORDER BY engine_visits DESC
@@ -341,6 +376,9 @@ class AnalysisCache:
             model_name=row['model_name'],
             from_cache=True,
             timestamp=row['created_at'],
+            calculation_duration=row['calculation_duration'],
+            stopped_by_limit=bool(row['stopped_by_limit']) if row['stopped_by_limit'] is not None else None,
+            limit_setting=row['limit_setting'],
         )
     
     def put(
@@ -352,9 +390,17 @@ class AnalysisCache:
         top_moves: List[MoveCandidate],
         engine_visits: int,
         model_name: str,
+        calculation_duration: Optional[float] = None,
+        stopped_by_limit: Optional[bool] = None,
+        limit_setting: Optional[str] = None,
     ) -> None:
         """
-        Store analysis result in cache.
+        Store analysis result in cache with intelligent merge logic.
+        
+        Merge Rules (in priority order):
+        1. Completeness: Complete (stopped_by_limit=False) always overwrites Partial (True)
+        2. Depth/Effort: If same completeness, prefer higher visits or longer duration
+        3. Recency: If similar effort, prefer newer data
         
         Args:
             board_hash: Zobrist hash of the board position
@@ -364,30 +410,67 @@ class AnalysisCache:
             top_moves: List of candidate moves with statistics
             engine_visits: Number of visits used for analysis
             model_name: Name of the neural network model used
+            calculation_duration: Time taken for this calculation (seconds)
+            stopped_by_limit: True if stopped by limit, False if converged naturally
+            limit_setting: Description of limit used, e.g., "5s", "100v"
         """
         # Serialize top_moves to JSON
         result_json = json.dumps([m.to_dict() for m in top_moves])
         
-        query = """
-            INSERT OR REPLACE INTO analysis_cache 
-            (board_hash, moves_sequence, board_size, komi, 
-             analysis_result, engine_visits, model_name, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        
         with self._get_connection() as conn:
-             # This will now upsert based on (board_hash, engine_visits) UNIQUE constraint
-            conn.execute(query, (
-                board_hash,
-                moves_sequence,
-                board_size,
-                komi,
-                result_json,
-                engine_visits,
-                model_name,
-                datetime.now().isoformat(),
-            ))
-            conn.commit()
+            # Check for existing entry with same (board_hash, engine_visits, komi)
+            existing = conn.execute("""
+                SELECT calculation_duration, stopped_by_limit, limit_setting, created_at
+                FROM analysis_cache
+                WHERE board_hash = ? AND engine_visits = ? AND komi = ?
+            """, (board_hash, engine_visits, komi)).fetchone()
+            
+            should_update = True
+            
+            if existing:
+                # Apply intelligent merge logic
+                existing_stopped = existing['stopped_by_limit']
+                existing_duration = existing['calculation_duration']
+                
+                # Convert SQLite INTEGER to bool (None stays None)
+                existing_stopped_bool = bool(existing_stopped) if existing_stopped is not None else None
+                
+                # Rule 1: Completeness - Complete always beats Partial
+                if existing_stopped_bool is False and stopped_by_limit is True:
+                    # Existing is complete, new is partial - keep existing
+                    should_update = False
+                elif existing_stopped_bool is True and stopped_by_limit is False:
+                    # Existing is partial, new is complete - update
+                    should_update = True
+                elif existing_stopped_bool == stopped_by_limit:
+                    # Same completeness - Rule 2: Prefer longer duration (more effort)
+                    if existing_duration is not None and calculation_duration is not None:
+                        if existing_duration > calculation_duration * 1.1:  # 10% threshold
+                            should_update = False
+                    # Rule 3: If similar effort or unknown, prefer newer (should_update stays True)
+            
+            if should_update:
+                query = """
+                    INSERT OR REPLACE INTO analysis_cache 
+                    (board_hash, moves_sequence, board_size, komi, 
+                     analysis_result, engine_visits, model_name, created_at,
+                     calculation_duration, stopped_by_limit, limit_setting)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """
+                conn.execute(query, (
+                    board_hash,
+                    moves_sequence,
+                    board_size,
+                    komi,
+                    result_json,
+                    engine_visits,
+                    model_name,
+                    datetime.now().isoformat(),
+                    calculation_duration,
+                    1 if stopped_by_limit else (0 if stopped_by_limit is False else None),
+                    limit_setting,
+                ))
+                conn.commit()
     
     def delete(self, board_hash: str) -> bool:
         """

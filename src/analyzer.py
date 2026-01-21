@@ -9,6 +9,7 @@ Integrates:
 Provides a simple API for analyzing Go positions.
 """
 
+import time
 from typing import List, Optional
 
 from .board import (
@@ -164,12 +165,19 @@ class GoAnalyzer:
         
         top_n = self.config.analysis.top_moves_count
         
-        # Run analysis
+        # Run analysis with timing
+        start_time = time.time()
         top_moves = self.katago.analyze(
             next_player=board.next_player,
             visits=current_visits,
             top_n=top_n,
         )
+        calculation_duration = time.time() - start_time
+        
+        # Analysis stopped by visit limit (not by convergence)
+        # KataGo with visits limit always stops by limit, never by convergence
+        stopped_by_limit = True
+        limit_setting = f"{current_visits}v"
         
         # Get model name
         model_name = self.katago.get_model_name()
@@ -198,6 +206,9 @@ class GoAnalyzer:
             engine_visits=current_visits,
             model_name=model_name,
             from_cache=False,
+            calculation_duration=calculation_duration,
+            stopped_by_limit=stopped_by_limit,
+            limit_setting=limit_setting,
         )
         
         # Store in cache (with canonical orientation moves)
@@ -209,6 +220,9 @@ class GoAnalyzer:
             top_moves=canonical_moves,  # Store canonical orientation
             engine_visits=current_visits,
             model_name=model_name,
+            calculation_duration=calculation_duration,
+            stopped_by_limit=stopped_by_limit,
+            limit_setting=limit_setting,
         )
         
         return result
@@ -259,11 +273,18 @@ class GoAnalyzer:
         
         top_n = self.config.analysis.top_moves_count
         
+        # Run analysis with timing
+        start_time = time.time()
         top_moves = self.katago.analyze(
             next_player=board.next_player,
             visits=current_visits,
             top_n=top_n,
         )
+        calculation_duration = time.time() - start_time
+        
+        # Analysis stopped by visit limit (not by convergence)
+        stopped_by_limit = True
+        limit_setting = f"{current_visits}v"
         
         model_name = self.katago.get_model_name()
         
@@ -290,6 +311,9 @@ class GoAnalyzer:
             engine_visits=current_visits,
             model_name=model_name,
             from_cache=False,
+            calculation_duration=calculation_duration,
+            stopped_by_limit=stopped_by_limit,
+            limit_setting=limit_setting,
         )
         
         self.cache.put(
@@ -300,6 +324,9 @@ class GoAnalyzer:
             top_moves=canonical_moves,  # Store canonical orientation
             engine_visits=current_visits,
             model_name=model_name,
+            calculation_duration=calculation_duration,
+            stopped_by_limit=stopped_by_limit,
+            limit_setting=limit_setting,
         )
         
         return result
