@@ -17,6 +17,7 @@ from .board import (
 )
 from .cache import AnalysisCache, AnalysisResult, MoveCandidate
 from .config import AppConfig, load_config
+from .database import ensure_db_seeded
 from .katago_gtp import KataGoGTP
 
 
@@ -60,6 +61,9 @@ class GoAnalyzer:
             self.config = config
         else:
             self.config = load_config(config_path)
+        
+        # Ensure database is seeded with initial data if needed
+        ensure_db_seeded(self.config)
         
         self.cache = AnalysisCache(config=self.config)
         self.katago = KataGoGTP(self.config.katago)
