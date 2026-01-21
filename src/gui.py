@@ -304,6 +304,15 @@ def init_session_state():
         st.session_state.komi = 7.5
     if 'handicap' not in st.session_state:
         st.session_state.handicap = 0
+    if 'visits' not in st.session_state:
+        # Default to 300 for 9x9/komi7.5/handicap0 (opening book available)
+        # Otherwise default to 50 for fast analysis
+        if (st.session_state.get('board_size', 9) == 9 and 
+            st.session_state.get('komi', 7.5) == 7.5 and 
+            st.session_state.get('handicap', 0) == 0):
+            st.session_state.visits = 300
+        else:
+            st.session_state.visits = 50
     if 'analyzer' not in st.session_state:
         st.session_state.analyzer = None
     if 'analysis_result' not in st.session_state:
@@ -319,15 +328,14 @@ def init_session_state():
                 moves=None,
                 handicap=st.session_state.get('handicap', 0),
                 komi=st.session_state.get('komi', 7.5),
-                visits=st.session_state.get('visits', 50),
+                visits=st.session_state.get('visits', 300),
             )
             st.session_state.analysis_result = result
         except Exception:
             pass  # Silently fail if KataGo not available
-    if 'visits' not in st.session_state:
-        st.session_state.visits = 50  # Default to fast analysis
     if 'last_click' not in st.session_state:
         st.session_state.last_click = None
+
 
 
 def get_stones_from_moves(moves: List[str], board_size: int) -> List[Tuple[str, int, int]]:
@@ -476,20 +484,32 @@ def main():
         
         # Visits Control
         # Define discrete visit levels (non-linear for better UX)
-        visit_levels = [10, 50, 100, 200, 500, 1000, 2000, 5000]
+        all_visit_levels = [10, 50, 100, 200, 300, 500, 1000, 2000, 5000]
+        
+        # For 9x9 / komi 7.5 / handicap 0, we have pre-calculated opening book at 300 visits
+        # Set minimum to 300 to ensure users get the best cached data
+        if (st.session_state.board_size == 9 and 
+            st.session_state.komi == 7.5 and 
+            st.session_state.handicap == 0):
+            min_visits = 300
+            visit_levels = [v for v in all_visit_levels if v >= min_visits]
+        else:
+            visit_levels = all_visit_levels
         
         # Ensure current visits is valid
         current_visits = st.session_state.visits
         if current_visits not in visit_levels:
-            # Snap to nearest valid value
+            # Snap to nearest valid value (at least the minimum)
             current_visits = min(visit_levels, key=lambda x: abs(x - current_visits))
+            if current_visits < visit_levels[0]:
+                current_visits = visit_levels[0]
             st.session_state.visits = current_visits
         
         st.session_state.visits = st.select_slider(
             "Analysis Strength (Visits)",
             options=visit_levels,
             value=current_visits,
-            help="10=Debug, 50=Fast, 500+=Strong (Slow on CPU)"
+            help="300+=Opening Book (9x9), 500+=Strong (Slow on CPU)" if st.session_state.board_size == 9 else "10=Debug, 50=Fast, 500+=Strong (Slow on CPU)"
         )
         
         # Show cached data availability
