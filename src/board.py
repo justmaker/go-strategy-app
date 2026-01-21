@@ -5,10 +5,12 @@ Provides:
 - BoardState: Manages board position, moves, and handicap stones
 - Zobrist Hash: Unique hash for board positions (for caching)
 - Standard handicap stone placements for 9x9, 13x13, 19x19
+- Symmetry transformations for canonical hashing (D4 symmetry group)
 """
 
 import random
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from typing import Dict, List, Optional, Set, Tuple
 
 # Seed for reproducible Zobrist hash values
@@ -92,6 +94,136 @@ def get_handicap_positions(board_size: int, handicap: int) -> List[str]:
         raise ValueError(f"Invalid handicap {handicap} for board size {board_size}")
     
     return positions
+
+
+# ============================================================================
+# Symmetry Transformations (D4 Dihedral Group)
+# ============================================================================
+
+class SymmetryTransform(Enum):
+    """
+    The 8 symmetry transformations of a square board (D4 dihedral group).
+    
+    For a board of size N, with coordinates (x, y) where 0 <= x, y < N:
+    - IDENTITY: (x, y) -> (x, y)
+    - ROTATE_90: (x, y) -> (N-1-y, x)
+    - ROTATE_180: (x, y) -> (N-1-x, N-1-y)
+    - ROTATE_270: (x, y) -> (y, N-1-x)
+    - FLIP_HORIZONTAL: (x, y) -> (N-1-x, y)
+    - FLIP_VERTICAL: (x, y) -> (x, N-1-y)
+    - FLIP_DIAGONAL: (x, y) -> (y, x)
+    - FLIP_ANTIDIAGONAL: (x, y) -> (N-1-y, N-1-x)
+    """
+    IDENTITY = auto()
+    ROTATE_90 = auto()
+    ROTATE_180 = auto()
+    ROTATE_270 = auto()
+    FLIP_HORIZONTAL = auto()
+    FLIP_VERTICAL = auto()
+    FLIP_DIAGONAL = auto()
+    FLIP_ANTIDIAGONAL = auto()
+
+
+def apply_transform(x: int, y: int, size: int, transform: SymmetryTransform) -> Tuple[int, int]:
+    """
+    Apply a symmetry transformation to coordinates.
+    
+    Args:
+        x, y: Original coordinates (0-indexed)
+        size: Board size
+        transform: The transformation to apply
+        
+    Returns:
+        Transformed (x, y) coordinates
+    """
+    n = size - 1  # Max index
+    
+    if transform == SymmetryTransform.IDENTITY:
+        return (x, y)
+    elif transform == SymmetryTransform.ROTATE_90:
+        return (n - y, x)
+    elif transform == SymmetryTransform.ROTATE_180:
+        return (n - x, n - y)
+    elif transform == SymmetryTransform.ROTATE_270:
+        return (y, n - x)
+    elif transform == SymmetryTransform.FLIP_HORIZONTAL:
+        return (n - x, y)
+    elif transform == SymmetryTransform.FLIP_VERTICAL:
+        return (x, n - y)
+    elif transform == SymmetryTransform.FLIP_DIAGONAL:
+        return (y, x)
+    elif transform == SymmetryTransform.FLIP_ANTIDIAGONAL:
+        return (n - y, n - x)
+    else:
+        raise ValueError(f"Unknown transform: {transform}")
+
+
+def get_inverse_transform(transform: SymmetryTransform) -> SymmetryTransform:
+    """
+    Get the inverse of a symmetry transformation.
+    
+    Args:
+        transform: The transformation to invert
+        
+    Returns:
+        The inverse transformation
+    """
+    inverses = {
+        SymmetryTransform.IDENTITY: SymmetryTransform.IDENTITY,
+        SymmetryTransform.ROTATE_90: SymmetryTransform.ROTATE_270,
+        SymmetryTransform.ROTATE_180: SymmetryTransform.ROTATE_180,
+        SymmetryTransform.ROTATE_270: SymmetryTransform.ROTATE_90,
+        SymmetryTransform.FLIP_HORIZONTAL: SymmetryTransform.FLIP_HORIZONTAL,
+        SymmetryTransform.FLIP_VERTICAL: SymmetryTransform.FLIP_VERTICAL,
+        SymmetryTransform.FLIP_DIAGONAL: SymmetryTransform.FLIP_DIAGONAL,
+        SymmetryTransform.FLIP_ANTIDIAGONAL: SymmetryTransform.FLIP_ANTIDIAGONAL,
+    }
+    return inverses[transform]
+
+
+def transform_stones(
+    stones: Dict[Tuple[int, int], str],
+    size: int,
+    transform: SymmetryTransform
+) -> Dict[Tuple[int, int], str]:
+    """
+    Apply a symmetry transformation to all stones on the board.
+    
+    Args:
+        stones: Dictionary of {(x, y): color}
+        size: Board size
+        transform: The transformation to apply
+        
+    Returns:
+        New dictionary with transformed coordinates
+    """
+    return {
+        apply_transform(x, y, size, transform): color
+        for (x, y), color in stones.items()
+    }
+
+
+def transform_gtp_coord(gtp_coord: str, size: int, transform: SymmetryTransform) -> str:
+    """
+    Apply a symmetry transformation to a GTP coordinate.
+    
+    Args:
+        gtp_coord: GTP coordinate (e.g., "Q16")
+        size: Board size
+        transform: The transformation to apply
+        
+    Returns:
+        Transformed GTP coordinate
+    """
+    if gtp_coord.upper() == "PASS":
+        return "PASS"
+    
+    x, y = gtp_to_coords(gtp_coord, size)
+    new_x, new_y = apply_transform(x, y, size, transform)
+    return coords_to_gtp(new_x, new_y)
+
+
+ALL_TRANSFORMS = list(SymmetryTransform)
 
 
 # ============================================================================
@@ -243,6 +375,63 @@ class ZobristHasher:
             h ^= self.komi_hash[q_komi]
         
         return format(h, '016x')
+    
+    def compute_canonical_hash(
+        self,
+        stones: Dict[Tuple[int, int], str],
+        next_player: str,
+        komi: float,
+        board_size: int
+    ) -> Tuple[str, SymmetryTransform]:
+        """
+        Compute canonical Zobrist hash by finding the minimum hash across all symmetries.
+        
+        This ensures that symmetrically equivalent positions have the same hash,
+        enabling cache hits for rotated/reflected positions.
+        
+        Args:
+            stones: Dictionary of {(x, y): color} where color is 'B' or 'W'
+            next_player: 'B' or 'W'
+            komi: Komi value
+            board_size: Size of the board
+            
+        Returns:
+            Tuple of (canonical_hash, transform_used)
+        """
+        min_hash = None
+        min_transform = SymmetryTransform.IDENTITY
+        
+        for transform in ALL_TRANSFORMS:
+            transformed_stones = transform_stones(stones, board_size, transform)
+            h = self._compute_hash_int(transformed_stones, next_player, komi)
+            
+            if min_hash is None or h < min_hash:
+                min_hash = h
+                min_transform = transform
+        
+        return (format(min_hash, '016x'), min_transform)
+    
+    def _compute_hash_int(
+        self,
+        stones: Dict[Tuple[int, int], str],
+        next_player: str,
+        komi: float
+    ) -> int:
+        """Compute Zobrist hash as integer (internal use)."""
+        h = 0
+        
+        for (x, y), color in stones.items():
+            color_idx = 0 if color == 'B' else 1
+            h ^= self.stone_hash[color_idx][x][y]
+        
+        if next_player == 'W':
+            h ^= self.player_hash
+        
+        q_komi = self._quantize_komi(komi)
+        if q_komi in self.komi_hash:
+            h ^= self.komi_hash[q_komi]
+        
+        return h
 
 
 # Global Zobrist hasher instance
@@ -355,6 +544,22 @@ class BoardState:
         """
         hasher = get_zobrist_hasher()
         return hasher.compute_hash(self.stones, self.next_player, self.komi)
+    
+    def compute_canonical_hash(self) -> Tuple[str, SymmetryTransform]:
+        """
+        Compute canonical Zobrist hash using symmetry normalization.
+        
+        Returns the minimum hash across all 8 symmetry transformations,
+        along with the transformation used. This allows cache hits for
+        symmetrically equivalent positions.
+        
+        Returns:
+            Tuple of (canonical_hash, transform_used)
+        """
+        hasher = get_zobrist_hasher()
+        return hasher.compute_canonical_hash(
+            self.stones, self.next_player, self.komi, self.size
+        )
     
     def get_gtp_setup_commands(self) -> List[str]:
         """

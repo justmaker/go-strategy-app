@@ -3,7 +3,7 @@ Go Strategy Analyzer - Main business logic layer.
 
 Integrates:
 - BoardState management
-- SQLite caching
+- SQLite caching with symmetry-aware canonical hashing
 - KataGo GTP communication
 
 Provides a simple API for analyzing Go positions.
@@ -11,7 +11,10 @@ Provides a simple API for analyzing Go positions.
 
 from typing import List, Optional
 
-from .board import BoardState, create_board
+from .board import (
+    BoardState, create_board,
+    SymmetryTransform, get_inverse_transform, transform_gtp_coord
+)
 from .cache import AnalysisCache, AnalysisResult, MoveCandidate
 from .config import AppConfig, load_config
 from .katago_gtp import KataGoGTP
@@ -120,8 +123,8 @@ class GoAnalyzer:
             moves=moves,
         )
         
-        # Compute hash for caching
-        board_hash = board.compute_hash()
+        # Compute canonical hash for caching (uses symmetry normalization)
+        canonical_hash, transform_used = board.compute_canonical_hash()
         
         # Determine visits count
         if visits is None:
@@ -132,8 +135,21 @@ class GoAnalyzer:
         
         # Check cache (unless force_refresh)
         if not force_refresh:
-            cached = self.cache.get(board_hash, komi=board.komi, required_visits=current_visits)
+            cached = self.cache.get(canonical_hash, komi=board.komi, required_visits=current_visits)
             if cached is not None:
+                # Transform moves back to original orientation if needed
+                if transform_used != SymmetryTransform.IDENTITY:
+                    inverse = get_inverse_transform(transform_used)
+                    transformed_moves = []
+                    for move in cached.top_moves:
+                        new_coord = transform_gtp_coord(move.move, board_size, inverse)
+                        transformed_moves.append(MoveCandidate(
+                            move=new_coord,
+                            winrate=move.winrate,
+                            score_lead=move.score_lead,
+                            visits=move.visits,
+                        ))
+                    cached.top_moves = transformed_moves
                 return cached
         
         # Cache miss - run KataGo analysis
@@ -154,25 +170,39 @@ class GoAnalyzer:
         # Get model name
         model_name = self.katago.get_model_name()
         
-        # Build result
+        # Transform top_moves to canonical orientation before caching
+        if transform_used != SymmetryTransform.IDENTITY:
+            canonical_moves = []
+            for move in top_moves:
+                new_coord = transform_gtp_coord(move.move, board_size, transform_used)
+                canonical_moves.append(MoveCandidate(
+                    move=new_coord,
+                    winrate=move.winrate,
+                    score_lead=move.score_lead,
+                    visits=move.visits,
+                ))
+        else:
+            canonical_moves = top_moves
+        
+        # Build result (with original orientation moves for return)
         result = AnalysisResult(
-            board_hash=board_hash,
+            board_hash=canonical_hash,
             board_size=board_size,
             komi=board.komi,
             moves_sequence=board.get_moves_sequence_string(),
-            top_moves=top_moves,
+            top_moves=top_moves,  # Return original orientation
             engine_visits=current_visits,
             model_name=model_name,
             from_cache=False,
         )
         
-        # Store in cache
+        # Store in cache (with canonical orientation moves)
         self.cache.put(
-            board_hash=board_hash,
+            board_hash=canonical_hash,
             moves_sequence=board.get_moves_sequence_string(),
             board_size=board_size,
             komi=board.komi,
-            top_moves=top_moves,
+            top_moves=canonical_moves,  # Store canonical orientation
             engine_visits=current_visits,
             model_name=model_name,
         )
@@ -191,7 +221,8 @@ class GoAnalyzer:
         Returns:
             AnalysisResult with top candidate moves
         """
-        board_hash = board.compute_hash()
+        # Compute canonical hash for caching (uses symmetry normalization)
+        canonical_hash, transform_used = board.compute_canonical_hash()
         
         # Determine visits count
         if visits is None:
@@ -201,8 +232,21 @@ class GoAnalyzer:
         
         # Check cache
         if not force_refresh:
-            cached = self.cache.get(board_hash, komi=board.komi, required_visits=current_visits)
+            cached = self.cache.get(canonical_hash, komi=board.komi, required_visits=current_visits)
             if cached is not None:
+                # Transform moves back to original orientation if needed
+                if transform_used != SymmetryTransform.IDENTITY:
+                    inverse = get_inverse_transform(transform_used)
+                    transformed_moves = []
+                    for move in cached.top_moves:
+                        new_coord = transform_gtp_coord(move.move, board.size, inverse)
+                        transformed_moves.append(MoveCandidate(
+                            move=new_coord,
+                            winrate=move.winrate,
+                            score_lead=move.score_lead,
+                            visits=move.visits,
+                        ))
+                    cached.top_moves = transformed_moves
                 return cached
         
         # Cache miss - run analysis
@@ -219,23 +263,37 @@ class GoAnalyzer:
         
         model_name = self.katago.get_model_name()
         
+        # Transform top_moves to canonical orientation before caching
+        if transform_used != SymmetryTransform.IDENTITY:
+            canonical_moves = []
+            for move in top_moves:
+                new_coord = transform_gtp_coord(move.move, board.size, transform_used)
+                canonical_moves.append(MoveCandidate(
+                    move=new_coord,
+                    winrate=move.winrate,
+                    score_lead=move.score_lead,
+                    visits=move.visits,
+                ))
+        else:
+            canonical_moves = top_moves
+        
         result = AnalysisResult(
-            board_hash=board_hash,
+            board_hash=canonical_hash,
             board_size=board.size,
             komi=board.komi,
             moves_sequence=board.get_moves_sequence_string(),
-            top_moves=top_moves,
+            top_moves=top_moves,  # Return original orientation
             engine_visits=current_visits,
             model_name=model_name,
             from_cache=False,
         )
         
         self.cache.put(
-            board_hash=board_hash,
+            board_hash=canonical_hash,
             moves_sequence=board.get_moves_sequence_string(),
             board_size=board.size,
             komi=board.komi,
-            top_moves=top_moves,
+            top_moves=canonical_moves,  # Store canonical orientation
             engine_visits=current_visits,
             model_name=model_name,
         )
