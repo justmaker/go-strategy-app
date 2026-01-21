@@ -129,7 +129,7 @@ def main():
     args = parse_args()
     
     print("=" * 60)
-    print("9x9 Opening Book Generation")
+    print(f"{args.board_size}x{args.board_size} Opening Book Generation")
     print("=" * 60)
     print(f"Board size:  {args.board_size}x{args.board_size}")
     print(f"Max depth:   {args.depth}")
