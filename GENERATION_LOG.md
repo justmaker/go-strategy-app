@@ -18,7 +18,7 @@ This document records all opening book generation runs for tracking and reproduc
 
 ## Generation Runs
 
-### Run #1: 9x9 Opening Book (2026-01-22)
+### Run #1: 9x9 Opening Book (2026-01-22) ❌ DEPRECATED
 
 | Parameter | Value |
 |-----------|-------|
@@ -40,7 +40,7 @@ This document records all opening book generation runs for tracking and reproduc
 
 ---
 
-### Run #2: 13x13 Opening Book (2026-01-22) ✅ COMPLETED
+### Run #2: 13x13 Opening Book (2026-01-22) ❌ DEPRECATED
 
 | Parameter | Value |
 |-----------|-------|
@@ -99,6 +99,52 @@ This document records all opening book generation runs for tracking and reproduc
 - Significant reduction in node count due to grouping symmetric moves
 - Visits set to 100 for speed (proof of concept for 19x19 feasibility)
 - GUI updated to recognize 19x19@100v as a valid opening book
+
+---
+
+### Run #4: 9x9 Opening Book (Regenerated) (2026-01-22) ✅ COMPLETED
+
+| Parameter | Value |
+|-----------|-------|
+| **Board Size** | 9x9 |
+| **Komi** | 7.5 |
+| **Handicap** | 0 |
+| **Visits** | 500 |
+| **Max Depth** | 10 |
+| **Time Limit** | None |
+| **KataGo Threads** | 2 |
+| **Total Run Time** | 11m 43s |
+| **Nodes Processed** | 2,945 |
+| **Cache Entries (new)** | 2,945 |
+| **Total Database Entries** | 4,765 |
+
+**Notes**:
+- **Regenerated with Symmetry Pruning**
+- Increased visits to 500 (vs 300 in Run #1) for higher quality
+- Replaced Run #1 data
+
+---
+
+### Run #5: 13x13 Opening Book (Regenerated) (2026-01-22) ✅ COMPLETED
+
+| Parameter | Value |
+|-----------|-------|
+| **Board Size** | 13x13 |
+| **Komi** | 7.5 |
+| **Handicap** | 0 |
+| **Visits** | 300 |
+| **Max Depth** | 10 |
+| **Time Limit** | None |
+| **KataGo Threads** | 2 |
+| **Total Run Time** | 13m 06s |
+| **Nodes Processed** | 3,004 |
+| **Cache Entries (new)** | 3,004 |
+| **Total Database Entries** | 7,769 |
+
+**Notes**:
+- **Regenerated with Symmetry Pruning**
+- Dramatic reduction in nodes (18,336 -> 3,004) while maintaining same depth/visits
+- Replaced Run #2 data
 
 ---
 
