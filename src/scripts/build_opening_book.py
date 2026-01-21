@@ -54,7 +54,7 @@ Examples:
         type=str,
         default=None,
         metavar='HH:MM',
-        help='Wait until specified time to start (format: HH:MM, e.g., 20:00)'
+        help='Wait until specified time to start (format: HH:MM, e.g., 20:00). Use "now" to start immediately.'
     )
     
     parser.add_argument(
@@ -138,8 +138,8 @@ def main():
     print("=" * 60)
     print()
     
-    # Wait if --start-at is specified
-    if args.start_at:
+    # Wait if --start-at is specified (unless "now")
+    if args.start_at and args.start_at.lower() != "now":
         wait_until(args.start_at)
     
     print("Starting opening book generation...")
