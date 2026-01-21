@@ -272,13 +272,16 @@ def draw_board_pil(
             # Calculate score loss
             loss = best_score - move.score_lead
             
-            # Determine color
-            # Blue: Best Move (Rank 1 - i==0)
-            # Green: Loss < 1.0
+            # Determine color based on Score Loss AND Winrate Loss
+            # Blue: Best Move (Loss ~ 0 AND Winrate ~ Best) - handles symmetric moves correctly
+            # Green: Loss < 1.0 (or negative loss but not best winrate)
             # Yellow: Loss < 3.0
-            # Else: Standard (maybe Grey or disable on board?)
             
-            if i == 0:
+            best_winrate = suggested_moves[0].winrate
+            winrate_loss = best_winrate - move.winrate
+            
+            # Strict criteria for Blue: Must be best score AND best winrate (within margin)
+            if loss <= 0.05 and winrate_loss <= 0.005:
                 fill_color = (100, 150, 255) # Blue
             elif loss < 1.0:
                 fill_color = (100, 220, 100) # Green
@@ -837,9 +840,12 @@ def main():
                 score_sign = "+" if move.score_lead >= 0 else ""
                 loss = best_score - move.score_lead
                 
-                # Determine color indicator
-                if i == 0:
-                    indicator = "🔵" # Blue for Best
+                # Determine color indicator based on loss
+                best_winrate = result.top_moves[0].winrate
+                winrate_loss = best_winrate - move.winrate
+                
+                if loss <= 0.05 and winrate_loss <= 0.005:
+                    indicator = "🔵" # Blue for Best (and equivalents)
                     color_style = "color: #4da6ff; font-weight: bold;"
                 elif loss < 1.0:
                     indicator = "🟢" # Green

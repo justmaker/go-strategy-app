@@ -223,6 +223,40 @@ def transform_gtp_coord(gtp_coord: str, size: int, transform: SymmetryTransform)
     return coords_to_gtp(new_x, new_y)
 
 
+def get_valid_symmetries(
+    stones: Dict[Tuple[int, int], str],
+    size: int
+) -> List[SymmetryTransform]:
+    """
+    Identify which symmetry transformations preserve the current stone positions.
+    
+    If applying a transformation results in the exact same set of stones (same positions, same colors),
+    then that transformation is a valid symmetry of the current board state.
+    
+    Args:
+        stones: Dictionary of {(x, y): color}
+        size: Board size
+        
+    Returns:
+        List of valid SymmetryTransform enums
+    """
+    valid_symmetries = []
+    
+    # Pre-compute set of items for fast comparison
+    original_items = set(stones.items())
+    
+    for transform in ALL_TRANSFORMS:
+        if transform == SymmetryTransform.IDENTITY:
+            valid_symmetries.append(transform)
+            continue
+            
+        transformed = transform_stones(stones, size, transform)
+        if set(transformed.items()) == original_items:
+            valid_symmetries.append(transform)
+            
+    return valid_symmetries
+
+
 ALL_TRANSFORMS = list(SymmetryTransform)
 
 

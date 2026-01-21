@@ -212,20 +212,60 @@ def main():
                 if not candidate_moves:
                     continue
                 
-                # 1. Pick Top 3 moves
-                top_3 = candidate_moves[:3]
-                
-                # 2. Pruning: Only follow if winrate is within 10% of best move
-                best_winrate = top_3[0].winrate
-                
+                # Pruning & Symmetry Handling
+                # 1. Select top 3 *unique canonical* moves
+                # Best winrate for pruning threshold
+                best_winrate = candidate_moves[0].winrate
                 next_player = board.next_player
                 
-                for move_cand in top_3:
-                    # Check winrate threshold (winrate is 0.0-1.0)
+                selected_moves = []
+                # Branch-local seen hashes to avoid symmetric duplicates in the SAME parent node
+                seen_next_hashes = set()
+                
+                # Look at top candidates to find 3 unique ones (up to 15 to be safe)
+                for move_cand in candidate_moves[:20]:
+                    # 2. Pruning: Only follow if winrate is within 10% of best move
                     if move_cand.winrate < (best_winrate - 0.10):
+                        break # Sorted by winrate, so we can stop early
+                    
+                    if move_cand.move.upper() == 'PASS':
+                        # Valid move, add it (pass doesn't have board symmetry issues in the same way, usually)
+                        selected_moves.append(move_cand)
+                        if len(selected_moves) >= 3:
+                            break
                         continue
+
+                    # Symmetry check: Simulate move to get next board hash
+                    try:
+                        temp_move_str = f"{next_player} {move_cand.move}"
+                        temp_moves = list(moves)
+                        temp_moves.append(temp_move_str)
                         
-                    # Construct new path
+                        # create_board is fast enough (no NN)
+                        temp_board = create_board(size=args.board_size, moves=temp_moves)
+                        next_canonical_hash, _ = temp_board.compute_canonical_hash()
+                        
+                        # Also check if this state has been visited GLOBALLY (transposition table)
+                        # This optimization prevents adding nodes to queue that we already visited via another path
+                        # Note: we need to handle depth carefully. BFS ensures shortest path, so if seen, we skip.
+                        if next_canonical_hash in visited_hashes:
+                            continue
+                            
+                        # Also check LOCALLY within this branching (e.g. C3 vs G3)
+                        if next_canonical_hash in seen_next_hashes:
+                            continue # Symmetric equivalent to a move we JUST picked
+                        
+                        seen_next_hashes.add(next_canonical_hash)
+                        selected_moves.append(move_cand)
+                        
+                        if len(selected_moves) >= 3:
+                            break
+                            
+                    except ValueError:
+                        continue # Invalid move (should not happen from KataGo)
+                
+                # Add selected unique moves to queue
+                for move_cand in selected_moves:
                     new_move_str = f"{next_player} {move_cand.move}"
                     new_moves_list = list(moves)
                     new_moves_list.append(new_move_str)

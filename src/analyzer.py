@@ -14,7 +14,7 @@ from typing import List, Optional
 
 from .board import (
     BoardState, create_board,
-    SymmetryTransform, get_inverse_transform, transform_gtp_coord
+    SymmetryTransform, get_inverse_transform, transform_gtp_coord, get_valid_symmetries
 )
 from .cache import AnalysisCache, AnalysisResult, MoveCandidate
 from .config import AppConfig, load_config
@@ -155,6 +155,10 @@ class GoAnalyzer:
                             visits=move.visits,
                         ))
                     cached.top_moves = transformed_moves
+                
+                # Expand symmetries for presentation (visual completeness)
+                self._expand_symmetries(cached, board)
+                
                 return cached
         
         # Cache miss - run KataGo analysis
@@ -225,8 +229,61 @@ class GoAnalyzer:
             limit_setting=limit_setting,
         )
         
+        # Expand symmetries for presentation (visual completeness)
+        self._expand_symmetries(result, board)
+        
         return result
     
+    def _expand_symmetries(self, result: AnalysisResult, board: BoardState) -> None:
+        """
+        Expand top moves to include all symmetrically equivalent moves on the current board.
+        
+        This ensures that if the board is symmetric (e.g., empty or tengen), 
+        all symmetric points are shown with the same evaluation, even if KataGo 
+        only returned a subset or pruned some efficiently.
+        """
+        valid_symmetries = get_valid_symmetries(board.stones, board.size)
+        
+        # If no symmetry (only IDENTITY), nothing to do
+        if len(valid_symmetries) <= 1:
+            return
+            
+        seen_coords = set()
+        expanded_moves = []
+        
+        # First pass: keep existing moves and mark seen coordinates
+        for move in result.top_moves:
+            seen_coords.add(move.move)
+            expanded_moves.append(move)
+            
+        # Second pass: generate symmetries for each existing move
+        for move in result.top_moves:
+            if move.move.upper() == "PASS":
+                continue
+                
+            for transform in valid_symmetries:
+                if transform == SymmetryTransform.IDENTITY:
+                    continue
+                    
+                sym_coord = transform_gtp_coord(move.move, board.size, transform)
+                
+                if sym_coord not in seen_coords:
+                    # Create symmetric candidate
+                    new_cand = MoveCandidate(
+                        move=sym_coord,
+                        winrate=move.winrate,
+                        score_lead=move.score_lead,
+                        visits=move.visits
+                    )
+                    expanded_moves.append(new_cand)
+                    seen_coords.add(sym_coord)
+        
+        # Sort by winrate (descending)
+        expanded_moves.sort(key=lambda m: m.winrate, reverse=True)
+        
+        # Update result in place
+        result.top_moves = expanded_moves
+
     def analyze_board(self, board: BoardState, visits: Optional[int] = None, force_refresh: bool = False) -> AnalysisResult:
         """
         Analyze an existing BoardState object.
@@ -401,6 +458,8 @@ def quick_analyze(
             handicap=handicap,
             komi=komi,
         )
+
+
 
 
 def format_result(result: AnalysisResult) -> str:
