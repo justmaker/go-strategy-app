@@ -123,7 +123,8 @@ def coords_to_gtp(col: int, row: int, board_size: int) -> str:
     else:
         letter = chr(ord('A') + col)
     
-    number = board_size - row
+    # row is 0-based from bottom
+    number = row + 1
     return f"{letter}{number}"
 
 
@@ -528,14 +529,12 @@ def main():
         [data-testid="stSidebar"] {
             z-index: 100;
         }
-        .main .block-container {
-            max-width: 100%;
-            padding-left: 1rem;
-            padding-right: 1rem;
-        }
-        /* Keep main content visible when sidebar is open */
-        section[data-testid="stSidebar"] ~ div {
-            margin-left: 0;
+        @media (min-width: 900px) {
+            .main .block-container {
+                max-width: 100%;
+                padding-left: 10rem; /* Give more space for sidebar */
+                padding-right: 2rem;
+            }
         }
         </style>
     """, unsafe_allow_html=True)
@@ -1015,59 +1014,7 @@ def main():
         st.markdown(f"### Next: {player_symbol} {player_name}")
         
         st.markdown("---")
-        
-        # Analysis results
-        st.markdown("### Analysis")
-        
-        if st.session_state.analysis_result:
-            result = st.session_state.analysis_result
-            
-            source = "Cache" if result.from_cache else "KataGo"
-            st.success(f"Source: {source}")
-            
-            st.caption("Win% = player's chance after move | Score = point lead")
-            st.markdown("**Top Moves:**")
-            
-            best_winrate = result.top_moves[0].winrate if result.top_moves else 0.5
-            best_score = result.top_moves[0].score_lead if result.top_moves else 0.0
-            
-            for i, move in enumerate(result.top_moves[:10]): # Show more moves in list
-                winrate_pct = move.winrate * 100
-                score_sign = "+" if move.score_lead >= 0 else ""
-                loss = best_score - move.score_lead
-                winrate_drop = best_winrate - move.winrate
-                
-                # Filter: Don't show in list if winrate drop > 10% (match board filtering)
-                if winrate_drop > 0.10:
-                    continue
-                
-                # Determine color indicator based on winrate drop (Sync with Board)
-                if winrate_drop <= 0.005:
-                    indicator = "🔵" # Blue: Best (drop <= 0.5%)
-                    color_style = "color: #4da6ff; font-weight: bold;"
-                elif i == 1 or winrate_drop <= 0.03:
-                    indicator = "🟢" # Green: Good (Drop <= 3%)
-                    color_style = "color: #4dce4d;"
-                elif i == 2 or winrate_drop <= 0.10:
-                    indicator = "🟡" # Yellow: Acceptable (Drop <= 10%)
-                    color_style = "color: #e6e600;"
-                else:
-                    indicator = "⚪"
-                    color_style = "color: #cccccc;"
-                
-                # Format with custom styling
-                st.markdown(
-                    f"<span style='{color_style}'>{indicator} **{i+1}. {move.move}**</span> "
-                    f"| Win: `{winrate_pct:5.1f}%` "
-                    f"| Score: `{score_sign}{move.score_lead:.1f}` "
-                    f"| Loss: `{loss:.1f}`",
-                    unsafe_allow_html=True
-                )
-        else:
-            st.info("Place a stone to see analysis")
-        
-        st.markdown("---")
-        
+
         # Move history
         st.markdown("### Move History")
         
@@ -1103,7 +1050,6 @@ def main():
                     if st.button(label, key=f"hist_{i}", use_container_width=True, type=button_type):
                         st.session_state.moves = st.session_state.moves[:i+1]
                         st.session_state.analysis_result = None
-                        save_session_to_disk()
                         st.rerun()
                 
                 # Second move in pair (if exists)
@@ -1117,19 +1063,76 @@ def main():
                         if st.button(label, key=f"hist_{i+1}", use_container_width=True, type=button_type):
                             st.session_state.moves = st.session_state.moves[:i+2]
                             st.session_state.analysis_result = None
-                            save_session_to_disk()
                             st.rerun()
         else:
             st.text("(No moves yet)")
         
         st.markdown("---")
         
+        # Analysis results
+        st.markdown("### Analysis")
+        
+        if st.session_state.analysis_result:
+            result = st.session_state.analysis_result
+            
+            source = "Cache" if result.from_cache else "KataGo"
+            st.success(f"Source: {source}")
+            
+            st.caption("Win% = player's chance after move | Score = point lead")
+            st.markdown("**Top Moves:**")
+            
+            best_winrate = result.top_moves[0].winrate if result.top_moves else 0.5
+            best_score = result.top_moves[0].score_lead if result.top_moves else 0.0
+            
+            # Sorting and ranking logic for display consistency
+            sorted_moves = sorted(result.top_moves, key=lambda m: m.winrate, reverse=True)
+            best_winrate = sorted_moves[0].winrate
+
+            rank = 0
+            for move in sorted_moves[:10]: # Show top 10
+                if move.move.upper() == "PASS":
+                     continue
+                
+                winrate_pct = move.winrate * 100
+                score_sign = "+" if move.score_lead >= 0 else ""
+                loss = best_score - move.score_lead
+                winrate_drop = best_winrate - move.winrate
+                
+                # Filter: Don't show in list if winrate drop > 10% (match board filtering)
+                if winrate_drop > 0.10:
+                    continue
+                
+                # Determine color indicator based on winrate drop (Sync with Board)
+                if rank == 0 or winrate_drop <= 0.005:
+                    indicator = "🔵" # Blue: Best (drop <= 0.5%)
+                    color_style = "color: #4da6ff; font-weight: bold;"
+                elif rank == 1 or winrate_drop <= 0.03:
+                    indicator = "🟢" # Green: Good (Drop <= 3%)
+                    color_style = "color: #4dce4d;"
+                else:
+                    indicator = "🟡" # Yellow: Acceptable (Drop <= 10%)
+                    color_style = "color: #e6e600;"
+                
+                rank += 1
+                
+                # Format with custom styling
+                st.markdown(
+                    f"<span style='{color_style}'>{indicator} **{move.move}**</span> "
+                    f"| Win: `{winrate_pct:5.1f}%` "
+                    f"| Score: `{score_sign}{move.score_lead:.1f}` "
+                    f"| Loss: `{loss:.1f}`",
+                    unsafe_allow_html=True
+                )
+        else:
+            st.info("Place a stone to see analysis")
+            
+        st.markdown("---")
+
         # Game info
         st.markdown("### Game Info")
         st.write(f"Board: {st.session_state.board_size}x{st.session_state.board_size}")
         st.write(f"Komi: {st.session_state.komi}")
         st.write(f"Handicap: {st.session_state.handicap}")
-
 
 if __name__ == "__main__":
     main()
