@@ -28,3 +28,4 @@ pytest>=7.0
 # - json (serialization)
 # - threading (thread safety)
 # - argparse (CLI)
+sgfmill==1.1.1

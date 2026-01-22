@@ -29,6 +29,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.analyzer import GoAnalyzer
 from src.cache import MoveCandidate
+from src.sgf_handler import parse_sgf, create_sgf
 
 
 # ============================================================================
@@ -581,6 +582,103 @@ def main():
             st.session_state.moves.append(f"{next_player} PASS")
             st.session_state.analysis_result = None
             st.rerun()
+        
+        st.markdown("---")
+        
+        # ================================================================
+        # SGF Import/Export
+        # ================================================================
+        st.subheader("📁 SGF Import/Export")
+        
+        # SGF Upload
+        uploaded_file = st.file_uploader(
+            "Load SGF",
+            type=["sgf"],
+            help="Upload an SGF file to load the game",
+            key="sgf_uploader"
+        )
+        
+        if uploaded_file is not None:
+            try:
+                # Read and parse the SGF
+                sgf_content = uploaded_file.read().decode("utf-8", errors="replace")
+                game_data = parse_sgf(sgf_content)
+                
+                # Update session state with loaded game
+                loaded_size = game_data["board_size"]
+                if loaded_size in [9, 13, 19]:
+                    st.session_state.board_size = loaded_size
+                else:
+                    st.warning(f"Board size {loaded_size} not supported. Using 19x19.")
+                    st.session_state.board_size = 19
+                
+                st.session_state.komi = game_data["komi"]
+                st.session_state.handicap = game_data["handicap"]
+                st.session_state.moves = game_data["moves"]
+                
+                # Handle handicap stones (add as initial moves)
+                if game_data["handicap_stones"]:
+                    # Handicap stones are added as Black moves at the beginning
+                    handicap_moves = [f"B {coord}" for coord in game_data["handicap_stones"]]
+                    st.session_state.moves = handicap_moves + st.session_state.moves
+                
+                # Show metadata
+                meta = game_data.get("metadata", {})
+                if meta:
+                    info_parts = []
+                    if "black_player" in meta:
+                        info_parts.append(f"Black: {meta['black_player']}")
+                    if "white_player" in meta:
+                        info_parts.append(f"White: {meta['white_player']}")
+                    if "result" in meta:
+                        info_parts.append(f"Result: {meta['result']}")
+                    if info_parts:
+                        st.info(" | ".join(info_parts))
+                
+                st.success(f"Loaded {len(game_data['moves'])} moves from SGF!")
+                
+                # Auto-analyze the loaded position
+                try:
+                    if st.session_state.analyzer is None:
+                        st.session_state.analyzer = GoAnalyzer(
+                            config_path=str(PROJECT_ROOT / "config.yaml")
+                        )
+                    result = st.session_state.analyzer.analyze(
+                        board_size=st.session_state.board_size,
+                        moves=st.session_state.moves if st.session_state.moves else None,
+                        handicap=st.session_state.handicap,
+                        komi=st.session_state.komi,
+                        visits=st.session_state.visits,
+                    )
+                    st.session_state.analysis_result = result
+                except Exception as e:
+                    st.session_state.analysis_result = None
+                
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Failed to load SGF: {e}")
+        
+        # SGF Download
+        if st.session_state.moves:
+            sgf_content = create_sgf(
+                board_size=st.session_state.board_size,
+                moves=st.session_state.moves,
+                komi=st.session_state.komi,
+                handicap=st.session_state.handicap,
+                game_name="Go Strategy App Analysis",
+            )
+            
+            st.download_button(
+                label="💾 Download SGF",
+                data=sgf_content,
+                file_name="game.sgf",
+                mime="application/x-go-sgf",
+                use_container_width=True,
+                help="Download current game as SGF file"
+            )
+        else:
+            st.caption("No moves to export yet.")
         
         st.markdown("---")
         
