@@ -628,6 +628,30 @@ class AnalysisCache:
             # If table doesn't exist yet or other error
             return False
 
+    def get_opening_book_visits(self, board_size: int, komi: float, handicap: int) -> int:
+        """
+        Get the visits count of the highest quality opening book if it exists, or 0.
+        
+        Args:
+            board_size: Board size
+            komi: Komi
+            handicap: Handicap stones
+            
+        Returns:
+            Visits count (e.g. 300) or 0 if not found
+        """
+        query = """
+            SELECT MAX(visits) as max_visits FROM opening_book_meta 
+            WHERE board_size = ? AND komi = ? AND handicap = ?
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(query, (board_size, komi, handicap))
+                row = cursor.fetchone()
+                return row['max_visits'] if row and row['max_visits'] else 0
+        except Exception:
+            return 0
+
 
     def merge_database(self, source_db_path: str) -> Dict[str, int]:
         """

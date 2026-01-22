@@ -339,17 +339,16 @@ def init_session_state():
 
     if 'visits' not in st.session_state:
         # Check if opening book exists for current settings
-        has_book = False
+        book_visits = 0
         if st.session_state.analyzer:
-            has_book = st.session_state.analyzer.cache.has_opening_book(
+            book_visits = st.session_state.analyzer.cache.get_opening_book_visits(
                 board_size=st.session_state.get('board_size', 9),
                 komi=st.session_state.get('komi', 7.5),
-                handicap=st.session_state.get('handicap', 0),
-                min_visits=300
+                handicap=st.session_state.get('handicap', 0)
             )
             
-        if has_book:
-            st.session_state.visits = 300
+        if book_visits > 0:
+            st.session_state.visits = book_visits
         else:
             st.session_state.visits = 50
     if 'analysis_result' not in st.session_state:
@@ -598,17 +597,19 @@ def main():
         
         # Check if we have an opening book for this configuration
         has_book = False
+        # Check if we have an opening book for this configuration
+        book_visits = 0
         if st.session_state.analyzer:
-            has_book = st.session_state.analyzer.cache.has_opening_book(
+            book_visits = st.session_state.analyzer.cache.get_opening_book_visits(
                 board_size=st.session_state.board_size,
                 komi=st.session_state.komi,
                 handicap=st.session_state.handicap,
-                min_visits=300
             )
 
         # If opening book exists, enforce minimum visits to ensure quality
+        has_book = book_visits > 0
         if has_book:
-            min_visits = 300
+            min_visits = book_visits
             visit_levels = [v for v in all_visit_levels if v >= min_visits]
         else:
             visit_levels = all_visit_levels
@@ -629,7 +630,7 @@ def main():
             "Analysis Strength (Visits)",
             options=visit_levels,
             value=current_visits,
-            help="300+=Opening Book, 500+=Strong" if has_book else "10=Debug, 50=Fast, 500+=Strong"
+            help=f"{min_visits}+=Opening Book" if has_book else "10=Debug, 50=Fast, 500+=Strong"
         )
         
         # Show cached data availability
