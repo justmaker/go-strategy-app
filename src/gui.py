@@ -490,8 +490,9 @@ def get_next_player(moves: List[str], handicap: int) -> str:
 def main():
     st.set_page_config(
         page_title="Go Strategy Analyzer",
-        page_icon="",
+        page_icon="⚫",
         layout="wide",
+        initial_sidebar_state="expanded",
     )
     
     # Custom CSS to override default red slider color
@@ -522,6 +523,19 @@ def main():
         /* Fix the gap above sidebar content */
         .stSidebar .block-container {
             padding-top: 1rem !important;
+        }
+        /* Ensure sidebar doesn't overlap main content */
+        [data-testid="stSidebar"] {
+            z-index: 100;
+        }
+        .main .block-container {
+            max-width: 100%;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        /* Keep main content visible when sidebar is open */
+        section[data-testid="stSidebar"] ~ div {
+            margin-left: 0;
         }
         </style>
     """, unsafe_allow_html=True)
