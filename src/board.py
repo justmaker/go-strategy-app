@@ -366,6 +366,12 @@ class ZobristHasher:
         for i in range(-200, 201):
             komi = i * 0.5
             self.komi_hash[komi] = self._random_hash()
+        # Hash for different board sizes to avoid collisions
+        self.size_hash: Dict[int, int] = {
+            9: self._random_hash(),
+            13: self._random_hash(),
+            19: self._random_hash(),
+        }
     
     def _random_hash(self) -> int:
         """Generate a random 64-bit hash value."""
@@ -379,7 +385,8 @@ class ZobristHasher:
         self,
         stones: Dict[Tuple[int, int], str],
         next_player: str,
-        komi: float
+        komi: float,
+        board_size: int = 19
     ) -> str:
         """
         Compute Zobrist hash for a board position.
@@ -388,26 +395,12 @@ class ZobristHasher:
             stones: Dictionary of {(x, y): color} where color is 'B' or 'W'
             next_player: 'B' or 'W'
             komi: Komi value
+            board_size: Size of the board (important for empty boards)
             
         Returns:
             Hex string representation of the hash
         """
-        h = 0
-        
-        # XOR in all stones
-        for (x, y), color in stones.items():
-            color_idx = 0 if color == 'B' else 1
-            h ^= self.stone_hash[color_idx][x][y]
-        
-        # XOR in player to move (if White)
-        if next_player == 'W':
-            h ^= self.player_hash
-        
-        # XOR in komi
-        q_komi = self._quantize_komi(komi)
-        if q_komi in self.komi_hash:
-            h ^= self.komi_hash[q_komi]
-        
+        h = self._compute_hash_int(stones, next_player, komi, board_size)
         return format(h, '016x')
     
     def compute_canonical_hash(
@@ -437,7 +430,7 @@ class ZobristHasher:
         
         for transform in ALL_TRANSFORMS:
             transformed_stones = transform_stones(stones, board_size, transform)
-            h = self._compute_hash_int(transformed_stones, next_player, komi)
+            h = self._compute_hash_int(transformed_stones, next_player, komi, board_size)
             
             if min_hash is None or h < min_hash:
                 min_hash = h
@@ -449,10 +442,14 @@ class ZobristHasher:
         self,
         stones: Dict[Tuple[int, int], str],
         next_player: str,
-        komi: float
+        komi: float,
+        board_size: int
     ) -> int:
         """Compute Zobrist hash as integer (internal use)."""
         h = 0
+        
+        # XOR in board size to avoid empty board collisions
+        h ^= self.size_hash.get(board_size, 0)
         
         for (x, y), color in stones.items():
             color_idx = 0 if color == 'B' else 1
@@ -503,6 +500,7 @@ class BoardState:
     handicap_stones: List[str] = field(default_factory=list)
     komi: float = 7.5
     next_player: str = 'B'
+    prisoners: Dict[str, int] = field(default_factory=lambda: {'B': 0, 'W': 0})
     
     def __post_init__(self):
         """Validate board state after initialization."""
@@ -529,31 +527,81 @@ class BoardState:
         # After handicap, White plays first
         self.next_player = 'W'
     
-    def play(self, color: str, coord: str) -> None:
-        """
-        Play a move on the board.
-        
-        Args:
-            color: 'B' or 'W'
-            coord: GTP coordinate (e.g., "Q16")
-            
-        Raises:
-            ValueError: If move is invalid
-        """
-        color = color.upper()
-        if color not in ('B', 'W'):
-            raise ValueError(f"Color must be 'B' or 'W', got {color}")
-        
+        if coord.upper() == "PASS":
+            self.moves.append((color, "PASS"))
+            self.next_player = 'W' if color == 'B' else 'B'
+            return
+
         x, y = gtp_to_coords(coord, self.size)
         
         if (x, y) in self.stones:
             raise ValueError(f"Position {coord} is already occupied")
         
+        # 1. Place the stone
         self.stones[(x, y)] = color
+        
+        # 2. Check for captures of opponent stones
+        opponent = 'W' if color == 'B' else 'B'
+        captured_total = 0
+        
+        # Check adjacent positions
+        for nx, ny in [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]:
+            if 0 <= nx < self.size and 0 <= ny < self.size:
+                if self.stones.get((nx, ny)) == opponent:
+                    # If this opponent group has no liberties, capture it
+                    group = self._get_group((nx, ny))
+                    if self._get_liberties(group) == 0:
+                        for gx, gy in group:
+                            del self.stones[(gx, gy)]
+                            captured_total += 1
+        
+        # 3. Update prisoner counts
+        # Note: If black captures white, black gets white prisoners
+        self.prisoners[color] += captured_total
+        
+        # 4. Check for suicide (self-capture) - GTP usually forbids this
+        # If the newly placed stone group has no liberties, and captured nothing
+        if captured_total == 0:
+            own_group = self._get_group((x, y))
+            if self._get_liberties(own_group) == 0:
+                 # Suicide rule check - most Go rules forbid this
+                 # For now, we allow it in BoardState as it's a "set-up" tool, 
+                 # but we should at least remove the stones.
+                 for gx, gy in own_group:
+                     del self.stones[(gx, gy)]
+        
         self.moves.append((color, coord))
         
         # Update next player
-        self.next_player = 'W' if color == 'B' else 'B'
+        self.next_player = opponent
+
+    def _get_group(self, start_pos: Tuple[int, int]) -> Set[Tuple[int, int]]:
+        """Get all connected stones of the same color."""
+        color = self.stones.get(start_pos)
+        if not color:
+            return set()
+        
+        group = {start_pos}
+        stack = [start_pos]
+        
+        while stack:
+            x, y = stack.pop()
+            for nx, ny in [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]:
+                if (0 <= nx < self.size and 0 <= ny < self.size and 
+                    (nx, ny) not in group and self.stones.get((nx, ny)) == color):
+                    group.add((nx, ny))
+                    stack.append((nx, ny))
+        return group
+
+    def _get_liberties(self, group: Set[Tuple[int, int]]) -> int:
+        """Count the liberties of a stone group."""
+        liberties = set()
+        for x, y in group:
+            for nx, ny in [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]:
+                if 0 <= nx < self.size and 0 <= ny < self.size:
+                    if (nx, ny) not in self.stones:
+                        liberties.add((nx, ny))
+        return len(liberties)
     
     def play_moves(self, moves: List[str]) -> None:
         """
@@ -577,7 +625,7 @@ class BoardState:
             Hex string hash of the position
         """
         hasher = get_zobrist_hasher()
-        return hasher.compute_hash(self.stones, self.next_player, self.komi)
+        return hasher.compute_hash(self.stones, self.next_player, self.komi, self.size)
     
     def compute_canonical_hash(self) -> Tuple[str, SymmetryTransform]:
         """

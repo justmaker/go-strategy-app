@@ -288,9 +288,9 @@ class KataGoGTP:
             if self.process is None or self.process.stdin is None or self.process.stdout is None:
                 raise KataGoProcessError("KataGo process is not running")
             
-            # Use kata-analyze which provides scoreLead
-            # Format: kata-analyze <player> interval <centiseconds>
-            cmd = f"kata-analyze {next_player} interval 10"
+            # Use kata-analyze which provides scoreLead and ownership
+            # ownership true ensures we get territory estimation
+            cmd = f"kata-analyze {next_player} interval 10 ownership true"
             
             # Send command
             try:
@@ -353,8 +353,14 @@ class KataGoGTP:
             if response_lines:
                 last_line = response_lines[-1]
                 candidates = self._parse_kata_analyze_line(last_line, top_n)
+                # Extract ownership from the last line if present
+                ownership = self._parse_ownership(last_line)
                 if candidates:
-                    return candidates
+                    # Inject ownership into the first candidate's optional field 
+                    # (This is a bit hacky, normally we'd return a custom object)
+                    # For now just return the candidates, ownership will be handled in analyzer.py
+                    return candidates, ownership
+                return candidates, None
             
             # Fallback to genmove if kata-analyze failed
             response = self._send_command_internal(f"genmove {next_player}")
@@ -414,6 +420,16 @@ class KataGoGTP:
         # Sort by visits (descending) to get moves with most analysis
         moves.sort(key=lambda m: m.visits, reverse=True)
         return moves[:top_n]
+
+    def _parse_ownership(self, line: str) -> Optional[List[float]]:
+        """Extract ownership array from kata-analyze output line."""
+        match = re.search(r'ownership\s+\[([\d.\s-]+)\]', line)
+        if match:
+             try:
+                 return [float(x) for x in match.group(1).split()]
+             except ValueError:
+                 return None
+        return None
     
     def _parse_analyze_output(self, output: str, top_n: int) -> List[MoveCandidate]:
         """

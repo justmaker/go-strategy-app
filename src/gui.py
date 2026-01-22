@@ -18,6 +18,7 @@ import numpy as np
 from PIL import Image
 import io
 from typing import List, Tuple, Optional
+import json
 import sys
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.board import BoardState
 from src.analyzer import GoAnalyzer
 from src.cache import MoveCandidate
 from src.sgf_handler import parse_sgf, create_sgf
@@ -147,23 +149,51 @@ def get_star_points(board_size: int) -> List[Tuple[int, int]]:
 # ============================================================================
 
 def draw_board_pil(
-    board_size: int,
-    stones: List[Tuple[str, int, int, int]],  # List of (color, col, row, move_number) - move_number is 0 for handicap stones
+    board: BoardState,
     suggested_moves: Optional[List[MoveCandidate]] = None,
     last_move: Optional[Tuple[int, int]] = None,
     show_move_numbers: bool = True,
+    show_territory: bool = False,
+    ownership: Optional[List[float]] = None
 ) -> Image.Image:
     """
-    Draw a Go board as PIL Image for click interaction.
+    Draw a Go board as PIL Image specifically using BoardState for correct captures.
     """
-    from PIL import ImageDraw, ImageFont
+    from PIL import ImageDraw, ImageFont, Image
     
+    board_size = board.size
     img_size = get_board_image_size(board_size)
     
     # Create image with board color
     board_color = (222, 184, 135)  # Burlywood RGB
     img = Image.new('RGB', (img_size, img_size), board_color)
     draw = ImageDraw.Draw(img)
+    
+    # 0. Draw ownership heatmap (Territory)
+    if show_territory and ownership and len(ownership) == board_size * board_size:
+        # Create a semi-transparent overlay
+        overlay = Image.new('RGBA', (img_size, img_size), (0, 0, 0, 0))
+        o_draw = ImageDraw.Draw(overlay)
+        
+        for y in range(board_size):
+            for x in range(board_size):
+                # ownership index is usually y*size + x
+                val = ownership[y * board_size + x]
+                if abs(val) < 0.15: continue
+                
+                px, py = board_to_pixel_coords(x, y)
+                r = CELL_SIZE // 2 - 2
+                
+                # Positive val favors Black (Blue-ish), Negative favors White (Red-ish)
+                # Actually let's use standard Black/White translucent squares
+                if val > 0:
+                    color = (0, 0, 0, int(abs(val) * 100)) # Black territory
+                else:
+                    color = (255, 255, 255, int(abs(val) * 100)) # White territory
+                
+                o_draw.rectangle([px-r, py-r, px+r, py+r], fill=color)
+        
+        img.paste(overlay, (0, 0), overlay)
     
     # Try to load a font, fallback to default
     try:
@@ -217,14 +247,18 @@ def draw_board_pil(
         r = 3
         draw.ellipse([px - r, py - r, px + r, py + r], fill='black')
     
-    # Draw stones
-    occupied = set()
-    for stone_data in stones:
-        color, col, row = stone_data[0], stone_data[1], stone_data[2]
-        move_number = stone_data[3] if len(stone_data) > 3 else 0
-        
+    # Draw stones from BoardState.stones
+    stones_dict = board.stones
+    # Map coordinates to move numbers for display
+    move_nums = {}
+    for i, (color, coord) in enumerate(board.moves):
+        if coord.upper() != "PASS":
+            c_coord = gtp_to_coords(coord, board_size)
+            move_nums[c_coord] = i + 1
+
+    for (col, row), color in stones_dict.items():
+        move_number = move_nums.get((col, row), 0)
         px, py = board_to_pixel_coords(col, row)
-        occupied.add((col, row))
         
         stone_color = 'black' if color == 'B' else 'white'
         outline_color = 'black'
@@ -237,10 +271,8 @@ def draw_board_pil(
         if show_move_numbers and move_number > 0:
             text_color = 'white' if color == 'B' else 'black'
             num_text = str(move_number)
-            # Center the text on stone
             draw.text((px, py), num_text, fill=text_color, font=move_font, anchor='mm')
-        elif last_move and (col, row) == last_move and not show_move_numbers:
-            # Mark last move with a small circle only when move numbers are off
+        elif last_move and (col, row) == last_move:
             marker_color = 'white' if color == 'B' else 'black'
             mr = 4
             draw.ellipse([px - mr, py - mr, px + mr, py + mr], 
@@ -261,7 +293,7 @@ def draw_board_pil(
             if move.move.upper() == "PASS":
                 continue
             col, row = gtp_to_coords(move.move, board_size)
-            if col < 0 or (col, row) in occupied:
+            if col < 0 or (col, row) in stones_dict:
                 continue
             
             # Filter: Only show moves within 10% winrate of best
@@ -269,13 +301,14 @@ def draw_board_pil(
             if winrate_drop > 0.10:  # More than 10% winrate drop
                 continue
             
-            # Color based on winrate drop
-            # Blue: Best (winrate drop <= 0.5%)
-            # Green: Good (winrate drop <= 3%)
-            # Yellow: Acceptable (winrate drop <= 10%)
+            # Color based on dynamic logic to ensure visual variety for top moves
+            # Rule:
+            # - Index 0 (Best): Blue
+            # - Index 1: Blue if drop <= 0.5%, else Green
+            # - Index 2: Blue/Green if drop matches, else Yellow
             if winrate_drop <= 0.005:
                 fill_color = (100, 150, 255)  # Blue
-            elif winrate_drop <= 0.03:
+            elif i == 1 or winrate_drop <= 0.03:
                 fill_color = (100, 220, 100)  # Green
             else:
                 fill_color = (255, 220, 80)   # Yellow
@@ -305,16 +338,46 @@ def draw_board_pil(
 # Session State Management
 # ============================================================================
 
+def save_session_to_disk():
+    """Save current game state to a temporary file for persistence across refreshes."""
+    state = {
+        'moves': st.session_state.moves,
+        'board_size': st.session_state.board_size,
+        'komi': st.session_state.komi,
+        'handicap': st.session_state.handicap
+    }
+    try:
+        save_path = PROJECT_ROOT / "data" / "current_session.json"
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(save_path, 'w') as f:
+            json.dump(state, f)
+    except:
+        pass
+
+def load_session_from_disk():
+    """Load previously saved session state."""
+    try:
+        save_path = PROJECT_ROOT / "data" / "current_session.json"
+        if save_path.exists():
+            with open(save_path, 'r') as f:
+                return json.load(f)
+    except:
+        pass
+    return None
+
 def init_session_state():
     """Initialize session state variables."""
+    # Try to load from disk first
+    saved_state = load_session_from_disk()
+    
     if 'moves' not in st.session_state:
-        st.session_state.moves = []
+        st.session_state.moves = saved_state['moves'] if saved_state else []
     if 'board_size' not in st.session_state:
-        st.session_state.board_size = 9
+        st.session_state.board_size = saved_state['board_size'] if saved_state else 9
     if 'komi' not in st.session_state:
-        st.session_state.komi = 7.5
+        st.session_state.komi = saved_state['komi'] if saved_state else 7.5
     if 'handicap' not in st.session_state:
-        st.session_state.handicap = 0
+        st.session_state.handicap = saved_state['handicap'] if saved_state else 0
     if 'analyzer' not in st.session_state:
         st.session_state.analyzer = None
         
@@ -364,7 +427,11 @@ def init_session_state():
     if 'last_click' not in st.session_state:
         st.session_state.last_click = None
     if 'show_move_numbers' not in st.session_state:
-        st.session_state.show_move_numbers = True  # Default ON like Sabaki
+        st.session_state.show_move_numbers = True
+    if 'prisoners' not in st.session_state:
+        st.session_state.prisoners = {'B': 0, 'W': 0}
+    if 'show_territory' not in st.session_state:
+        st.session_state.show_territory = False
 
 
 
@@ -447,6 +514,17 @@ def main():
         div[data-baseweb="select"] {
             color: #333333;
         }
+        /* Reduce sidebar top padding */
+        [data-testid="stSidebar"] > div:first-child {
+            padding-top: 2rem !important;
+        }
+        [data-testid="stSidebarNav"] {
+            padding-top: 0rem !important;
+        }
+        /* Fix the gap above sidebar content */
+        .stSidebar .block-container {
+            padding-top: 1rem !important;
+        }
         </style>
     """, unsafe_allow_html=True)
     
@@ -458,7 +536,7 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.header("Settings")
+        st.markdown("### Settings")
         
         # Board size - Three buttons
         st.write("**Board Size**")
@@ -593,108 +671,17 @@ def main():
         
         st.markdown("---")
         
-        # ================================================================
-        # SGF Import/Export
-        # ================================================================
-        st.subheader("📁 SGF Import/Export")
-        
-        # SGF Upload
-        uploaded_file = st.file_uploader(
-            "Load SGF",
-            type=["sgf"],
-            help="Upload an SGF file to load the game",
-            key="sgf_uploader"
-        )
-        
-        if uploaded_file is not None:
-            try:
-                # Read and parse the SGF
-                sgf_content = uploaded_file.read().decode("utf-8", errors="replace")
-                game_data = parse_sgf(sgf_content)
-                
-                # Update session state with loaded game
-                loaded_size = game_data["board_size"]
-                if loaded_size in [9, 13, 19]:
-                    st.session_state.board_size = loaded_size
-                else:
-                    st.warning(f"Board size {loaded_size} not supported. Using 19x19.")
-                    st.session_state.board_size = 19
-                
-                st.session_state.komi = game_data["komi"]
-                st.session_state.handicap = game_data["handicap"]
-                st.session_state.moves = game_data["moves"]
-                
-                # Handle handicap stones (add as initial moves)
-                if game_data["handicap_stones"]:
-                    # Handicap stones are added as Black moves at the beginning
-                    handicap_moves = [f"B {coord}" for coord in game_data["handicap_stones"]]
-                    st.session_state.moves = handicap_moves + st.session_state.moves
-                
-                # Show metadata
-                meta = game_data.get("metadata", {})
-                if meta:
-                    info_parts = []
-                    if "black_player" in meta:
-                        info_parts.append(f"Black: {meta['black_player']}")
-                    if "white_player" in meta:
-                        info_parts.append(f"White: {meta['white_player']}")
-                    if "result" in meta:
-                        info_parts.append(f"Result: {meta['result']}")
-                    if info_parts:
-                        st.info(" | ".join(info_parts))
-                
-                st.success(f"Loaded {len(game_data['moves'])} moves from SGF!")
-                
-                # Auto-analyze the loaded position
-                try:
-                    if st.session_state.analyzer is None:
-                        st.session_state.analyzer = GoAnalyzer(
-                            config_path=str(PROJECT_ROOT / "config.yaml")
-                        )
-                    result = st.session_state.analyzer.analyze(
-                        board_size=st.session_state.board_size,
-                        moves=st.session_state.moves if st.session_state.moves else None,
-                        handicap=st.session_state.handicap,
-                        komi=st.session_state.komi,
-                        visits=st.session_state.visits,
-                    )
-                    st.session_state.analysis_result = result
-                except Exception as e:
-                    st.session_state.analysis_result = None
-                
-                st.rerun()
-                
-            except Exception as e:
-                st.error(f"Failed to load SGF: {e}")
-        
-        # SGF Download
-        if st.session_state.moves:
-            sgf_content = create_sgf(
-                board_size=st.session_state.board_size,
-                moves=st.session_state.moves,
-                komi=st.session_state.komi,
-                handicap=st.session_state.handicap,
-                game_name="Go Strategy App Analysis",
-            )
-            
-            st.download_button(
-                label="💾 Download SGF",
-                data=sgf_content,
-                file_name="game.sgf",
-                mime="application/x-go-sgf",
-                use_container_width=True,
-                help="Download current game as SGF file"
-            )
-        else:
-            st.caption("No moves to export yet.")
-        
-        st.markdown("---")
-        
         # Show Move Numbers toggle
         st.session_state.show_move_numbers = st.checkbox(
             "Show Move Numbers",
             value=st.session_state.show_move_numbers,
-            help="Display move numbers (1, 2, 3...) on stones like Sabaki"
+        )
+        
+        # Show Territory toggle
+        st.session_state.show_territory = st.checkbox(
+            "Show Territory (AI Estate)",
+            value=st.session_state.show_territory,
+            help="Show AI predicted territory ownership"
         )
         
         # Visits Control
@@ -848,66 +835,70 @@ def main():
             st.write(f"Cached: {stats.get('total_entries', 0)}")
         except Exception as e:
             st.warning(f"Cache unavailable")
-    
-    # Main content area
-    col_board, col_info = st.columns([2, 1])
-    
-    with col_board:
-        # Get current state
-        stones = get_stones_from_moves(st.session_state.moves, st.session_state.board_size)
-        occupied = get_occupied_positions(stones)
         
-        # Get last move
-        last_move = None
-        if st.session_state.moves:
-            last = st.session_state.moves[-1].split()
-            if len(last) == 2 and last[1].upper() != "PASS":
-                last_move = gtp_to_coords(last[1], st.session_state.board_size)
+        st.markdown("---")
         
-        # Get suggested moves
-        suggested = None
-        if st.session_state.analysis_result:
-            suggested = st.session_state.analysis_result.top_moves
+        # ================================================================
+        # SGF Import/Export (Moved to bottom)
+        # ================================================================
+        st.subheader("📁 SGF Import/Export")
         
-        # Draw board as PIL image
-        board_img = draw_board_pil(
-            board_size=st.session_state.board_size,
-            stones=stones,
-            suggested_moves=suggested,
-            last_move=last_move,
-            show_move_numbers=st.session_state.show_move_numbers,
+        # SGF Upload
+        uploaded_file = st.file_uploader(
+            "Load SGF",
+            type=["sgf"],
+            help="Upload an SGF file to load the game",
+            key="sgf_uploader"
         )
         
-        # Display clickable image
-        coords = streamlit_image_coordinates(
-            board_img,
-            key=f"board_{len(st.session_state.moves)}_{st.session_state.analysis_result is not None}",
-        )
-        
-        # Handle click
-        if coords is not None:
-            click_x = coords["x"]
-            click_y = coords["y"]
-            
-            col, row = pixel_to_board_coords(click_x, click_y, st.session_state.board_size)
-            
-            if col >= 0 and row >= 0 and (col, row) not in occupied:
-                # Valid click on empty intersection
-                next_player = get_next_player(st.session_state.moves, st.session_state.handicap)
-                gtp_coord = coords_to_gtp(col, row, st.session_state.board_size)
+        if uploaded_file is not None:
+            try:
+                # Read and parse the SGF
+                sgf_content = uploaded_file.read().decode("utf-8", errors="replace")
+                game_data = parse_sgf(sgf_content)
                 
-                st.session_state.moves.append(f"{next_player} {gtp_coord}")
+                # Update session state with loaded game
+                loaded_size = game_data["board_size"]
+                if loaded_size in [9, 13, 19]:
+                    st.session_state.board_size = loaded_size
+                else:
+                    st.warning(f"Board size {loaded_size} not supported. Using 19x19.")
+                    st.session_state.board_size = 19
                 
-                # Auto-analyze after each move
+                st.session_state.komi = game_data["komi"]
+                st.session_state.handicap = game_data["handicap"]
+                st.session_state.moves = game_data["moves"]
+                
+                # Handle handicap stones (add as initial moves)
+                if game_data["handicap_stones"]:
+                    # Handicap stones are added as Black moves at the beginning
+                    handicap_moves = [f"B {coord}" for coord in game_data["handicap_stones"]]
+                    st.session_state.moves = handicap_moves + st.session_state.moves
+                
+                # Show metadata
+                meta = game_data.get("metadata", {})
+                if meta:
+                    info_parts = []
+                    if "black_player" in meta:
+                        info_parts.append(f"Black: {meta['black_player']}")
+                    if "white_player" in meta:
+                        info_parts.append(f"White: {meta['white_player']}")
+                    if "result" in meta:
+                        info_parts.append(f"Result: {meta['result']}")
+                    if info_parts:
+                        st.info(" | ".join(info_parts))
+                
+                st.success(f"Loaded {len(game_data['moves'])} moves from SGF!")
+                
+                # Auto-analyze the loaded position
                 try:
                     if st.session_state.analyzer is None:
                         st.session_state.analyzer = GoAnalyzer(
                             config_path=str(PROJECT_ROOT / "config.yaml")
                         )
-                    
                     result = st.session_state.analyzer.analyze(
                         board_size=st.session_state.board_size,
-                        moves=st.session_state.moves,
+                        moves=st.session_state.moves if st.session_state.moves else None,
                         handicap=st.session_state.handicap,
                         komi=st.session_state.komi,
                         visits=st.session_state.visits,
@@ -916,6 +907,89 @@ def main():
                 except Exception as e:
                     st.session_state.analysis_result = None
                 
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Failed to load SGF: {e}")
+        
+        # SGF Download
+        if st.session_state.moves:
+            sgf_content = create_sgf(
+                board_size=st.session_state.board_size,
+                moves=st.session_state.moves,
+                komi=st.session_state.komi,
+                handicap=st.session_state.handicap,
+                game_name="Go Strategy App Analysis",
+            )
+            
+            st.download_button(
+                label="💾 Download SGF",
+                data=sgf_content,
+                file_name="game.sgf",
+                mime="application/x-go-sgf",
+                use_container_width=True,
+                help="Download current game as SGF file"
+            )
+        else:
+            st.caption("No moves to export yet.")
+    
+    # Main content area
+    col_board, col_info = st.columns([2, 1])
+    
+    with col_board:
+        # Build BoardState object for accurate capture logic
+        from src.board import create_board
+        board_obj = create_board(
+            size=st.session_state.board_size,
+            handicap=st.session_state.handicap,
+            komi=st.session_state.komi,
+            moves=st.session_state.moves
+        )
+        # Update session state prisoners based on full board simulation
+        st.session_state.prisoners = board_obj.prisoners
+        
+        # Get last move
+        last_move = None
+        if st.session_state.moves:
+            last = st.session_state.moves[-1].split()
+            if len(last) == 2 and last[1].upper() != "PASS":
+                last_move = gtp_to_coords(last[1], st.session_state.board_size)
+        
+        # Get suggested moves and ownership
+        suggested = None
+        ownership = None
+        if st.session_state.analysis_result:
+            suggested = st.session_state.analysis_result.top_moves
+            ownership = st.session_state.analysis_result.ownership
+        
+        # Draw board as PIL image
+        board_img = draw_board_pil(
+            board=board_obj,
+            suggested_moves=suggested,
+            last_move=last_move,
+            show_move_numbers=st.session_state.show_move_numbers,
+            show_territory=st.session_state.show_territory,
+            ownership=ownership
+        )
+        
+        # Display clickable image
+        coords = streamlit_image_coordinates(
+            board_img,
+            key=f"board_{len(st.session_state.moves)}_{st.session_state.analysis_result is not None}_{st.session_state.show_territory}",
+        )
+        
+        # Handle click
+        if coords is not None:
+            click_x = coords["x"]
+            click_y = coords["y"]
+            col, row = pixel_to_board_coords(click_x, click_y, st.session_state.board_size)
+            
+            if col >= 0 and row >= 0 and (col, row) not in board_obj.stones:
+                next_player = get_next_player(st.session_state.moves, st.session_state.handicap)
+                gtp_coord = coords_to_gtp(col, row, st.session_state.board_size)
+                st.session_state.moves.append(f"{next_player} {gtp_coord}")
+                st.session_state.last_click = (col, row)
+                save_session_to_disk()
                 st.rerun()
     
     with col_info:
@@ -940,25 +1014,28 @@ def main():
             st.caption("Win% = player's chance after move | Score = point lead")
             st.markdown("**Top Moves:**")
             
-            best_score = result.top_moves[0].score_lead if result.top_moves else 0
+            best_winrate = result.top_moves[0].winrate if result.top_moves else 0.5
+            best_score = result.top_moves[0].score_lead if result.top_moves else 0.0
             
             for i, move in enumerate(result.top_moves[:10]): # Show more moves in list
                 winrate_pct = move.winrate * 100
                 score_sign = "+" if move.score_lead >= 0 else ""
                 loss = best_score - move.score_lead
+                winrate_drop = best_winrate - move.winrate
                 
-                # Determine color indicator based on loss
-                best_winrate = result.top_moves[0].winrate
-                winrate_loss = best_winrate - move.winrate
+                # Filter: Don't show in list if winrate drop > 10% (match board filtering)
+                if winrate_drop > 0.10:
+                    continue
                 
-                if loss <= 0.05 and winrate_loss <= 0.005:
-                    indicator = "🔵" # Blue for Best (and equivalents)
+                # Determine color indicator based on winrate drop (Sync with Board)
+                if winrate_drop <= 0.005:
+                    indicator = "🔵" # Blue: Best (drop <= 0.5%)
                     color_style = "color: #4da6ff; font-weight: bold;"
-                elif loss < 1.0:
-                    indicator = "🟢" # Green
+                elif i == 1 or winrate_drop <= 0.03:
+                    indicator = "🟢" # Green: Good (Drop <= 3%)
                     color_style = "color: #4dce4d;"
-                elif loss < 5.0:
-                    indicator = "🟡" # Yellow
+                elif i == 2 or winrate_drop <= 0.10:
+                    indicator = "🟡" # Yellow: Acceptable (Drop <= 10%)
                     color_style = "color: #e6e600;"
                 else:
                     indicator = "⚪"
@@ -985,11 +1062,47 @@ def main():
             move_count = len(st.session_state.moves)
             st.write(f"Total: {move_count} moves")
             
-            # Show last 10 moves
-            recent = st.session_state.moves[-10:]
-            for i, m in enumerate(recent):
-                move_num = move_count - len(recent) + i + 1
-                st.text(f"{move_num}. {m}")
+            # Show prisoner counts with better styling
+            p_b = st.session_state.prisoners['B']
+            p_w = st.session_state.prisoners['W']
+            st.markdown(f"""
+                <div style='background-color: #f0f0f0; padding: 10px; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 10px;'>
+                    <span style='font-size: 1.1em;'><b>Prisoners</b></span><br>
+                    ⚫ Black: <b>{p_w}</b> (Captured White)<br>
+                    ⚪ White: <b>{p_b}</b> (Captured Black)
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Show moves as clickable buttons in 2 columns
+            st.markdown("**History (Jump to move):**")
+            
+            for i in range(0, len(st.session_state.moves), 2):
+                h_col1, h_col2 = st.columns(2)
+                
+                # First move in pair
+                with h_col1:
+                    move_str = st.session_state.moves[i]
+                    m_color = move_str.split()[0]
+                    m_coord = move_str.split()[1]
+                    label = f"{i+1}. {m_color}{m_coord}"
+                    button_type = "primary" if i == len(st.session_state.moves)-1 else "secondary"
+                    if st.button(label, key=f"hist_{i}", use_container_width=True, type=button_type):
+                        st.session_state.moves = st.session_state.moves[:i+1]
+                        save_session_to_disk()
+                        st.rerun()
+                
+                # Second move in pair (if exists)
+                if i + 1 < len(st.session_state.moves):
+                    with h_col2:
+                        move_str = st.session_state.moves[i+1]
+                        m_color = move_str.split()[0]
+                        m_coord = move_str.split()[1]
+                        label = f"{i+2}. {m_color}{m_coord}"
+                        button_type = "primary" if (i+1) == len(st.session_state.moves)-1 else "secondary"
+                        if st.button(label, key=f"hist_{i+1}", use_container_width=True, type=button_type):
+                            st.session_state.moves = st.session_state.moves[:i+2]
+                            save_session_to_disk()
+                            st.rerun()
         else:
             st.text("(No moves yet)")
         

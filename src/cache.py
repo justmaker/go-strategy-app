@@ -7,7 +7,7 @@ Includes metadata for future data review and merging.
 
 import json
 import sqlite3
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -66,6 +66,8 @@ class AnalysisResult:
     calculation_duration: Optional[float] = None  # Time taken in seconds
     stopped_by_limit: Optional[bool] = None  # True if stopped by limit, False if converged
     limit_setting: Optional[str] = None  # e.g., "5s", "100v"
+    ownership: Optional[List[float]] = None  # -1.0 to 1.0 for each intersection
+    prisoners: Dict[str, int] = field(default_factory=lambda: {'B': 0, 'W': 0})
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -82,6 +84,8 @@ class AnalysisResult:
             'calculation_duration': self.calculation_duration,
             'stopped_by_limit': self.stopped_by_limit,
             'limit_setting': self.limit_setting,
+            'ownership': self.ownership,
+            'prisoners': self.prisoners,
         }
     
     @classmethod
@@ -100,6 +104,8 @@ class AnalysisResult:
             calculation_duration=data.get('calculation_duration'),
             stopped_by_limit=data.get('stopped_by_limit'),
             limit_setting=data.get('limit_setting'),
+            ownership=data.get('ownership'),
+            prisoners=data.get('prisoners', {'B': 0, 'W': 0}),
         )
 
 

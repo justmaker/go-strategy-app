@@ -138,11 +138,13 @@ class GoAnalyzer:
         else:
             current_visits = visits
         
-        # Check cache (unless force_refresh)
         if not force_refresh:
             cached = self.cache.get(canonical_hash, komi=board.komi, required_visits=current_visits)
             if cached is not None:
-                # Transform moves back to original orientation if needed
+                # Sync prisoners from current board
+                cached.prisoners = board.prisoners.copy()
+                
+                # Transform moves and ownership back to original orientation if needed
                 if transform_used != SymmetryTransform.IDENTITY:
                     inverse = get_inverse_transform(transform_used)
                     transformed_moves = []
@@ -155,12 +157,26 @@ class GoAnalyzer:
                             visits=move.visits,
                         ))
                     cached.top_moves = transformed_moves
-                
-                # Expand symmetries for presentation (visual completeness)
-                self._expand_symmetries(cached, board)
+                    
+                    # Transform ownership back
+                    if cached.ownership:
+                        from .board import SymmetryTransform, apply_transform, get_inverse_transform
+                        inverse = get_inverse_transform(transform_used)
+                        new_ownership = [0.0] * (board_size * board_size)
+                        for y in range(board_size):
+                            for x in range(board_size):
+                                old_idx = y * board_size + x
+                                val = cached.ownership[old_idx]
+                                nx, ny = apply_transform(x, y, board_size, inverse)
+                                new_idx = ny * board_size + nx
+                                new_ownership[new_idx] = val
+                        cached.ownership = new_ownership
                 
                 # Ensure empty boards have diverse recommendations
                 self._add_empty_board_candidates(cached, board)
+
+                # Expand symmetries for presentation (visual completeness)
+                self._expand_symmetries(cached, board)
                 
                 return cached
         
@@ -216,27 +232,31 @@ class GoAnalyzer:
             calculation_duration=calculation_duration,
             stopped_by_limit=stopped_by_limit,
             limit_setting=limit_setting,
+            ownership=ownership,
+            prisoners=board.prisoners.copy(),
         )
         
-        # Store in cache (with canonical orientation moves)
+        # Store in cache (with canonical orientation)
         self.cache.put(
             board_hash=canonical_hash,
             moves_sequence=board.get_moves_sequence_string(),
             board_size=board_size,
             komi=board.komi,
-            top_moves=canonical_moves,  # Store canonical orientation
+            top_moves=canonical_moves,
             engine_visits=current_visits,
             model_name=model_name,
             calculation_duration=calculation_duration,
             stopped_by_limit=stopped_by_limit,
             limit_setting=limit_setting,
+            # ownership=canonical_ownership, # Add to cache put if supported
+            # prisoners=board.prisoners,
         )
-        
-        # Expand symmetries for presentation (visual completeness)
-        self._expand_symmetries(result, board)
         
         # Ensure empty boards have diverse recommendations
         self._add_empty_board_candidates(result, board)
+
+        # Expand symmetries for presentation (visual completeness)
+        self._expand_symmetries(result, board)
         
         return result
     
@@ -245,8 +265,10 @@ class GoAnalyzer:
         Expand top moves to include all symmetrically equivalent moves on the current board.
         
         This ensures that if the board is symmetric (e.g., empty or tengen), 
-        all symmetric points are shown with the same evaluation, even if KataGo 
-        only returned a subset or pruned some efficiently.
+        all symmetric points are shown with the same evaluation.
+        
+        USER REQUIREMENT: If symmetric equivalent points have different numbers, 
+        use the lowest winrate/score from that group to ensure they remain the same Top.
         """
         valid_symmetries = get_valid_symmetries(board.stones, board.size)
         
@@ -254,35 +276,48 @@ class GoAnalyzer:
         if len(valid_symmetries) <= 1:
             return
             
-        seen_coords = set()
-        expanded_moves = []
+        # 1. Group existing moves and their symmetries
+        # We'll use a canonical representation (lexicographically smallest GTP coord) for each group
+        groups = {} # canonical_coord -> {moves: [MoveCandidate], members: {coords}}
         
-        # First pass: keep existing moves and mark seen coordinates
-        for move in result.top_moves:
-            seen_coords.add(move.move)
-            expanded_moves.append(move)
-            
-        # Second pass: generate symmetries for each existing move
         for move in result.top_moves:
             if move.move.upper() == "PASS":
                 continue
-                
+            
+            # Find all symmetric points for this move
+            sym_coords = set()
             for transform in valid_symmetries:
-                if transform == SymmetryTransform.IDENTITY:
-                    continue
-                    
-                sym_coord = transform_gtp_coord(move.move, board.size, transform)
-                
-                if sym_coord not in seen_coords:
-                    # Create symmetric candidate
-                    new_cand = MoveCandidate(
-                        move=sym_coord,
-                        winrate=move.winrate,
-                        score_lead=move.score_lead,
-                        visits=move.visits
-                    )
-                    expanded_moves.append(new_cand)
-                    seen_coords.add(sym_coord)
+                sym_coords.add(transform_gtp_coord(move.move, board.size, transform))
+            
+            # Canonical is the smallest coordinate string
+            canonical = min(sym_coords)
+            
+            if canonical not in groups:
+                groups[canonical] = {"moves": [], "coords": sym_coords}
+            groups[canonical]["moves"].append(move)
+
+        # 2. For each group, find the minimum winrate and score_lead
+        # And create an expanded list of moves
+        expanded_moves = []
+        for canonical, data in groups.items():
+            # If multiple existing moves fell into this group, pick the minimums
+            min_winrate = min(m.winrate for m in data["moves"])
+            min_score = min(m.score_lead for m in data["moves"])
+            max_visits = max(m.visits for m in data["moves"]) # Visits we can keep max or average, max is probably safer to show it's "known"
+            
+            # Now create candidates for EVERY coordinate in this group
+            for coord in data["coords"]:
+                expanded_moves.append(MoveCandidate(
+                    move=coord,
+                    winrate=min_winrate,
+                    score_lead=min_score,
+                    visits=max_visits
+                ))
+        
+        # Add PASS if it was there
+        for move in result.top_moves:
+            if move.move.upper() == "PASS":
+                expanded_moves.append(move)
         
         # Sort by winrate (descending)
         expanded_moves.sort(key=lambda m: m.winrate, reverse=True)
@@ -311,65 +346,59 @@ class GoAnalyzer:
             return
         
         # Define standard opening candidates per board size
-        # Format: (coord, estimated_score_penalty) - penalty relative to best
+        # Format: (coord, score_penalty, winrate_drop)
+        # We explicitly set winrate_drop to ensure they land in:
+        # Blue (0.0), Green (0.02), Yellow (0.07)
         if board.size == 9:
-            # 9x9: Tengen is best, then adjacent, then star/3-3
             extra_candidates = [
-                ("C3", -2.5),  # 3-3 point
-                ("G7", -2.5),  # 3-3 point (opposite)
-                ("C7", -2.0),  # Star point area  
-                ("G3", -2.0),  # Star point area
+                ("E5", 0.0, 0.0),    # Tengen (Blue)
+                ("C3", -1.0, 0.02),  # 3-3 point (Green)
+                ("C7", -4.0, 0.07),  # Star point area (Yellow)
             ]
         elif board.size == 13:
-            # 13x13: Star points, then 3-4 points, then 3-3
             extra_candidates = [
-                ("D3", -3.0),  # 3-4 point
-                ("K11", -3.0),  # 3-4 point (opposite)
-                ("C3", -4.0),  # 3-3 point
-                ("L11", -4.0),  # 3-3 point
+                ("D4", 0.0, 0.0),    # Star point (Blue)
+                ("D3", -1.5, 0.02),  # 3-4 point (Green)
+                ("C3", -5.0, 0.07),  # 3-3 point (Yellow)
             ]
         else:  # 19x19
-            # 19x19: Star points, then 3-4, then 3-3
             extra_candidates = [
-                ("D3", -4.0),  # 3-4 point (komoku)
-                ("R17", -4.0),  # 3-4 point
-                ("C3", -5.5),  # 3-3 point (san-san)
-                ("R17", -5.5),  # 3-3 point
+                ("D4", 0.0, 0.0),    # Star point (Blue)
+                ("D3", -2.0, 0.02),  # 3-4 point (Green)
+                ("C3", -6.0, 0.07),  # 3-3 point (Yellow)
             ]
         
-        # Get best score from existing moves
-        best_score = result.top_moves[0].score_lead if result.top_moves else 0.0
-        best_winrate = result.top_moves[0].winrate if result.top_moves else 0.5
+        # Get best score/winrate from existing moves (if any)
+        if result.top_moves:
+            best_score = result.top_moves[0].score_lead
+            best_winrate = result.top_moves[0].winrate
+        else:
+            best_score = 0.0
+            best_winrate = 0.45
         
         # Track existing coords to avoid duplicates
         existing_coords = {m.move.upper() for m in result.top_moves}
         
         # Add extra candidates
-        for coord, penalty in extra_candidates:
+        for coord, score_penalty, wr_drop in extra_candidates:
             if coord.upper() in existing_coords:
                 continue
             
             # Calculate estimated values
-            est_score = best_score + penalty
-            # Rough winrate estimate (each point ~ 0.01 winrate)
-            est_winrate = max(0.1, best_winrate + penalty * 0.01)
+            est_score = best_score + score_penalty
+            est_winrate = max(0.01, best_winrate - wr_drop)
             
             new_cand = MoveCandidate(
-                move=coord,
+                move=coord.upper(),
                 winrate=est_winrate,
                 score_lead=est_score,
-                visits=1,  # Mark as estimated
+                visits=1,  # Mark as estimated/low visit
             )
             result.top_moves.append(new_cand)
             existing_coords.add(coord.upper())
-            
-            # Check if we now have 3 groups
-            existing_scores.add(round(est_score, 1))
-            if len(existing_scores) >= 3:
-                break
         
-        # Re-sort by score
-        result.top_moves.sort(key=lambda m: m.score_lead, reverse=True)
+        # Re-sort by winrate (descending)
+        result.top_moves.sort(key=lambda m: m.winrate, reverse=True)
 
     def analyze_board(self, board: BoardState, visits: Optional[int] = None, force_refresh: bool = False) -> AnalysisResult:
         """
