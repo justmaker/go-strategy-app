@@ -63,7 +63,10 @@ def pixel_to_board_coords(x: int, y: int, board_size: int) -> Tuple[int, int]:
     
     # Convert to grid coordinates with rounding
     col = round(board_x / CELL_SIZE)
-    row = round(board_y / CELL_SIZE)
+    display_row = round(board_y / CELL_SIZE)
+    
+    # Convert display row back to board row (flip y)
+    row = board_size - 1 - display_row
     
     # Check bounds
     if 0 <= col < board_size and 0 <= row < board_size:
@@ -71,10 +74,16 @@ def pixel_to_board_coords(x: int, y: int, board_size: int) -> Tuple[int, int]:
     return (-1, -1)
 
 
-def board_to_pixel_coords(col: int, row: int) -> Tuple[int, int]:
-    """Convert board coordinates to pixel coordinates."""
+def board_to_pixel_coords(col: int, row: int, board_size: int = 9) -> Tuple[int, int]:
+    """Convert board coordinates to pixel coordinates.
+    
+    col: x coordinate (0 = left)
+    row: y coordinate (0 = bottom in GTP, but we display 0 at top)
+    """
     x = BOARD_PADDING + col * CELL_SIZE
-    y = BOARD_PADDING + row * CELL_SIZE
+    # Flip y for display: row 0 (bottom) should be at bottom of image
+    display_row = board_size - 1 - row
+    y = BOARD_PADDING + display_row * CELL_SIZE
     return (x, y)
 
 
@@ -86,7 +95,7 @@ def gtp_to_coords(gtp_move: str, board_size: int) -> Tuple[int, int]:
     """
     Convert GTP coordinate (e.g., 'Q16') to (col, row) indices.
     GTP: A-T (skip I), 1-19 from bottom-left
-    Returns: (col, row) where (0,0) is top-left in display
+    Returns: (x, y) where y=0 is BOTTOM (same as board.py)
     """
     if not gtp_move or gtp_move.upper() == "PASS":
         return (-1, -1)
@@ -100,10 +109,10 @@ def gtp_to_coords(gtp_move: str, board_size: int) -> Tuple[int, int]:
     else:
         col = ord(col_letter) - ord('A')
     
-    # GTP row 1 = bottom, we want row 0 = top
-    row = board_size - row_num
+    # GTP row 1 = y=0 (bottom), consistent with board.py
+    y = row_num - 1
     
-    return (col, row)
+    return (col, y)
 
 
 def coords_to_gtp(col: int, row: int, board_size: int) -> str:
@@ -130,12 +139,18 @@ def col_to_letter(col: int) -> str:
 # ============================================================================
 
 def get_star_points(board_size: int) -> List[Tuple[int, int]]:
-    """Get star point coordinates for a given board size."""
+    """Get star point coordinates for a given board size.
+    
+    Returns (x, y) where y=0 is bottom (GTP standard).
+    """
     if board_size == 9:
+        # 3-3 points: C3, G3, E5 (tengen), C7, G7
         return [(2, 2), (6, 2), (4, 4), (2, 6), (6, 6)]
     elif board_size == 13:
+        # 4-4 points
         return [(3, 3), (9, 3), (6, 6), (3, 9), (9, 9)]
     elif board_size == 19:
+        # Standard 9 star points
         return [
             (3, 3), (9, 3), (15, 3),
             (3, 9), (9, 9), (15, 9),
@@ -181,7 +196,7 @@ def draw_board_pil(
                 val = ownership[y * board_size + x]
                 if abs(val) < 0.15: continue
                 
-                px, py = board_to_pixel_coords(x, y)
+                px, py = board_to_pixel_coords(x, y, board_size)
                 r = CELL_SIZE // 2 - 2
                 
                 # Positive val favors Black (Blue-ish), Negative favors White (Red-ish)
@@ -243,7 +258,7 @@ def draw_board_pil(
     # Draw star points
     star_points = get_star_points(board_size)
     for col, row in star_points:
-        px, py = board_to_pixel_coords(col, row)
+        px, py = board_to_pixel_coords(col, row, board_size)
         r = 3
         draw.ellipse([px - r, py - r, px + r, py + r], fill='black')
     
@@ -258,7 +273,7 @@ def draw_board_pil(
 
     for (col, row), color in stones_dict.items():
         move_number = move_nums.get((col, row), 0)
-        px, py = board_to_pixel_coords(col, row)
+        px, py = board_to_pixel_coords(col, row, board_size)
         
         stone_color = 'black' if color == 'B' else 'white'
         outline_color = 'black'
@@ -318,7 +333,7 @@ def draw_board_pil(
             
             rank += 1
             
-            px, py = board_to_pixel_coords(col, row)
+            px, py = board_to_pixel_coords(col, row, board_size)
             r = STONE_RADIUS + 2
             
             # Draw colored circle
