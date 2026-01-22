@@ -286,7 +286,7 @@ def draw_board_pil(
                 fill_color = (100, 150, 255) # Blue
             elif loss < 1.0:
                 fill_color = (100, 220, 100) # Green
-            elif loss < 3.0:
+            elif loss < 5.0:
                 fill_color = (255, 220, 80)  # Yellow
             else:
                 continue # Don't draw moves with high loss on the board to keep it clean
@@ -968,7 +968,7 @@ def main():
                 elif loss < 1.0:
                     indicator = "🟢" # Green
                     color_style = "color: #4dce4d;"
-                elif loss < 3.0:
+                elif loss < 5.0:
                     indicator = "🟡" # Yellow
                     color_style = "color: #e6e600;"
                 else:
