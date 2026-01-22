@@ -644,22 +644,8 @@ def main():
             if st.button("Undo", type="secondary", use_container_width=True):
                 if st.session_state.moves:
                     st.session_state.moves.pop()
-                    # Auto-analyze after undo
-                    try:
-                        if st.session_state.analyzer is None:
-                            st.session_state.analyzer = GoAnalyzer(
-                                config_path=str(PROJECT_ROOT / "config.yaml")
-                            )
-                        result = st.session_state.analyzer.analyze(
-                            board_size=st.session_state.board_size,
-                            moves=st.session_state.moves if st.session_state.moves else None,
-                            handicap=st.session_state.handicap,
-                            komi=st.session_state.komi,
-                            visits=st.session_state.visits,
-                        )
-                        st.session_state.analysis_result = result
-                    except:
-                        st.session_state.analysis_result = None
+                    st.session_state.analysis_result = None
+                    save_session_to_disk()
                     st.rerun()
         
         # Pass button
@@ -1003,6 +989,7 @@ def main():
                 next_player = get_next_player(st.session_state.moves, st.session_state.handicap)
                 gtp_coord = coords_to_gtp(col, row, st.session_state.board_size)
                 st.session_state.moves.append(f"{next_player} {gtp_coord}")
+                st.session_state.analysis_result = None
                 st.session_state.last_click = (col, row)
                 save_session_to_disk()
                 st.rerun()
@@ -1103,6 +1090,7 @@ def main():
                     button_type = "primary" if i == len(st.session_state.moves)-1 else "secondary"
                     if st.button(label, key=f"hist_{i}", use_container_width=True, type=button_type):
                         st.session_state.moves = st.session_state.moves[:i+1]
+                        st.session_state.analysis_result = None
                         save_session_to_disk()
                         st.rerun()
                 
@@ -1116,6 +1104,7 @@ def main():
                         button_type = "primary" if (i+1) == len(st.session_state.moves)-1 else "secondary"
                         if st.button(label, key=f"hist_{i+1}", use_container_width=True, type=button_type):
                             st.session_state.moves = st.session_state.moves[:i+2]
+                            st.session_state.analysis_result = None
                             save_session_to_disk()
                             st.rerun()
         else:
