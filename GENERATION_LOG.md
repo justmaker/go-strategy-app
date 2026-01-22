@@ -93,6 +93,7 @@ This document records all opening book generation runs for tracking and reproduc
 | **Nodes Processed** | 1,818 |
 | **Cache Entries (new)** | 1,818 |
 | **Total Database Entries** | 23,307 |
+| **Database Size** | ~9.6 MB (Before cleanup) |
 
 **Notes**:
 - **First run with Symmetry Pruning optimization**
@@ -117,6 +118,7 @@ This document records all opening book generation runs for tracking and reproduc
 | **Nodes Processed** | 2,945 |
 | **Cache Entries (new)** | 2,945 |
 | **Total Database Entries** | 4,765 |
+| **Database Size** | ~2.0 MB (Intermediate) |
 
 **Notes**:
 - **Regenerated with Symmetry Pruning**
