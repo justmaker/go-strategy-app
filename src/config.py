@@ -45,7 +45,7 @@ class AnalysisConfig:
     default_komi: float = 7.5
     visits_19x19: int = 150
     visits_small: int = 500
-    top_moves_count: int = 3
+    top_moves_count: int = 10
 
 
 @dataclass

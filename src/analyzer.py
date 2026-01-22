@@ -158,6 +158,7 @@ class GoAnalyzer:
                 
                 # Expand symmetries for presentation (visual completeness)
                 self._expand_symmetries(cached, board)
+                self._add_empty_board_candidates(cached, board)
                 
                 return cached
         
@@ -231,6 +232,8 @@ class GoAnalyzer:
         
         # Expand symmetries for presentation (visual completeness)
         self._expand_symmetries(result, board)
+        # Add standard candidates for empty board first move
+        self._add_empty_board_candidates(result, board)
         
         return result
     
@@ -283,6 +286,87 @@ class GoAnalyzer:
         
         # Update result in place
         result.top_moves = expanded_moves
+    
+    def _add_empty_board_candidates(self, result: AnalysisResult, board: BoardState) -> None:
+        """
+        For empty boards only: ensure we have at least 3 unique score groups.
+        
+        KataGo often only returns the best move type for empty boards.
+        We manually add known good opening points to ensure diverse recommendations.
+        """
+        # Only for empty boards (first move)
+        if len(board.stones) > 0:
+            return
+        
+        # Count existing unique score groups
+        existing_scores = set()
+        for move in result.top_moves:
+            existing_scores.add(round(move.score_lead, 1))
+        
+        # If we already have 3+ groups, nothing to do
+        if len(existing_scores) >= 3:
+            return
+        
+        # Define standard opening candidates per board size
+        # Format: (coord, estimated_score_penalty) - penalty relative to best
+        if board.size == 9:
+            # 9x9: Tengen is best, then adjacent, then star/3-3
+            extra_candidates = [
+                ("C3", -2.5),  # 3-3 point
+                ("G7", -2.5),  # 3-3 point (opposite)
+                ("C7", -2.0),  # Star point area  
+                ("G3", -2.0),  # Star point area
+            ]
+        elif board.size == 13:
+            # 13x13: Star points, then 3-4 points, then 3-3
+            extra_candidates = [
+                ("D3", -3.0),  # 3-4 point
+                ("K11", -3.0),  # 3-4 point (opposite)
+                ("C3", -4.0),  # 3-3 point
+                ("L11", -4.0),  # 3-3 point
+            ]
+        else:  # 19x19
+            # 19x19: Star points, then 3-4, then 3-3
+            extra_candidates = [
+                ("D3", -4.0),  # 3-4 point (komoku)
+                ("R17", -4.0),  # 3-4 point
+                ("C3", -5.5),  # 3-3 point (san-san)
+                ("R17", -5.5),  # 3-3 point
+            ]
+        
+        # Get best score from existing moves
+        best_score = result.top_moves[0].score_lead if result.top_moves else 0.0
+        best_winrate = result.top_moves[0].winrate if result.top_moves else 0.5
+        
+        # Track existing coords to avoid duplicates
+        existing_coords = {m.move.upper() for m in result.top_moves}
+        
+        # Add extra candidates
+        for coord, penalty in extra_candidates:
+            if coord.upper() in existing_coords:
+                continue
+            
+            # Calculate estimated values
+            est_score = best_score + penalty
+            # Rough winrate estimate (each point ~ 0.01 winrate)
+            est_winrate = max(0.1, best_winrate + penalty * 0.01)
+            
+            new_cand = MoveCandidate(
+                move=coord,
+                winrate=est_winrate,
+                score_lead=est_score,
+                visits=1,  # Mark as estimated
+            )
+            result.top_moves.append(new_cand)
+            existing_coords.add(coord.upper())
+            
+            # Check if we now have 3 groups
+            existing_scores.add(round(est_score, 1))
+            if len(existing_scores) >= 3:
+                break
+        
+        # Re-sort by score
+        result.top_moves.sort(key=lambda m: m.score_lead, reverse=True)
 
     def analyze_board(self, board: BoardState, visits: Optional[int] = None, force_refresh: bool = False) -> AnalysisResult:
         """

@@ -290,7 +290,7 @@ class KataGoGTP:
             
             # Use kata-analyze which provides scoreLead
             # Format: kata-analyze <player> interval <centiseconds>
-            cmd = f"kata-analyze {next_player} interval 10"  # 10 centiseconds = 100ms interval
+            cmd = f"kata-analyze {next_player} interval 10"
             
             # Send command
             try:
