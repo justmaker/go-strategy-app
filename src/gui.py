@@ -515,15 +515,15 @@ def main():
                 st.rerun()
         
         with size_col1:
-            if st.button("9x9", use_container_width=True, 
+            if st.button("9", use_container_width=True, 
                         type="primary" if st.session_state.board_size == 9 else "secondary"):
                 switch_board_size(9)
         with size_col2:
-            if st.button("13x13", use_container_width=True,
+            if st.button("13", use_container_width=True,
                         type="primary" if st.session_state.board_size == 13 else "secondary"):
                 switch_board_size(13)
         with size_col3:
-            if st.button("19x19", use_container_width=True,
+            if st.button("19", use_container_width=True,
                         type="primary" if st.session_state.board_size == 19 else "secondary"):
                 switch_board_size(19)
         
