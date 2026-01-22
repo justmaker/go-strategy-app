@@ -257,13 +257,11 @@ def draw_board_pil(
         except:
             info_font = small_font
         
-        # Draw top moves (up to 5, though usually we only show top few on board to avoid clutter)
-        # User requested coloring based on loss. 
-        # heavily restrict on-board visualization to top 3 or those with low loss to avoid clutter?
-        # The prompt implies we should show the candidates "based on Score Loss". 
-        # Let's show top 5 but filter by loss? Or just top 5.
+        # First move (empty board): Force show top 3 unique score groups
+        is_first_move = len(stones) == 0
+        seen_scores = set()
         
-        for i, move in enumerate(suggested_moves[:5]):
+        for i, move in enumerate(suggested_moves[:10]):  # Check more moves to find 3 unique groups
             if move.move.upper() == "PASS":
                 continue
             col, row = gtp_to_coords(move.move, board_size)
@@ -273,17 +271,22 @@ def draw_board_pil(
             # Calculate score loss
             loss = best_score - move.score_lead
             
+            # Track unique score groups (round to 0.1 to handle floating point)
+            score_key = round(move.score_lead, 1)
+            if score_key not in seen_scores:
+                seen_scores.add(score_key)
+            unique_rank = len(seen_scores)
+            
+            # Force show if first move and within top 3 unique groups
+            force_show = is_first_move and unique_rank <= 3
+            
             # Determine color based on Score Loss AND Winrate Loss
-            # Blue: Best Move (Loss ~ 0 AND Winrate ~ Best) - handles symmetric moves correctly
-            # Green: Loss < 1.0 (or negative loss but not best winrate)
+            # Blue: Best Move (Loss ~ 0 AND Winrate ~ Best)
+            # Green: Loss < 1.0
             # Yellow: Loss < 5.0
             
             best_winrate = suggested_moves[0].winrate
             winrate_loss = best_winrate - move.winrate
-            
-            # First move (empty board): Force show top 3 regardless of loss
-            is_first_move = len(stones) == 0
-            force_show = is_first_move and i < 3
             
             # Strict criteria for Blue: Must be best score AND best winrate (within margin)
             if loss <= 0.05 and winrate_loss <= 0.005:
