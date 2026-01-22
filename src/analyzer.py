@@ -14,7 +14,8 @@ from typing import List, Optional
 
 from .board import (
     BoardState, create_board,
-    SymmetryTransform, get_inverse_transform, transform_gtp_coord, get_valid_symmetries
+    SymmetryTransform, get_inverse_transform, transform_gtp_coord, get_valid_symmetries,
+    apply_transform
 )
 from .cache import AnalysisCache, AnalysisResult, MoveCandidate
 from .config import AppConfig, load_config
@@ -160,7 +161,6 @@ class GoAnalyzer:
                     
                     # Transform ownership back
                     if cached.ownership:
-                        from .board import SymmetryTransform, apply_transform, get_inverse_transform
                         inverse = get_inverse_transform(transform_used)
                         new_ownership = [0.0] * (board_size * board_size)
                         for y in range(board_size):
@@ -190,7 +190,7 @@ class GoAnalyzer:
         
         # Run analysis with timing
         start_time = time.time()
-        top_moves = self.katago.analyze(
+        top_moves, ownership = self.katago.analyze(
             next_player=board.next_player,
             visits=current_visits,
             top_n=top_n,
@@ -198,26 +198,37 @@ class GoAnalyzer:
         calculation_duration = time.time() - start_time
         
         # Analysis stopped by visit limit (not by convergence)
-        # KataGo with visits limit always stops by limit, never by convergence
         stopped_by_limit = True
         limit_setting = f"{current_visits}v"
         
         # Get model name
         model_name = self.katago.get_model_name()
         
-        # Transform top_moves to canonical orientation before caching
+        # Transform top_moves and ownership to canonical orientation before caching
         if transform_used != SymmetryTransform.IDENTITY:
             canonical_moves = []
             for move in top_moves:
-                new_coord = transform_gtp_coord(move.move, board_size, transform_used)
+                new_coord = transform_gtp_coord(move.move, board.size, transform_used)
                 canonical_moves.append(MoveCandidate(
                     move=new_coord,
                     winrate=move.winrate,
                     score_lead=move.score_lead,
                     visits=move.visits,
                 ))
+            
+            canonical_ownership = ownership
+            if ownership:
+                canonical_ownership = [0.0] * (board.size * board.size)
+                for y in range(board.size):
+                    for x in range(board.size):
+                        old_idx = y * board.size + x
+                        val = ownership[old_idx]
+                        nx, ny = apply_transform(x, y, board.size, transform_used)
+                        new_idx = ny * board.size + nx
+                        canonical_ownership[new_idx] = val
         else:
             canonical_moves = top_moves
+            canonical_ownership = ownership
         
         # Build result (with original orientation moves for return)
         result = AnalysisResult(
@@ -240,7 +251,7 @@ class GoAnalyzer:
         self.cache.put(
             board_hash=canonical_hash,
             moves_sequence=board.get_moves_sequence_string(),
-            board_size=board_size,
+            board_size=board.size,
             komi=board.komi,
             top_moves=canonical_moves,
             engine_visits=current_visits,
@@ -248,8 +259,7 @@ class GoAnalyzer:
             calculation_duration=calculation_duration,
             stopped_by_limit=stopped_by_limit,
             limit_setting=limit_setting,
-            # ownership=canonical_ownership, # Add to cache put if supported
-            # prisoners=board.prisoners,
+            ownership=canonical_ownership,
         )
         
         # Ensure empty boards have diverse recommendations

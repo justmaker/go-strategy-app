@@ -126,7 +126,8 @@ CREATE TABLE IF NOT EXISTS analysis_cache (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     calculation_duration REAL,
     stopped_by_limit INTEGER,
-    limit_setting TEXT
+    limit_setting TEXT,
+    ownership TEXT
 );
 """
 
@@ -233,8 +234,8 @@ class AnalysisCache:
                     # Copy data
                     conn.execute("""
                         INSERT INTO analysis_cache 
-                        (board_hash, moves_sequence, board_size, komi, analysis_result, engine_visits, model_name, created_at)
-                        SELECT board_hash, moves_sequence, board_size, komi, analysis_result, engine_visits, model_name, created_at
+                        (board_hash, moves_sequence, board_size, komi, analysis_result, engine_visits, model_name, created_at, calculation_duration, stopped_by_limit, limit_setting)
+                        SELECT board_hash, moves_sequence, board_size, komi, analysis_result, engine_visits, model_name, created_at, calculation_duration, stopped_by_limit, limit_setting
                         FROM analysis_cache_old
                     """)
                     conn.execute("DROP TABLE analysis_cache_old")
@@ -325,6 +326,7 @@ class AnalysisCache:
                     ("calculation_duration", "REAL"),
                     ("stopped_by_limit", "INTEGER"),
                     ("limit_setting", "TEXT"),
+                    ("ownership", "TEXT"),
                 ]
                 
                 for col_name, col_type in new_columns:
@@ -357,20 +359,22 @@ class AnalysisCache:
             AnalysisResult if found, None otherwise
         """
         if required_visits is not None:
-             query = """
+            query = """
                 SELECT board_hash, moves_sequence, board_size, komi,
                        analysis_result, engine_visits, model_name, created_at,
-                       calculation_duration, stopped_by_limit, limit_setting
+                       calculation_duration, stopped_by_limit, limit_setting,
+                       ownership
                 FROM analysis_cache
                 WHERE board_hash = ? AND komi = ? AND engine_visits = ?
             """
-             params = (board_hash, komi, required_visits)
+            params = (board_hash, komi, required_visits)
         else:
             # Get the one with highest visits
             query = """
                 SELECT board_hash, moves_sequence, board_size, komi,
                        analysis_result, engine_visits, model_name, created_at,
-                       calculation_duration, stopped_by_limit, limit_setting
+                       calculation_duration, stopped_by_limit, limit_setting,
+                       ownership
                 FROM analysis_cache
                 WHERE board_hash = ? AND komi = ?
                 ORDER BY engine_visits DESC
@@ -405,6 +409,7 @@ class AnalysisCache:
             calculation_duration=row['calculation_duration'],
             stopped_by_limit=bool(row['stopped_by_limit']) if row['stopped_by_limit'] is not None else None,
             limit_setting=row['limit_setting'],
+            ownership=json.loads(row['ownership']) if row['ownership'] else None,
         )
     
     def put(
@@ -419,6 +424,7 @@ class AnalysisCache:
         calculation_duration: Optional[float] = None,
         stopped_by_limit: Optional[bool] = None,
         limit_setting: Optional[str] = None,
+        ownership: Optional[List[float]] = None,
     ) -> None:
         """
         Store analysis result in cache with intelligent merge logic.
@@ -480,8 +486,9 @@ class AnalysisCache:
                     INSERT OR REPLACE INTO analysis_cache 
                     (board_hash, moves_sequence, board_size, komi, 
                      analysis_result, engine_visits, model_name, created_at,
-                     calculation_duration, stopped_by_limit, limit_setting)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     calculation_duration, stopped_by_limit, limit_setting,
+                     ownership)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
                 conn.execute(query, (
                     board_hash,
@@ -495,6 +502,7 @@ class AnalysisCache:
                     calculation_duration,
                     1 if stopped_by_limit else (0 if stopped_by_limit is False else None),
                     limit_setting,
+                    json.dumps(ownership) if ownership else None,
                 ))
                 conn.commit()
     
