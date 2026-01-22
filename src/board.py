@@ -526,7 +526,14 @@ class BoardState:
         
         # After handicap, White plays first
         self.next_player = 'W'
-    
+    def play(self, color: str, coord: str) -> None:
+        """
+        Play a single move on the board.
+        
+        Args:
+            color: 'B' or 'W'
+            coord: GTP coordinate (e.g., "Q16") or "PASS"
+        """
         if coord.upper() == "PASS":
             self.moves.append((color, "PASS"))
             self.next_player = 'W' if color == 'B' else 'B'
@@ -556,24 +563,19 @@ class BoardState:
                             captured_total += 1
         
         # 3. Update prisoner counts
-        # Note: If black captures white, black gets white prisoners
         self.prisoners[color] += captured_total
         
-        # 4. Check for suicide (self-capture) - GTP usually forbids this
-        # If the newly placed stone group has no liberties, and captured nothing
+        # 4. Check for suicide (self-capture)
         if captured_total == 0:
             own_group = self._get_group((x, y))
             if self._get_liberties(own_group) == 0:
-                 # Suicide rule check - most Go rules forbid this
-                 # For now, we allow it in BoardState as it's a "set-up" tool, 
-                 # but we should at least remove the stones.
                  for gx, gy in own_group:
                      del self.stones[(gx, gy)]
         
         self.moves.append((color, coord))
         
         # Update next player
-        self.next_player = opponent
+        self.next_player = 'W' if color == 'B' else 'B'
 
     def _get_group(self, start_pos: Tuple[int, int]) -> Set[Tuple[int, int]]:
         """Get all connected stones of the same color."""
