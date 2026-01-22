@@ -471,42 +471,61 @@ def main():
     with st.sidebar:
         st.header("Settings")
         
-        # Board size
-        new_board_size = st.selectbox(
-            "Board Size",
-            options=[9, 13, 19],
-            index=[9, 13, 19].index(st.session_state.board_size),
-        )
-        if new_board_size != st.session_state.board_size:
-            st.session_state.board_size = new_board_size
-            st.session_state.moves = []
-            st.session_state.analysis_result = None
-            # Update default visits based on board size
-            if st.session_state.analyzer:
-                 st.session_state.visits = st.session_state.analyzer.config.get_visits(new_board_size)
-            
-            # Auto-analyze empty board to show first move suggestions
-            try:
-                if st.session_state.analyzer is None:
-                    st.session_state.analyzer = GoAnalyzer(
-                        config_path=str(PROJECT_ROOT / "config.yaml")
-                    )
-                
-                # Ensure we use the freshly updated visits count
-                current_visits = st.session_state.get('visits', 50)
-                
-                result = st.session_state.analyzer.analyze(
-                    board_size=st.session_state.board_size,
-                    moves=None,
-                    handicap=st.session_state.get('handicap', 0),
-                    komi=st.session_state.get('komi', 7.5),
-                    visits=current_visits,
-                )
-                st.session_state.analysis_result = result
-            except Exception:
+        # Board size - Three buttons
+        st.write("**Board Size**")
+        size_col1, size_col2, size_col3 = st.columns(3)
+        
+        def switch_board_size(new_size: int):
+            """Helper to switch board size and trigger analysis."""
+            if new_size != st.session_state.board_size:
+                st.session_state.board_size = new_size
+                st.session_state.moves = []
                 st.session_state.analysis_result = None
-            
-            st.rerun()
+                
+                # Update default visits based on board size
+                if st.session_state.analyzer:
+                    book_visits = st.session_state.analyzer.cache.get_opening_book_visits(
+                        board_size=new_size,
+                        komi=st.session_state.get('komi', 7.5),
+                        handicap=st.session_state.get('handicap', 0)
+                    )
+                    if book_visits > 0:
+                        st.session_state.visits = book_visits
+                
+                # Auto-analyze empty board to show first move suggestions
+                try:
+                    if st.session_state.analyzer is None:
+                        st.session_state.analyzer = GoAnalyzer(
+                            config_path=str(PROJECT_ROOT / "config.yaml")
+                        )
+                    
+                    current_visits = st.session_state.get('visits', 50)
+                    
+                    result = st.session_state.analyzer.analyze(
+                        board_size=new_size,
+                        moves=None,
+                        handicap=st.session_state.get('handicap', 0),
+                        komi=st.session_state.get('komi', 7.5),
+                        visits=current_visits,
+                    )
+                    st.session_state.analysis_result = result
+                except Exception as e:
+                    st.session_state.analysis_result = None
+                
+                st.rerun()
+        
+        with size_col1:
+            if st.button("9x9", use_container_width=True, 
+                        type="primary" if st.session_state.board_size == 9 else "secondary"):
+                switch_board_size(9)
+        with size_col2:
+            if st.button("13x13", use_container_width=True,
+                        type="primary" if st.session_state.board_size == 13 else "secondary"):
+                switch_board_size(13)
+        with size_col3:
+            if st.button("19x19", use_container_width=True,
+                        type="primary" if st.session_state.board_size == 19 else "secondary"):
+                switch_board_size(19)
         
         # Komi
         st.session_state.komi = st.number_input(
