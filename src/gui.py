@@ -948,6 +948,21 @@ def main():
         # Update session state prisoners based on full board simulation
         st.session_state.prisoners = board_obj.prisoners
         
+        # Auto-trigger analysis if result is missing (e.g. after board setup)
+        if st.session_state.analysis_result is None and st.session_state.analyzer:
+            try:
+                result = st.session_state.analyzer.analyze(
+                    board_size=st.session_state.board_size,
+                    moves=st.session_state.moves if st.session_state.moves else None,
+                    handicap=st.session_state.handicap,
+                    komi=st.session_state.komi,
+                    visits=st.session_state.visits,
+                )
+                st.session_state.analysis_result = result
+                st.rerun()
+            except Exception:
+                pass
+        
         # Get last move
         last_move = None
         if st.session_state.moves:
