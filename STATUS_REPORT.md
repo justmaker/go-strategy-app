@@ -1,5 +1,5 @@
 # Go Strategy App - 開發狀況報告
-**日期**: 2026-01-22 08:44
+**日期**: 2026-01-22
 **狀態**: 進行中，有待修復問題
 
 ---
@@ -51,10 +51,9 @@
   - 黃色: winrate drop ≤ 10%
   - 不顯示: winrate drop > 10%
 
-### 2. 已移除但保留的代碼
-- `src/analyzer.py` 中有 `_add_empty_board_candidates` 方法
-- 目前沒有被調用（已移除調用點）
-- 可以刪除，或留著備用
+### 2. 已修復的空盤推薦問題
+- `src/analyzer.py` 中 `_add_empty_board_candidates` 方法已重新調用
+- 現在會確保空盤顯示多元推薦（至少 3 個獨特分數組）
 
 ---
 
@@ -97,8 +96,9 @@ python src/scripts/build_opening_book.py --board-size 19 --visits 100 --max-dept
 
 | 文件 | 狀態 | 說明 |
 |------|------|------|
+| `config.yaml` | ✅ 剛修改 | KataGo 路徑更新為本地構建 |
 | `src/gui.py` | ✅ 剛修改 | 過濾邏輯已簡化為 winrate-only |
-| `src/analyzer.py` | ✅ 剛修改 | 移除了 `_add_empty_board_candidates` 調用 |
+| `src/analyzer.py` | ✅ 剛修改 | 添加了 `_add_empty_board_candidates` 調用 |
 | `src/config.py` | ✅ OK | `top_moves_count` 改為 10 |
 | `katago/gtp_analysis.cfg` | ✅ OK | 添加了 `analysisWideRootNoise = 0.25` |
 | `data/analysis.db` | ⚠️ 舊數據 | 開局庫是用 `top_n=3` 生成的 |
@@ -126,6 +126,6 @@ open http://localhost:8501
 
 ## 📝 Git 狀態
 
-最新 commit: `3022df0` - "refactor: simplify move filtering to winrate-only (10% threshold)"
+最新 commit: `663d0ec` - "feat: update KataGo paths for local build and enhance empty board analysis"
 
 所有變更已推送到 GitHub main 分支。
