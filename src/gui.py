@@ -276,17 +276,21 @@ def draw_board_pil(
             # Determine color based on Score Loss AND Winrate Loss
             # Blue: Best Move (Loss ~ 0 AND Winrate ~ Best) - handles symmetric moves correctly
             # Green: Loss < 1.0 (or negative loss but not best winrate)
-            # Yellow: Loss < 3.0
+            # Yellow: Loss < 5.0
             
             best_winrate = suggested_moves[0].winrate
             winrate_loss = best_winrate - move.winrate
+            
+            # First move (empty board): Force show top 3 regardless of loss
+            is_first_move = len(stones) == 0
+            force_show = is_first_move and i < 3
             
             # Strict criteria for Blue: Must be best score AND best winrate (within margin)
             if loss <= 0.05 and winrate_loss <= 0.005:
                 fill_color = (100, 150, 255) # Blue
             elif loss < 1.0:
                 fill_color = (100, 220, 100) # Green
-            elif loss < 5.0:
+            elif loss < 5.0 or force_show:
                 fill_color = (255, 220, 80)  # Yellow
             else:
                 continue # Don't draw moves with high loss on the board to keep it clean
