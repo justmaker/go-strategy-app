@@ -280,8 +280,10 @@ def draw_board_pil(
     
     # Draw suggested moves with winrate-based coloring
     if suggested_moves and len(suggested_moves) > 0:
+        # Ensure moves are sorted by winrate descending to handle potential unsorted data
+        suggested_moves = sorted(suggested_moves, key=lambda m: m.winrate, reverse=True)
+        
         best_winrate = suggested_moves[0].winrate
-        best_score = suggested_moves[0].score_lead
         
         # Load fonts for info text
         try:
@@ -289,7 +291,8 @@ def draw_board_pil(
         except:
             info_font = small_font
         
-        for i, move in enumerate(suggested_moves):
+        rank = 0
+        for move in suggested_moves:
             if move.move.upper() == "PASS":
                 continue
             col, row = gtp_to_coords(move.move, board_size)
@@ -303,15 +306,17 @@ def draw_board_pil(
             
             # Color based on dynamic logic to ensure visual variety for top moves
             # Rule:
-            # - Index 0 (Best): Blue
-            # - Index 1: Blue if drop <= 0.5%, else Green
-            # - Index 2: Blue/Green if drop matches, else Yellow
-            if winrate_drop <= 0.005:
+            # - Rank 0 (Best): Blue
+            # - Rank 1: Blue if drop <= 0.5%, else Green
+            # - Rank 2: Blue/Green if drop matches, else Yellow
+            if rank == 0 or winrate_drop <= 0.005:
                 fill_color = (100, 150, 255)  # Blue
-            elif i == 1 or winrate_drop <= 0.03:
+            elif rank == 1 or winrate_drop <= 0.03:
                 fill_color = (100, 220, 100)  # Green
             else:
                 fill_color = (255, 220, 80)   # Yellow
+            
+            rank += 1
             
             px, py = board_to_pixel_coords(col, row)
             r = STONE_RADIUS + 2
