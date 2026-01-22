@@ -159,6 +159,9 @@ class GoAnalyzer:
                 # Expand symmetries for presentation (visual completeness)
                 self._expand_symmetries(cached, board)
                 
+                # Ensure empty boards have diverse recommendations
+                self._add_empty_board_candidates(cached, board)
+                
                 return cached
         
         # Cache miss - run KataGo analysis
@@ -231,6 +234,9 @@ class GoAnalyzer:
         
         # Expand symmetries for presentation (visual completeness)
         self._expand_symmetries(result, board)
+        
+        # Ensure empty boards have diverse recommendations
+        self._add_empty_board_candidates(result, board)
         
         return result
     
