@@ -158,7 +158,6 @@ class GoAnalyzer:
                 
                 # Expand symmetries for presentation (visual completeness)
                 self._expand_symmetries(cached, board)
-                self._add_empty_board_candidates(cached, board)
                 
                 return cached
         
@@ -232,8 +231,6 @@ class GoAnalyzer:
         
         # Expand symmetries for presentation (visual completeness)
         self._expand_symmetries(result, board)
-        # Add standard candidates for empty board first move
-        self._add_empty_board_candidates(result, board)
         
         return result
     

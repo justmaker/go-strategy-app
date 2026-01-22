@@ -246,9 +246,9 @@ def draw_board_pil(
             draw.ellipse([px - mr, py - mr, px + mr, py + mr], 
                          outline=marker_color, width=2)
     
-    # Draw suggested moves with score loss coloring
+    # Draw suggested moves with winrate-based coloring
     if suggested_moves and len(suggested_moves) > 0:
-        # Determine best score (from top move)
+        best_winrate = suggested_moves[0].winrate
         best_score = suggested_moves[0].score_lead
         
         # Load fonts for info text
@@ -257,46 +257,28 @@ def draw_board_pil(
         except:
             info_font = small_font
         
-        # First move (empty board): Force show top 3 unique score groups
-        is_first_move = len(stones) == 0
-        seen_scores = set()
-        
-        for i, move in enumerate(suggested_moves[:10]):  # Check more moves to find 3 unique groups
+        for i, move in enumerate(suggested_moves):
             if move.move.upper() == "PASS":
                 continue
             col, row = gtp_to_coords(move.move, board_size)
             if col < 0 or (col, row) in occupied:
                 continue
             
-            # Calculate score loss
-            loss = best_score - move.score_lead
+            # Filter: Only show moves within 10% winrate of best
+            winrate_drop = best_winrate - move.winrate
+            if winrate_drop > 0.10:  # More than 10% winrate drop
+                continue
             
-            # Track unique score groups (round to 0.1 to handle floating point)
-            score_key = round(move.score_lead, 1)
-            if score_key not in seen_scores:
-                seen_scores.add(score_key)
-            unique_rank = len(seen_scores)
-            
-            # Force show if first move and within top 3 unique groups
-            force_show = is_first_move and unique_rank <= 3
-            
-            # Determine color based on Score Loss AND Winrate Loss
-            # Blue: Best Move (Loss ~ 0 AND Winrate ~ Best)
-            # Green: Loss < 1.0
-            # Yellow: Loss < 5.0
-            
-            best_winrate = suggested_moves[0].winrate
-            winrate_loss = best_winrate - move.winrate
-            
-            # Strict criteria for Blue: Must be best score AND best winrate (within margin)
-            if loss <= 0.05 and winrate_loss <= 0.005:
-                fill_color = (100, 150, 255) # Blue
-            elif loss < 1.0:
-                fill_color = (100, 220, 100) # Green
-            elif loss < 5.0 or force_show:
-                fill_color = (255, 220, 80)  # Yellow
+            # Color based on winrate drop
+            # Blue: Best (winrate drop <= 0.5%)
+            # Green: Good (winrate drop <= 3%)
+            # Yellow: Acceptable (winrate drop <= 10%)
+            if winrate_drop <= 0.005:
+                fill_color = (100, 150, 255)  # Blue
+            elif winrate_drop <= 0.03:
+                fill_color = (100, 220, 100)  # Green
             else:
-                continue # Don't draw moves with high loss on the board to keep it clean
+                fill_color = (255, 220, 80)   # Yellow
             
             px, py = board_to_pixel_coords(col, row)
             r = STONE_RADIUS + 2
