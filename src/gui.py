@@ -359,45 +359,23 @@ def draw_board_pil(
 # ============================================================================
 
 def save_session_to_disk():
-    """Save current game state to a temporary file for persistence across refreshes."""
-    state = {
-        'moves': st.session_state.moves,
-        'board_size': st.session_state.board_size,
-        'komi': st.session_state.komi,
-        'handicap': st.session_state.handicap
-    }
-    try:
-        save_path = PROJECT_ROOT / "data" / "current_session.json"
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(save_path, 'w') as f:
-            json.dump(state, f)
-    except:
-        pass
+    """Deprecated - no longer saving to disk."""
+    pass
 
 def load_session_from_disk():
-    """Load previously saved session state."""
-    try:
-        save_path = PROJECT_ROOT / "data" / "current_session.json"
-        if save_path.exists():
-            with open(save_path, 'r') as f:
-                return json.load(f)
-    except:
-        pass
+    """Deprecated - no longer loading from disk."""
     return None
 
 def init_session_state():
     """Initialize session state variables."""
-    # Try to load from disk first
-    saved_state = load_session_from_disk()
-    
     if 'moves' not in st.session_state:
-        st.session_state.moves = saved_state['moves'] if saved_state else []
+        st.session_state.moves = []
     if 'board_size' not in st.session_state:
-        st.session_state.board_size = saved_state['board_size'] if saved_state else 9
+        st.session_state.board_size = 9
     if 'komi' not in st.session_state:
-        st.session_state.komi = saved_state['komi'] if saved_state else 7.5
+        st.session_state.komi = 7.5
     if 'handicap' not in st.session_state:
-        st.session_state.handicap = saved_state['handicap'] if saved_state else 0
+        st.session_state.handicap = 0
     if 'analyzer' not in st.session_state:
         st.session_state.analyzer = None
         
