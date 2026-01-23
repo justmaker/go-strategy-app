@@ -51,9 +51,11 @@ class AppWrapper extends StatefulWidget {
 class _AppWrapperState extends State<AppWrapper> {
   late final ApiService _apiService;
   late final CacheService _cacheService;
+  late final OpeningBookService _openingBookService;
   late final GameProvider _gameProvider;
   bool _initialized = false;
   String? _error;
+  String _initStatus = 'Starting...';
 
   @override
   void initState() {
@@ -63,16 +65,26 @@ class _AppWrapperState extends State<AppWrapper> {
 
   Future<void> _initServices() async {
     try {
-      // Configure API endpoint from config
+      // Step 1: Initialize opening book service (for offline-first)
+      setState(() => _initStatus = 'Loading opening book...');
+      _openingBookService = OpeningBookService();
+      
+      // Step 2: Configure API endpoint from config
+      setState(() => _initStatus = 'Connecting to server...');
       _apiService = ApiService(
         baseUrl: AppConfig.apiBaseUrl,
         timeout: AppConfig.connectionTimeout,
       );
+      
+      // Step 3: Initialize local cache
+      setState(() => _initStatus = 'Initializing cache...');
       _cacheService = CacheService();
       
+      // Step 4: Create game provider with all services
       _gameProvider = GameProvider(
         api: _apiService,
         cache: _cacheService,
+        openingBook: _openingBookService,
         boardSize: AppConfig.defaultBoardSize,
         komi: AppConfig.defaultKomi,
         defaultVisits: AppConfig.defaultVisits,
@@ -128,14 +140,14 @@ class _AppWrapperState extends State<AppWrapper> {
     }
 
     if (!_initialized) {
-      return const Scaffold(
+      return Scaffold(
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Initializing...'),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(_initStatus),
             ],
           ),
         ),

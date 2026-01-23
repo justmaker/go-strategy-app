@@ -7,9 +7,27 @@ A Flutter-based mobile app for Go (Weiqi/Baduk) strategy analysis, powered by Ka
 - Interactive Go board with tap-to-play
 - Real-time AI analysis with move suggestions
 - Color-coded recommendations (Blue=Best, Green=Good, Yellow=OK)
-- Offline support with local SQLite cache
+- **Offline-first architecture** with bundled opening book
+- Local SQLite cache for additional positions
 - Support for 9x9, 13x13, and 19x19 boards
 - Configurable analysis visits and komi
+
+## Offline Support
+
+The app includes a bundled opening book with ~7,700 pre-analyzed positions:
+- **9x9**: ~2,900 positions (500 visits each)
+- **13x13**: ~3,000 positions (300 visits each)
+- **19x19**: ~1,800 positions (100-150 visits each)
+
+Analysis lookup priority:
+1. **Bundled Opening Book** - Instant, always available (~380KB compressed)
+2. **Local Cache** - Fast, persisted between sessions
+3. **API Call** - Requires network, results are cached locally
+
+The UI shows the source of each analysis:
+- 📖 **Book** (green) - From bundled opening book
+- 💾 **Cache** (blue) - From local SQLite cache
+- ☁️ **Live** (orange) - From API server
 
 ## Prerequisites
 
@@ -58,6 +76,22 @@ flutter build apk --release
 
 The APK will be at: `build/app/outputs/flutter-apk/app-release.apk`
 
+## Updating the Opening Book
+
+To update the bundled opening book with new analysis data:
+
+```bash
+# From project root
+source venv/bin/activate
+
+# Export with compression (recommended)
+python -m src.scripts.export_opening_book --min-visits 100 --compress
+
+# This creates: mobile/assets/opening_book.json.gz
+```
+
+Then rebuild the APK to include the updated data.
+
 ## Installing the APK
 
 ### Via ADB (USB debugging)
@@ -95,20 +129,24 @@ flutter test
 
 ```
 lib/
-├── config.dart          # App configuration (API URL, defaults)
-├── main.dart            # App entry point
-├── models/              # Data models
-│   ├── board_state.dart # Board state management
+├── config.dart              # App configuration (API URL, defaults)
+├── main.dart                # App entry point
+├── models/                  # Data models
+│   ├── board_state.dart     # Board state management
 │   └── analysis_result.dart
-├── providers/           # State management
-│   └── game_provider.dart
-├── screens/             # UI screens
+├── providers/               # State management
+│   └── game_provider.dart   # Offline-first analysis logic
+├── screens/                 # UI screens
 │   └── analysis_screen.dart
-├── services/            # Backend services
-│   ├── api_service.dart # REST API client
-│   └── cache_service.dart
-└── widgets/             # UI components
+├── services/                # Backend services
+│   ├── api_service.dart     # REST API client
+│   ├── cache_service.dart   # Local SQLite cache
+│   └── opening_book_service.dart  # Bundled opening book
+└── widgets/                 # UI components
     └── go_board_widget.dart
+
+assets/
+└── opening_book.json.gz     # Bundled opening book (~380KB)
 ```
 
 ## Coordinate System
@@ -121,7 +159,8 @@ Example: Q16 = column Q (16th), row 16
 
 ## API Requirements
 
-The mobile app requires a running Go Strategy API server. See the main project README for server setup instructions.
+The mobile app can work **fully offline** for positions in the opening book.
+For positions not in the book, it requires a running Go Strategy API server.
 
 Endpoints used:
 - `GET /health` - Connection check
@@ -132,7 +171,8 @@ Endpoints used:
 ## Troubleshooting
 
 ### "Connection refused" error
-- Ensure the API server is running
+- **For opening book positions**: Works offline, no connection needed!
+- For other positions: Ensure the API server is running
 - Check the API URL in `lib/config.dart`
 - If using local network, ensure your device is on the same network
 - Android emulator: Use `10.0.2.2` instead of `localhost`
@@ -147,6 +187,11 @@ flutter clean
 flutter pub get
 flutter build apk --release
 ```
+
+### Opening book not loading
+- Ensure `assets/opening_book.json` or `assets/opening_book.json.gz` exists
+- Check that `pubspec.yaml` includes the assets folder
+- Run `flutter pub get` after adding assets
 
 ## License
 

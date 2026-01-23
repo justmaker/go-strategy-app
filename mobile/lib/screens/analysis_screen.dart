@@ -147,13 +147,7 @@ class _AnalysisPanel extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                   const Spacer(),
-                  if (analysis.fromCache)
-                    Chip(
-                      label: const Text('Cached'),
-                      backgroundColor: Colors.blue.shade100,
-                      padding: EdgeInsets.zero,
-                      labelStyle: const TextStyle(fontSize: 10),
-                    ),
+                  _SourceChip(source: game.lastAnalysisSource),
                 ],
               ),
               const SizedBox(height: 8),
@@ -166,6 +160,49 @@ class _AnalysisPanel extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Chip showing the source of the analysis
+class _SourceChip extends StatelessWidget {
+  final AnalysisSource source;
+
+  const _SourceChip({required this.source});
+
+  @override
+  Widget build(BuildContext context) {
+    String label;
+    Color backgroundColor;
+    IconData icon;
+
+    switch (source) {
+      case AnalysisSource.openingBook:
+        label = 'Book';
+        backgroundColor = Colors.green.shade100;
+        icon = Icons.menu_book;
+        break;
+      case AnalysisSource.localCache:
+        label = 'Cache';
+        backgroundColor = Colors.blue.shade100;
+        icon = Icons.save;
+        break;
+      case AnalysisSource.api:
+        label = 'Live';
+        backgroundColor = Colors.orange.shade100;
+        icon = Icons.cloud;
+        break;
+      case AnalysisSource.none:
+        return const SizedBox.shrink();
+    }
+
+    return Chip(
+      avatar: Icon(icon, size: 14),
+      label: Text(label),
+      backgroundColor: backgroundColor,
+      padding: EdgeInsets.zero,
+      labelStyle: const TextStyle(fontSize: 10),
+      visualDensity: VisualDensity.compact,
     );
   }
 }
@@ -269,6 +306,86 @@ class _ControlsPanel extends StatelessWidget {
   }
 }
 
+/// Widget showing data statistics (opening book + cache)
+class _DataStatsWidget extends StatelessWidget {
+  final GameProvider game;
+
+  const _DataStatsWidget({required this.game});
+
+  @override
+  Widget build(BuildContext context) {
+    final bookStats = game.getOpeningBookStats();
+    final isBookLoaded = bookStats['is_loaded'] as bool? ?? false;
+    final bookEntries = bookStats['total_entries'] as int? ?? 0;
+    final byBoardSize = bookStats['by_board_size'] as Map<int, int>? ?? {};
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Opening book status
+        Row(
+          children: [
+            Icon(
+              isBookLoaded ? Icons.check_circle : Icons.error,
+              color: isBookLoaded ? Colors.green : Colors.red,
+              size: 16,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isBookLoaded
+                  ? 'Opening Book: $bookEntries positions'
+                  : 'Opening Book: Not loaded',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+            ),
+          ],
+        ),
+        if (isBookLoaded && byBoardSize.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 24),
+            child: Text(
+              byBoardSize.entries
+                  .map((e) => '${e.key}x${e.key}: ${e.value}')
+                  .join(' | '),
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 10),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        // Local cache stats
+        FutureBuilder<Map<String, dynamic>>(
+          future: game.getCacheStats(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return Text(
+                'Local Cache: Loading...',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              );
+            }
+            final stats = snapshot.data!;
+            final localCache = stats['local_cache'] as Map<String, dynamic>?;
+            final localEntries = localCache?['total_entries'] as int? ?? 0;
+            return Row(
+              children: [
+                Icon(
+                  Icons.save,
+                  color: Colors.blue.shade300,
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Local Cache: $localEntries positions',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
 class _SettingsSheet extends StatelessWidget {
   const _SettingsSheet();
 
@@ -342,20 +459,8 @@ class _SettingsSheet extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // Cache stats
-              FutureBuilder<Map<String, dynamic>>(
-                future: game.getCacheStats(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Text('Loading cache stats...');
-                  }
-                  final stats = snapshot.data!;
-                  return Text(
-                    'Local Cache: ${stats['total_entries']} positions',
-                    style: TextStyle(color: Colors.grey.shade600),
-                  );
-                },
-              ),
+              // Opening book & cache stats
+              _DataStatsWidget(game: game),
             ],
           ),
         );

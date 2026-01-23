@@ -34,3 +34,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  
+  # Bundled assets
+  assets:
+    - assets/opening_book.json
+    - assets/opening_book.json.gz
