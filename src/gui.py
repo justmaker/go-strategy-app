@@ -499,21 +499,11 @@ def main():
     # Custom CSS to override default red slider color
     st.markdown("""
         <style>
-        /* Slider track and thumb */
+        /* Slider and UI elements - Theme aware */
         .stSlider [data-baseweb="slider"] {
-            color: #333333;
+            /* Remove hardcoded color to follow theme */
         }
-        .stSlider [data-testid="stTickBar"] {
-            color: #333333;
-        }
-        /* Slider value text */
-        .stSlider [data-testid="stThumbValue"] {
-            color: #333333 !important;
-        }
-        /* Select slider text */
-        div[data-baseweb="select"] {
-            color: #333333;
-        }
+        
         /* Reduce sidebar top padding */
         [data-testid="stSidebar"] > div:first-child {
             padding-top: 2rem !important;
@@ -529,6 +519,17 @@ def main():
         [data-testid="stSidebar"] {
             z-index: 100;
         }
+        
+        /* Premium Card Styling */
+        .info-card {
+            background-color: rgba(128, 128, 128, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            margin-bottom: 15px;
+            color: inherit;
+        }
+
         @media (min-width: 900px) {
             .main .block-container {
                 max-width: 100%;
@@ -683,7 +684,7 @@ def main():
         
         # Visits Control
         # Define discrete visit levels (non-linear for better UX)
-        all_visit_levels = [10, 50, 100, 200, 300, 500, 1000, 2000, 5000]
+        all_visit_levels = [100, 200, 300, 500, 1000, 2000, 5000]
         
         # Check if we have an opening book for this configuration
         has_book = False
@@ -1007,11 +1008,19 @@ def main():
     
     with col_info:
         # Current turn
+        # Current turn indicator with premium styling
         next_player = get_next_player(st.session_state.moves, st.session_state.handicap)
         player_name = "Black" if next_player == 'B' else "White"
-        player_symbol = "" if next_player == 'B' else ""
         
-        st.markdown(f"### Next: {player_symbol} {player_name}")
+        bg_color = "rgba(0, 0, 0, 0.3)" if next_player == 'B' else "rgba(255, 255, 255, 0.1)"
+        text_color = "#ffffff" if next_player == 'B' else "inherit"
+        border_color = "rgba(0, 0, 0, 0.5)" if next_player == 'B' else "rgba(255, 255, 255, 0.3)"
+        
+        st.markdown(f"""
+            <div style='background-color: {bg_color}; color: {text_color}; padding: 15px; border-radius: 10px; border: 2px solid {border_color}; margin-bottom: 20px; display: flex; align-items: center; justify-content: center;'>
+                <span style='font-size: 1.5em; font-weight: bold;'>Next: {"⚫" if next_player == "B" else "⚪"} {player_name}</span>
+            </div>
+        """, unsafe_allow_html=True)
         
         st.markdown("---")
 
@@ -1027,10 +1036,12 @@ def main():
             p_b = st.session_state.prisoners['B']
             p_w = st.session_state.prisoners['W']
             st.markdown(f"""
-                <div style='background-color: #f0f0f0; padding: 10px; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 10px;'>
-                    <span style='font-size: 1.1em;'><b>Prisoners</b></span><br>
-                    ⚫ Black: <b>{p_w}</b> (Captured White)<br>
-                    ⚪ White: <b>{p_b}</b> (Captured Black)
+                <div class='info-card'>
+                    <span style='font-size: 1.1em; font-weight: bold;'>Prisoners</span><br>
+                    <div style='margin-top: 10px;'>
+                        ⚫ Black: <b>{p_w}</b> <span style='font-size: 0.9em; opacity: 0.7;'>(Captured White)</span><br>
+                        ⚪ White: <b>{p_b}</b> <span style='font-size: 0.9em; opacity: 0.7;'>(Captured Black)</span>
+                    </div>
                 </div>
             """, unsafe_allow_html=True)
             
