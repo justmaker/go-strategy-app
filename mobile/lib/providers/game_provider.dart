@@ -1,5 +1,5 @@
 /// Game provider for state management.
-/// Implements offline-first logic with bundled opening book, local cache, 
+/// Implements offline-first logic with bundled opening book, local cache,
 /// local KataGo engine, and API fallback.
 
 import 'dart:async';
@@ -28,7 +28,7 @@ class GameProvider extends ChangeNotifier {
   String? _error;
   ConnectionStatus _connectionStatus = ConnectionStatus.checking;
   bool _openingBookLoaded = false;
-  
+
   // Local engine state
   bool _localEngineEnabled = true;
   AnalysisProgress? _analysisProgress;
@@ -36,7 +36,7 @@ class GameProvider extends ChangeNotifier {
   // Settings
   int _selectedVisits;
   final List<int> _availableVisits;
-  
+
   List<int> get availableVisits => _availableVisits;
 
   GameProvider({
@@ -67,7 +67,7 @@ class GameProvider extends ChangeNotifier {
   bool get isOnline => _connectionStatus == ConnectionStatus.online;
   bool get isOpeningBookLoaded => _openingBookLoaded;
   OpeningBookService get openingBook => _openingBook;
-  
+
   // Local engine getters
   bool get localEngineEnabled => _localEngineEnabled;
   bool get localEngineRunning => _kataGo.isRunning;
@@ -78,21 +78,21 @@ class GameProvider extends ChangeNotifier {
   Future<void> init() async {
     // Load opening book first (for instant offline access)
     await _loadOpeningBook();
-    
+
     // Initialize local cache
     await _cache.init();
-    
+
     // Check server connection (non-blocking for UI)
     checkConnection();
-    
+
     // Try to start local engine (non-blocking)
     _initLocalEngine();
   }
-  
+
   /// Initialize local KataGo engine
   Future<void> _initLocalEngine() async {
     if (!_localEngineEnabled) return;
-    
+
     try {
       final success = await _kataGo.start();
       if (success) {
@@ -105,7 +105,7 @@ class GameProvider extends ChangeNotifier {
       debugPrint('Error starting local engine: $e');
     }
   }
-  
+
   /// Load bundled opening book
   Future<void> _loadOpeningBook() async {
     try {
@@ -128,10 +128,11 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
 
     final isHealthy = await _api.healthCheck();
-    _connectionStatus = isHealthy ? ConnectionStatus.online : ConnectionStatus.offline;
+    _connectionStatus =
+        isHealthy ? ConnectionStatus.online : ConnectionStatus.offline;
     notifyListeners();
   }
-  
+
   /// Toggle local engine
   void setLocalEngineEnabled(bool enabled) {
     _localEngineEnabled = enabled;
@@ -146,7 +147,8 @@ class GameProvider extends ChangeNotifier {
   /// Set board size
   void setBoardSize(int size) {
     if (size != _board.size) {
-      _board = BoardState(size: size, komi: _board.komi, handicap: _board.handicap);
+      _board =
+          BoardState(size: size, komi: _board.komi, handicap: _board.handicap);
       _lastAnalysis = null;
       _lastAnalysisSource = AnalysisSource.none;
       _analysisProgress = null;
@@ -187,7 +189,7 @@ class GameProvider extends ChangeNotifier {
   }
 
   /// Analyze current position (offline-first with opening book)
-  /// 
+  ///
   /// Priority order:
   /// 1. Bundled opening book (instant, always available)
   /// 2. Local SQLite cache (fast, persisted)
@@ -204,10 +206,15 @@ class GameProvider extends ChangeNotifier {
     try {
       // Compute a simple hash for lookups
       final boardHash = _computeSimpleHash();
-      
+
       // Step 1: Try bundled opening book first (unless force refresh)
+      // Use move-based lookup since we don't have Zobrist hash in Dart
       if (!forceRefresh && _openingBookLoaded) {
-        final bookResult = _openingBook.lookupWithKomi(boardHash, _board.komi);
+        final bookResult = _openingBook.lookupByMoves(
+          _board.size,
+          _board.komi,
+          _board.movesGtp,
+        );
         if (bookResult != null) {
           _lastAnalysis = bookResult;
           _lastAnalysisSource = AnalysisSource.openingBook;
@@ -268,7 +275,6 @@ class GameProvider extends ChangeNotifier {
           ? 'Offline: Position not in opening book or cache'
           : 'Failed to analyze position';
       _lastAnalysisSource = AnalysisSource.none;
-      
     } catch (e) {
       _error = 'Error: $e';
       _lastAnalysisSource = AnalysisSource.none;
@@ -277,11 +283,11 @@ class GameProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-  
+
   /// Analyze using local KataGo engine
   Future<void> _analyzeWithLocalEngine() async {
     final completer = Completer<void>();
-    
+
     await _kataGo.analyze(
       boardSize: _board.size,
       moves: _board.movesGtp,
@@ -296,10 +302,10 @@ class GameProvider extends ChangeNotifier {
         _lastAnalysisSource = AnalysisSource.localEngine;
         _analysisProgress = null;
         _isAnalyzing = false;
-        
+
         // Cache the result
         _cache.put(result);
-        
+
         notifyListeners();
         if (!completer.isCompleted) completer.complete();
       },
@@ -310,7 +316,7 @@ class GameProvider extends ChangeNotifier {
         if (!completer.isCompleted) completer.complete();
       },
     );
-    
+
     // Wait for completion with timeout
     try {
       await completer.future.timeout(
@@ -330,14 +336,14 @@ class GameProvider extends ChangeNotifier {
   /// Cancel ongoing analysis
   Future<void> cancelAnalysis() async {
     if (!_isAnalyzing) return;
-    
+
     await _kataGo.cancelAnalysis();
     _isAnalyzing = false;
     _analysisProgress = null;
     _error = 'Analysis cancelled';
     notifyListeners();
   }
-  
+
   /// Compute a simple hash for the current board position
   String _computeSimpleHash() {
     final buffer = StringBuffer();
@@ -371,7 +377,7 @@ class GameProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> getCacheStats() async {
     final localStats = await _cache.getStats();
     final bookStats = _openingBook.getStats();
-    
+
     return {
       'local_cache': localStats,
       'opening_book': bookStats,
@@ -381,7 +387,7 @@ class GameProvider extends ChangeNotifier {
       },
     };
   }
-  
+
   /// Get opening book statistics
   Map<String, dynamic> getOpeningBookStats() {
     return _openingBook.getStats();
@@ -396,5 +402,3 @@ class GameProvider extends ChangeNotifier {
     super.dispose();
   }
 }
-
-

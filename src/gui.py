@@ -698,8 +698,8 @@ def main():
 
         # If opening book exists, enforce minimum visits to ensure quality
         has_book = book_visits > 0
+        min_visits = book_visits if has_book else 10  # Default min_visits
         if has_book:
-            min_visits = book_visits
             visit_levels = [v for v in all_visit_levels if v >= min_visits]
         else:
             visit_levels = all_visit_levels

@@ -59,7 +59,9 @@ class AnalysisScreen extends StatelessWidget {
                   return GoBoardWidget(
                     board: game.board,
                     suggestions: game.lastAnalysis?.topMoves,
-                    onTap: game.isAnalyzing ? null : (point) => game.placeStone(point),
+                    onTap: game.isAnalyzing
+                        ? null
+                        : (point) => game.placeStone(point),
                   );
                 },
               ),
@@ -107,8 +109,8 @@ class _AnalysisPanel extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                     const SizedBox(width: 12),
-                    Text(progress != null 
-                        ? 'Analyzing locally... ${progress.visits}/${progress.maxVisits} visits'
+                    Text(progress != null
+                        ? 'Analyzing locally... ${progress.currentVisits}/${progress.maxVisits} visits'
                         : 'Analyzing...'),
                     if (progress != null) ...[
                       const SizedBox(width: 12),
@@ -125,7 +127,7 @@ class _AnalysisPanel extends StatelessWidget {
                 if (progress != null) ...[
                   const SizedBox(height: 8),
                   LinearProgressIndicator(
-                    value: progress.visits / progress.maxVisits,
+                    value: progress.currentVisits / progress.maxVisits,
                     backgroundColor: Colors.grey.shade300,
                   ),
                 ],
@@ -142,7 +144,9 @@ class _AnalysisPanel extends StatelessWidget {
               children: [
                 const Icon(Icons.error_outline, color: Colors.red),
                 const SizedBox(width: 8),
-                Expanded(child: Text(game.error!, style: const TextStyle(color: Colors.red))),
+                Expanded(
+                    child: Text(game.error!,
+                        style: const TextStyle(color: Colors.red))),
               ],
             ),
           );
@@ -429,7 +433,8 @@ class _SettingsSheet extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
+              Text('Settings',
+                  style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 16),
 
               // Board size
@@ -493,16 +498,14 @@ class _SettingsSheet extends StatelessWidget {
               SwitchListTile(
                 title: const Text('Local KataGo Engine'),
                 subtitle: Text(
-                  game.localEngineRunning 
+                  game.localEngineRunning
                       ? 'Running (offline analysis available)'
-                      : game.localEngineEnabled 
-                          ? 'Starting...' 
+                      : game.localEngineEnabled
+                          ? 'Starting...'
                           : 'Disabled',
                   style: TextStyle(
                     fontSize: 12,
-                    color: game.localEngineRunning 
-                        ? Colors.green 
-                        : Colors.grey,
+                    color: game.localEngineRunning ? Colors.green : Colors.grey,
                   ),
                 ),
                 value: game.localEngineEnabled,
