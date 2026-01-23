@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Network permissions for API communication -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    
     <application
-        android:label="go_strategy_app"
+        android:usesCleartextTraffic="true"
+        android:label="Go Strategy"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

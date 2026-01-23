@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'config.dart';
 import 'providers/providers.dart';
 import 'screens/screens.dart';
 import 'services/services.dart';
@@ -62,16 +63,20 @@ class _AppWrapperState extends State<AppWrapper> {
 
   Future<void> _initServices() async {
     try {
-      // Configure API endpoint
-      // TODO: Make this configurable via settings
-      const apiUrl = 'http://10.20.90.254:8000';
-
-      _apiService = ApiService(baseUrl: apiUrl);
+      // Configure API endpoint from config
+      _apiService = ApiService(
+        baseUrl: AppConfig.apiBaseUrl,
+        timeout: AppConfig.connectionTimeout,
+      );
       _cacheService = CacheService();
       
       _gameProvider = GameProvider(
         api: _apiService,
         cache: _cacheService,
+        boardSize: AppConfig.defaultBoardSize,
+        komi: AppConfig.defaultKomi,
+        defaultVisits: AppConfig.defaultVisits,
+        availableVisits: AppConfig.availableVisits,
       );
 
       await _gameProvider.init();

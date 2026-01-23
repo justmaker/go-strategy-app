@@ -3,25 +3,32 @@
 enum StoneColor { empty, black, white }
 
 /// Represents a point on the Go board
+/// 
+/// Coordinate system (matches GTP standard):
+/// - x: 0 to boardSize-1, left to right (A to T, skipping I)
+/// - y: 0 to boardSize-1, BOTTOM to TOP (row 1 to 19)
+/// 
+/// This means y=0 is the BOTTOM row (row 1 in GTP).
 class BoardPoint {
   final int x; // 0-based, left to right
-  final int y; // 0-based, top to bottom
+  final int y; // 0-based, bottom to top (GTP standard)
 
   const BoardPoint(this.x, this.y);
 
   /// Convert to GTP coordinate (e.g., "Q16")
   String toGtp(int boardSize) {
     // GTP columns: A-T (skip I), from left
-    // GTP rows: 1-19, from bottom
+    // GTP rows: 1-19, from bottom (y=0 is row 1)
     const columns = 'ABCDEFGHJKLMNOPQRST'; // Note: no 'I'
     final col = columns[x];
-    final row = boardSize - y;
+    final row = y + 1; // y=0 -> row 1, y=18 -> row 19
     return '$col$row';
   }
 
   /// Parse from GTP coordinate
   static BoardPoint? fromGtp(String gtp, int boardSize) {
     if (gtp.length < 2) return null;
+    if (gtp.toUpperCase() == 'PASS') return null;
     
     const columns = 'ABCDEFGHJKLMNOPQRST';
     final col = gtp[0].toUpperCase();
@@ -31,7 +38,20 @@ class BoardPoint {
     final row = int.tryParse(gtp.substring(1));
     if (row == null || row < 1 || row > boardSize) return null;
 
-    return BoardPoint(colIndex, boardSize - row);
+    // row 1 -> y=0, row 19 -> y=18
+    return BoardPoint(colIndex, row - 1);
+  }
+  
+  /// Convert to display coordinates (y=0 at top for rendering)
+  /// Use this when drawing on screen where y=0 is at the top
+  BoardPoint toDisplayCoords(int boardSize) {
+    return BoardPoint(x, boardSize - 1 - y);
+  }
+  
+  /// Convert from display coordinates (y=0 at top) to GTP coordinates
+  /// Use this when converting screen taps to board positions
+  static BoardPoint fromDisplayCoords(int displayX, int displayY, int boardSize) {
+    return BoardPoint(displayX, boardSize - 1 - displayY);
   }
 
   @override
@@ -82,6 +102,9 @@ class GameMove {
 }
 
 /// Manages the board state
+/// 
+/// Internal storage uses GTP coordinates (y=0 at bottom).
+/// For display purposes, use getStoneForDisplay() which flips the y-axis.
 class BoardState {
   final int size;
   final List<List<StoneColor>> _stones;
@@ -99,19 +122,31 @@ class BoardState {
         ),
         _moves = [];
 
-  /// Get stone at position
+  /// Get stone at GTP coordinates (y=0 at bottom)
   StoneColor getStone(int x, int y) {
     if (x < 0 || x >= size || y < 0 || y >= size) {
       return StoneColor.empty;
     }
     return _stones[y][x];
   }
+  
+  /// Get stone at display coordinates (y=0 at top, for rendering)
+  StoneColor getStoneForDisplay(int displayX, int displayY) {
+    final gtpY = size - 1 - displayY;
+    return getStone(displayX, gtpY);
+  }
 
-  /// Get stone at board point
+  /// Get stone at board point (GTP coordinates)
   StoneColor getStoneAt(BoardPoint point) => getStone(point.x, point.y);
 
-  /// Check if position is empty
+  /// Check if position is empty (GTP coordinates)
   bool isEmpty(int x, int y) => getStone(x, y) == StoneColor.empty;
+  
+  /// Check if position is empty (display coordinates)
+  bool isEmptyForDisplay(int displayX, int displayY) {
+    final gtpY = size - 1 - displayY;
+    return isEmpty(displayX, gtpY);
+  }
 
   /// Get the next player to move
   StoneColor get nextPlayer {
@@ -171,22 +206,26 @@ class BoardState {
     return newBoard;
   }
 
-  /// Get star points for the board
+  /// Get star points for the board (in GTP coordinates, y=0 at bottom)
   List<BoardPoint> get starPoints {
+    // Star points in GTP coordinates (x, y) where y=0 is bottom
     switch (size) {
       case 9:
+        // 9x9: C3, G3, E5, C7, G7 -> (2,2), (6,2), (4,4), (2,6), (6,6)
         return const [
           BoardPoint(2, 2), BoardPoint(6, 2),
           BoardPoint(4, 4),
           BoardPoint(2, 6), BoardPoint(6, 6),
         ];
       case 13:
+        // 13x13: D4, K4, G7, D10, K10 -> (3,3), (9,3), (6,6), (3,9), (9,9)
         return const [
           BoardPoint(3, 3), BoardPoint(9, 3),
           BoardPoint(6, 6),
           BoardPoint(3, 9), BoardPoint(9, 9),
         ];
       case 19:
+        // 19x19: D4, K4, Q4, D10, K10, Q10, D16, K16, Q16
         return const [
           BoardPoint(3, 3), BoardPoint(9, 3), BoardPoint(15, 3),
           BoardPoint(3, 9), BoardPoint(9, 9), BoardPoint(15, 9),
@@ -195,5 +234,10 @@ class BoardState {
       default:
         return [];
     }
+  }
+  
+  /// Get star points in display coordinates (y=0 at top, for rendering)
+  List<BoardPoint> get starPointsForDisplay {
+    return starPoints.map((p) => p.toDisplayCoords(size)).toList();
   }
 }

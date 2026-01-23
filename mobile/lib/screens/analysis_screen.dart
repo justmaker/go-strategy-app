@@ -307,7 +307,7 @@ class _SettingsSheet extends StatelessWidget {
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
-                children: GameProvider.availableVisits.map((v) {
+                children: game.availableVisits.map((v) {
                   return ChoiceChip(
                     label: Text('$v'),
                     selected: game.selectedVisits == v,

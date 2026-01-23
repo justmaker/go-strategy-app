@@ -71,14 +71,17 @@ class GoBoardWidget extends StatelessWidget {
 
   void _handleTap(TapDownDetails details, double widgetSize) {
     final padding = showCoordinates ? widgetSize * 0.05 : 0.0;
-    final boardSize = widgetSize - padding * 2;
-    final cellSize = boardSize / (board.size - 1);
+    final boardSizePixels = widgetSize - padding * 2;
+    final cellSize = boardSizePixels / (board.size - 1);
 
-    final x = ((details.localPosition.dx - padding) / cellSize).round();
-    final y = ((details.localPosition.dy - padding) / cellSize).round();
+    // Display coordinates (y=0 at top of screen)
+    final displayX = ((details.localPosition.dx - padding) / cellSize).round();
+    final displayY = ((details.localPosition.dy - padding) / cellSize).round();
 
-    if (x >= 0 && x < board.size && y >= 0 && y < board.size) {
-      onTap?.call(BoardPoint(x, y));
+    if (displayX >= 0 && displayX < board.size && displayY >= 0 && displayY < board.size) {
+      // Convert display coordinates to GTP coordinates (y=0 at bottom)
+      final gtpPoint = BoardPoint.fromDisplayCoords(displayX, displayY, board.size);
+      onTap?.call(gtpPoint);
     }
   }
 }
@@ -159,7 +162,8 @@ class _BoardPainter extends CustomPainter {
     final paint = Paint()..color = theme.starPointColor;
     final radius = cellSize * 0.12;
 
-    for (final point in board.starPoints) {
+    // Use display coordinates for rendering (y=0 at top)
+    for (final point in board.starPointsForDisplay) {
       final x = padding + point.x * cellSize;
       final y = padding + point.y * cellSize;
       canvas.drawCircle(Offset(x, y), radius, paint);
@@ -205,24 +209,31 @@ class _BoardPainter extends CustomPainter {
   void _drawSuggestions(Canvas canvas, double padding, double cellSize) {
     if (suggestions == null || suggestions!.isEmpty) return;
 
-    final bestScore = suggestions!.first.scoreLead;
+    final bestWinrate = suggestions!.first.winrate;
 
     for (int i = 0; i < suggestions!.length; i++) {
       final suggestion = suggestions![i];
-      final point = BoardPoint.fromGtp(suggestion.move, board.size);
-      if (point == null) continue;
+      final gtpPoint = BoardPoint.fromGtp(suggestion.move, board.size);
+      if (gtpPoint == null) continue;
+      
+      // Convert GTP coordinates to display coordinates for rendering
+      final point = gtpPoint.toDisplayCoords(board.size);
 
-      // Determine color based on score difference
+      // Determine color based on winrate difference (matching GUI logic)
       Color color;
-      if (i == 0) {
+      final winrateDrop = bestWinrate - suggestion.winrate;
+      if (winrateDrop <= 0.005) {
+        // Best move (drop <= 0.5%)
         color = theme.bestMoveColor;
+      } else if (winrateDrop <= 0.03) {
+        // Good move (drop <= 3%)
+        color = theme.goodMoveColor;
+      } else if (winrateDrop <= 0.10) {
+        // OK move (drop <= 10%)
+        color = theme.okMoveColor;
       } else {
-        final scoreDiff = bestScore - suggestion.scoreLead;
-        if (scoreDiff < 1.0) {
-          color = theme.goodMoveColor;
-        } else {
-          color = theme.okMoveColor;
-        }
+        // Skip moves with >10% winrate drop
+        continue;
       }
 
       final x = padding + point.x * cellSize;
@@ -265,13 +276,15 @@ class _BoardPainter extends CustomPainter {
   void _drawStones(Canvas canvas, double padding, double cellSize) {
     final stoneRadius = cellSize * 0.45;
 
-    for (int y = 0; y < board.size; y++) {
-      for (int x = 0; x < board.size; x++) {
-        final stone = board.getStone(x, y);
+    // Iterate in display coordinates (y=0 at top for rendering)
+    for (int displayY = 0; displayY < board.size; displayY++) {
+      for (int displayX = 0; displayX < board.size; displayX++) {
+        // Get stone using display coordinates
+        final stone = board.getStoneForDisplay(displayX, displayY);
         if (stone == StoneColor.empty) continue;
 
-        final centerX = padding + x * cellSize;
-        final centerY = padding + y * cellSize;
+        final centerX = padding + displayX * cellSize;
+        final centerY = padding + displayY * cellSize;
 
         // Draw stone shadow
         final shadowPaint = Paint()

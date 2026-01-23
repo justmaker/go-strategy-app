@@ -20,17 +20,23 @@ class GameProvider extends ChangeNotifier {
   ConnectionStatus _connectionStatus = ConnectionStatus.checking;
 
   // Settings
-  int _selectedVisits = 100;
-  static const List<int> availableVisits = [10, 50, 100, 200, 500, 1000, 2000, 5000];
+  int _selectedVisits;
+  final List<int> _availableVisits;
+  
+  List<int> get availableVisits => _availableVisits;
 
   GameProvider({
     required ApiService api,
     required CacheService cache,
     int boardSize = 19,
     double komi = 7.5,
+    int defaultVisits = 100,
+    List<int> availableVisits = const [10, 50, 100, 200, 500, 1000, 2000, 5000],
   })  : _api = api,
         _cache = cache,
-        _board = BoardState(size: boardSize, komi: komi);
+        _board = BoardState(size: boardSize, komi: komi),
+        _selectedVisits = defaultVisits,
+        _availableVisits = availableVisits;
 
   // Getters
   BoardState get board => _board;
@@ -76,7 +82,7 @@ class GameProvider extends ChangeNotifier {
 
   /// Set visits for analysis
   void setVisits(int visits) {
-    if (availableVisits.contains(visits)) {
+    if (_availableVisits.contains(visits)) {
       _selectedVisits = visits;
       notifyListeners();
     }
