@@ -1,59 +1,34 @@
-# Go Strategy App - 開發狀況報告
-**日期**: 2026-01-23
-**狀態**: 進行中，核心功能已修復
+# Project Status Report
 
----
+**Date:** 2026-01-23
+**Status:** 🟢 Stable / Active Development
 
-## ✅ 已完成/已修復的功能
+## Recent Achievements
+- **UI/UX Overhaul**:
+    - Fixed sidebar overlap issues with custom CSS layout.
+    - Reordered sidebar information hierarchy (Next -> History -> Analysis).
+    - Fixed visual glitches with stone coordinates and move history mismatch.
+- **Core Logic Fixes**:
+    - Unified coordinate systems between GUI and Core Logic (GTP standard `row 1 = bottom`).
+    - Fixed `coords_to_gtp` calculation error causing click displacements.
+    - Implemented correct color-coding logic for suggested moves based on winrate drop.
+- **Data Engineering**:
+    - Created automation script `run_data_generation.sh` for multi-size board data generation.
+    - Generated preliminary 9x9 opening book (~5500 nodes) cached in SQLite.
+    - Verified cache integration in GUI (sub-second response for cached openings).
+- **Session Management**:
+    - Refactored session handling to be ephemeral (browser-session based) rather than disk-persistent, improving UX for reset scenarios.
 
-### 1. 空盤推薦邏輯 (Symmetry & Variety)
-- **對稱歸一化**: 實作了對應對稱群組自動取 **最低勝率/目量** 的邏輯。這確保了對應點位在 GUI 中始終被視為同一個 "Top" 群組，避免數字微差導致顯示混亂。
-- **保證 Top 3**: 透過 `_add_empty_board_candidates` 在空盤時注入標準開局點（星位、小目、三三），確保 9, 13, 19 路棋盤初始都有至少 3 個獨立分數群組。
-- **排序與擴充**: 變更了邏輯順序，先注入候選點再進行對稱擴充，確保注入的點也能正確顯示其對稱點位。
+## Current System State
+- **Web GUI**: Fully functional, responsive, and aesthetically improved.
+- **Analysis Engine**: Using KataGo (CPU) with caching layer active.
+- **Data**: `data/analysis.db` contains ~5.5k records for 9x9.
 
-### 2. GUI UI/UX 優化
-- **側邊欄配置**: 將 SGF 導入/導出功能移至最下方，使常用設定更直觀。
-- **減少留白**: 透過自定義 CSS 減少了側邊欄上方的過度留白。
-- **勝率過濾**: 簡化過濾規則，僅依據勝率下降（Winrate Drop）進行顯示與著色（0.5% 藍, 3% 綠, 10% 黃），不再受點目數（Score Loss）限制。
-- **SGF 功能**: 實作了 SGF 完整導入（含貼目、讓子、棋譜解析）與導出。
-- **形勢判斷 (Territory Estimation)**: 整合 KataGo Ownership 數據，GUI 支援顯示 AI 預測的領地熱點圖。
-- **提子追蹤 (Captured Stones)**: 實作完整的圍棋提子邏輯，並在側邊欄即時顯示雙方提子數。
-- **會話持久化 (Persistence)**: 自動儲存當前對局狀態（棋譜、設定），重新載入或重新整理後可自動回復。
-- **歷史回顧 (History Navigation)**: 歷史步法改為可點選按鈕，支援隨時跳轉至任一歷史盤面。
+## Pending Tasks
+- [ ] **Data Generation**: Complete 13x13 (300 visits) and 19x19 (100 visits) runs (Recommended on GPU).
+- [ ] **API Verification**: Ensure REST API coordinates align with the recent GUI coordinate fixes.
+- [ ] **Mobile Integration**: Verify Flutter app works with the latest backend changes.
 
-### 3. 工程配置
-- **KataGo 本地路徑**: 已更新為本地編譯的路徑。
-- **開局庫生成**: 已完成基本開局庫（9x9 500v, 13x13 300v, 19x19 100v）。
-
----
-
-## ⚠️ 剩餘問題與建議
-
-### 1. 開局庫數據深度
-- **問題**: 現有開局庫是以 `top_moves_count=3` 生成，可能缺乏一些非非最優手的分支。
-- **建議**: 若需要更豐富的開局推薦，可考慮重新運行 `build_opening_book.py`（目前代碼已將 `top_moves_count` 設為 10）。
-
-### 2. 分析強度
-- **狀態**: 目前預設會根據開局庫的存在鎖定最低 visits。
-- **建議**: 在較複雜的中盤，建議拉高 Visits 到 500 以上以獲得更精準的判定。
-
----
-
-## 📁 關鍵文件索引
-
-| 文件 | 說明 |
-|------|------|
-| `src/gui.py` | 主介面與繪圖邏輯 |
-| `src/analyzer.py` | 分析邏輯、對稱處理、候選注入 |
-| `src/sgf_handler.py` | SGF 解析與生成 |
-| `config.yaml` | KataGo 與路徑設定 |
-| `data/analysis.db` | 緩存與開局庫資料庫 |
-
----
-
-## 🚀 快速啟動
-
-```bash
-source venv/bin/activate
-streamlit run src/gui.py --server.port 8501
-```
+## Known Issues
+- CPU-based generation is slow for deep searches (Depth > 8).
+- Sidebar padding is hardcoded (`10rem`), might need adjustment on ultra-wide or very narrow displays.
