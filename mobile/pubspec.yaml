@@ -39,3 +39,5 @@ flutter:
   assets:
     - assets/opening_book.json
     - assets/opening_book.json.gz
+    - assets/katago/model.bin.gz
+    - assets/katago/README.md
