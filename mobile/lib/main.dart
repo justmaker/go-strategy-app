@@ -52,6 +52,7 @@ class _AppWrapperState extends State<AppWrapper> {
   late final ApiService _apiService;
   late final CacheService _cacheService;
   late final OpeningBookService _openingBookService;
+  late final KataGoService _kataGoService;
   late final GameProvider _gameProvider;
   bool _initialized = false;
   String? _error;
@@ -80,11 +81,16 @@ class _AppWrapperState extends State<AppWrapper> {
       setState(() => _initStatus = 'Initializing cache...');
       _cacheService = CacheService();
       
-      // Step 4: Create game provider with all services
+      // Step 4: Initialize local KataGo engine service
+      setState(() => _initStatus = 'Preparing local engine...');
+      _kataGoService = KataGoService();
+      
+      // Step 5: Create game provider with all services
       _gameProvider = GameProvider(
         api: _apiService,
         cache: _cacheService,
         openingBook: _openingBookService,
+        kataGo: _kataGoService,
         boardSize: AppConfig.defaultBoardSize,
         komi: AppConfig.defaultKomi,
         defaultVisits: AppConfig.defaultVisits,

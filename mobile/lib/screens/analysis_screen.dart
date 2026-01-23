@@ -92,18 +92,43 @@ class _AnalysisPanel extends StatelessWidget {
     return Consumer<GameProvider>(
       builder: (context, game, _) {
         if (game.isAnalyzing) {
-          return const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+          final progress = game.analysisProgress;
+          return Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(progress != null 
+                        ? 'Analyzing locally... ${progress.visits}/${progress.maxVisits} visits'
+                        : 'Analyzing...'),
+                    if (progress != null) ...[
+                      const SizedBox(width: 12),
+                      IconButton(
+                        icon: const Icon(Icons.cancel, size: 20),
+                        onPressed: () => game.cancelAnalysis(),
+                        tooltip: 'Cancel',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ],
                 ),
-                SizedBox(width: 12),
-                Text('Analyzing...'),
+                if (progress != null) ...[
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: progress.visits / progress.maxVisits,
+                    backgroundColor: Colors.grey.shade300,
+                  ),
+                ],
               ],
             ),
           );
@@ -186,6 +211,11 @@ class _SourceChip extends StatelessWidget {
         label = 'Cache';
         backgroundColor = Colors.blue.shade100;
         icon = Icons.save;
+        break;
+      case AnalysisSource.localEngine:
+        label = 'Local';
+        backgroundColor = Colors.purple.shade100;
+        icon = Icons.memory;
         break;
       case AnalysisSource.api:
         label = 'Live';
@@ -458,6 +488,31 @@ class _SettingsSheet extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
+
+              // Local engine toggle
+              SwitchListTile(
+                title: const Text('Local KataGo Engine'),
+                subtitle: Text(
+                  game.localEngineRunning 
+                      ? 'Running (offline analysis available)'
+                      : game.localEngineEnabled 
+                          ? 'Starting...' 
+                          : 'Disabled',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: game.localEngineRunning 
+                        ? Colors.green 
+                        : Colors.grey,
+                  ),
+                ),
+                value: game.localEngineEnabled,
+                onChanged: (value) => game.setLocalEngineEnabled(value),
+                secondary: Icon(
+                  Icons.memory,
+                  color: game.localEngineRunning ? Colors.green : Colors.grey,
+                ),
+              ),
+              const Divider(),
 
               // Opening book & cache stats
               _DataStatsWidget(game: game),

@@ -1,5 +1,8 @@
 /// Game provider for state management.
-/// Implements offline-first logic with bundled opening book, local cache, and API fallback.
+/// Implements offline-first logic with bundled opening book, local cache, 
+/// local KataGo engine, and API fallback.
+
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
@@ -9,13 +12,14 @@ import '../services/services.dart';
 enum ConnectionStatus { online, offline, checking }
 
 /// Analysis source indicator
-enum AnalysisSource { openingBook, localCache, api, none }
+enum AnalysisSource { openingBook, localCache, localEngine, api, none }
 
 /// Game state provider
 class GameProvider extends ChangeNotifier {
   final ApiService _api;
   final CacheService _cache;
   final OpeningBookService _openingBook;
+  final KataGoService _kataGo;
 
   BoardState _board;
   AnalysisResult? _lastAnalysis;
@@ -24,6 +28,10 @@ class GameProvider extends ChangeNotifier {
   String? _error;
   ConnectionStatus _connectionStatus = ConnectionStatus.checking;
   bool _openingBookLoaded = false;
+  
+  // Local engine state
+  bool _localEngineEnabled = true;
+  AnalysisProgress? _analysisProgress;
 
   // Settings
   int _selectedVisits;
@@ -35,6 +43,7 @@ class GameProvider extends ChangeNotifier {
     required ApiService api,
     required CacheService cache,
     OpeningBookService? openingBook,
+    KataGoService? kataGo,
     int boardSize = 19,
     double komi = 7.5,
     int defaultVisits = 100,
@@ -42,6 +51,7 @@ class GameProvider extends ChangeNotifier {
   })  : _api = api,
         _cache = cache,
         _openingBook = openingBook ?? OpeningBookService(),
+        _kataGo = kataGo ?? KataGoService(),
         _board = BoardState(size: boardSize, komi: komi),
         _selectedVisits = defaultVisits,
         _availableVisits = availableVisits;
@@ -57,6 +67,12 @@ class GameProvider extends ChangeNotifier {
   bool get isOnline => _connectionStatus == ConnectionStatus.online;
   bool get isOpeningBookLoaded => _openingBookLoaded;
   OpeningBookService get openingBook => _openingBook;
+  
+  // Local engine getters
+  bool get localEngineEnabled => _localEngineEnabled;
+  bool get localEngineRunning => _kataGo.isRunning;
+  AnalysisProgress? get analysisProgress => _analysisProgress;
+  KataGoService get kataGoService => _kataGo;
 
   /// Initialize the provider
   Future<void> init() async {
@@ -68,6 +84,26 @@ class GameProvider extends ChangeNotifier {
     
     // Check server connection (non-blocking for UI)
     checkConnection();
+    
+    // Try to start local engine (non-blocking)
+    _initLocalEngine();
+  }
+  
+  /// Initialize local KataGo engine
+  Future<void> _initLocalEngine() async {
+    if (!_localEngineEnabled) return;
+    
+    try {
+      final success = await _kataGo.start();
+      if (success) {
+        debugPrint('Local KataGo engine started');
+      } else {
+        debugPrint('Local KataGo engine failed to start');
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error starting local engine: $e');
+    }
   }
   
   /// Load bundled opening book
@@ -95,6 +131,17 @@ class GameProvider extends ChangeNotifier {
     _connectionStatus = isHealthy ? ConnectionStatus.online : ConnectionStatus.offline;
     notifyListeners();
   }
+  
+  /// Toggle local engine
+  void setLocalEngineEnabled(bool enabled) {
+    _localEngineEnabled = enabled;
+    if (enabled && !_kataGo.isRunning) {
+      _initLocalEngine();
+    } else if (!enabled && _kataGo.isRunning) {
+      _kataGo.stop();
+    }
+    notifyListeners();
+  }
 
   /// Set board size
   void setBoardSize(int size) {
@@ -102,6 +149,7 @@ class GameProvider extends ChangeNotifier {
       _board = BoardState(size: size, komi: _board.komi, handicap: _board.handicap);
       _lastAnalysis = null;
       _lastAnalysisSource = AnalysisSource.none;
+      _analysisProgress = null;
       _error = null;
       notifyListeners();
     }
@@ -131,6 +179,7 @@ class GameProvider extends ChangeNotifier {
     _board.placeStone(point);
     _lastAnalysis = null;
     _lastAnalysisSource = AnalysisSource.none;
+    _analysisProgress = null;
     _error = null;
     notifyListeners();
 
@@ -142,17 +191,18 @@ class GameProvider extends ChangeNotifier {
   /// Priority order:
   /// 1. Bundled opening book (instant, always available)
   /// 2. Local SQLite cache (fast, persisted)
-  /// 3. API call (requires network, caches result)
+  /// 3. Local KataGo engine (slow but works offline)
+  /// 4. API call (requires network, caches result)
   Future<void> analyze({bool forceRefresh = false}) async {
     if (_isAnalyzing) return;
 
     _isAnalyzing = true;
     _error = null;
+    _analysisProgress = null;
     notifyListeners();
 
     try {
       // Compute a simple hash for lookups
-      // Note: This is a simplified hash - the real implementation should use Zobrist hashing
       final boardHash = _computeSimpleHash();
       
       // Step 1: Try bundled opening book first (unless force refresh)
@@ -182,7 +232,7 @@ class GameProvider extends ChangeNotifier {
         }
       }
 
-      // Step 3: Try API
+      // Step 3: Try API first if online (faster than local engine)
       if (_connectionStatus == ConnectionStatus.online) {
         try {
           final result = await _api.analyze(
@@ -196,27 +246,29 @@ class GameProvider extends ChangeNotifier {
           _lastAnalysis = result;
           _lastAnalysisSource = AnalysisSource.api;
 
-          // Cache the result locally for future offline access
+          // Cache the result locally
           await _cache.put(result);
 
           _isAnalyzing = false;
           notifyListeners();
           return;
         } on ApiException catch (e) {
-          // API failed, continue to offline fallback
-          _error = 'API error: ${e.message}';
+          debugPrint('API error: ${e.message}, falling back to local engine');
         }
       }
 
-      // Step 4: Offline mode - show appropriate message
-      if (_lastAnalysis == null) {
-        if (_connectionStatus == ConnectionStatus.offline) {
-          _error = 'Offline: Position not in opening book or cache';
-        } else {
-          _error = 'Failed to analyze position';
-        }
-        _lastAnalysisSource = AnalysisSource.none;
+      // Step 4: Try local KataGo engine
+      if (_localEngineEnabled && _kataGo.isRunning) {
+        await _analyzeWithLocalEngine();
+        return;
       }
+
+      // Step 5: No analysis available
+      _error = _connectionStatus == ConnectionStatus.offline
+          ? 'Offline: Position not in opening book or cache'
+          : 'Failed to analyze position';
+      _lastAnalysisSource = AnalysisSource.none;
+      
     } catch (e) {
       _error = 'Error: $e';
       _lastAnalysisSource = AnalysisSource.none;
@@ -226,18 +278,71 @@ class GameProvider extends ChangeNotifier {
     }
   }
   
+  /// Analyze using local KataGo engine
+  Future<void> _analyzeWithLocalEngine() async {
+    final completer = Completer<void>();
+    
+    await _kataGo.analyze(
+      boardSize: _board.size,
+      moves: _board.movesGtp,
+      komi: _board.komi,
+      maxVisits: _selectedVisits,
+      onProgress: (progress) {
+        _analysisProgress = progress;
+        notifyListeners();
+      },
+      onResult: (result) {
+        _lastAnalysis = result;
+        _lastAnalysisSource = AnalysisSource.localEngine;
+        _analysisProgress = null;
+        _isAnalyzing = false;
+        
+        // Cache the result
+        _cache.put(result);
+        
+        notifyListeners();
+        if (!completer.isCompleted) completer.complete();
+      },
+      onError: (error) {
+        _error = 'Local engine error: $error';
+        _isAnalyzing = false;
+        notifyListeners();
+        if (!completer.isCompleted) completer.complete();
+      },
+    );
+    
+    // Wait for completion with timeout
+    try {
+      await completer.future.timeout(
+        Duration(seconds: 120),
+        onTimeout: () {
+          _kataGo.cancelAnalysis();
+          _error = 'Analysis timed out';
+          _isAnalyzing = false;
+          notifyListeners();
+        },
+      );
+    } catch (e) {
+      debugPrint('Analysis error: $e');
+    }
+  }
+
+  /// Cancel ongoing analysis
+  Future<void> cancelAnalysis() async {
+    if (!_isAnalyzing) return;
+    
+    await _kataGo.cancelAnalysis();
+    _isAnalyzing = false;
+    _analysisProgress = null;
+    _error = 'Analysis cancelled';
+    notifyListeners();
+  }
+  
   /// Compute a simple hash for the current board position
-  /// 
-  /// This is a placeholder - for production, implement proper Zobrist hashing
-  /// that matches the server's implementation.
   String _computeSimpleHash() {
-    // Build a string representation of the position
     final buffer = StringBuffer();
     buffer.write('${_board.size}:${_board.komi}:');
     buffer.write(_board.movesGtp.join(';'));
-    
-    // Use Dart's built-in hash (not cryptographically secure, but fast)
-    // For production, should use Zobrist hashing to match server
     return buffer.toString().hashCode.toRadixString(16).padLeft(16, '0');
   }
 
@@ -246,6 +351,7 @@ class GameProvider extends ChangeNotifier {
     if (_board.undo()) {
       _lastAnalysis = null;
       _lastAnalysisSource = AnalysisSource.none;
+      _analysisProgress = null;
       _error = null;
       notifyListeners();
     }
@@ -256,6 +362,7 @@ class GameProvider extends ChangeNotifier {
     _board.clear();
     _lastAnalysis = null;
     _lastAnalysisSource = AnalysisSource.none;
+    _analysisProgress = null;
     _error = null;
     notifyListeners();
   }
@@ -268,6 +375,10 @@ class GameProvider extends ChangeNotifier {
     return {
       'local_cache': localStats,
       'opening_book': bookStats,
+      'local_engine': {
+        'enabled': _localEngineEnabled,
+        'running': _kataGo.isRunning,
+      },
     };
   }
   
@@ -278,9 +389,12 @@ class GameProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _kataGo.dispose();
     _api.dispose();
     _cache.close();
     _openingBook.clear();
     super.dispose();
   }
 }
+
+
