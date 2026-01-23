@@ -18,9 +18,9 @@ echo "==================================================="
 echo "Starting generation sequence..."
 echo ""
 
-# 1. 9x9 Board (High quality)
-echo "[1/3] Generating 9x9 data (Visits: 500, Depth: 12)..."
-python -m src.scripts.build_opening_book --board-size 9 --visits 500 --depth 12 --start-at now
+# 1. 9x9 Board (Fast)
+echo "[1/3] Generating 9x9 data (Visits: 100, Depth: 12)..."
+python -m src.scripts.build_opening_book --board-size 9 --visits 100 --depth 12 --start-at now
 if [ $? -ne 0 ]; then
     echo "Error generating 9x9 data. Aborting."
     exit 1
@@ -28,9 +28,9 @@ fi
 echo "Done 9x9."
 echo ""
 
-# 2. 13x13 Board (Medium quality)
-echo "[2/3] Generating 13x13 data (Visits: 300, Depth: 8)..."
-python -m src.scripts.build_opening_book --board-size 13 --visits 300 --depth 8 --start-at now
+# 2. 13x13 Board (Fast)
+echo "[2/3] Generating 13x13 data (Visits: 100, Depth: 8)..."
+python -m src.scripts.build_opening_book --board-size 13 --visits 100 --depth 8 --start-at now
 if [ $? -ne 0 ]; then
     echo "Error generating 13x13 data. Aborting."
     exit 1
@@ -38,7 +38,7 @@ fi
 echo "Done 13x13."
 echo ""
 
-# 3. 19x19 Board (Fast quality)
+# 3. 19x19 Board (Fast)
 echo "[3/3] Generating 19x19 data (Visits: 100, Depth: 4)..."
 python -m src.scripts.build_opening_book --board-size 19 --visits 100 --depth 4 --start-at now
 if [ $? -ne 0 ]; then
