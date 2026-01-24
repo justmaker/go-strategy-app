@@ -1,21 +1,58 @@
-# Flutter 各平台建置輸出路徑
+# Flutter 建置指南
 
-**專案目錄:** `/Users/rexhsu/Documents/go-strategy-app/mobile`
+**專案目錄:** `mobile/`
 
 ---
 
-## 一鍵建置全部平台
+## 快速開始：改完程式碼後如何發布新版
+
+### 步驟一：完成開發並 commit
 
 ```bash
-# 建置此系統可建置的所有平台
-./build_all.sh
-
-# 只建置特定平台
-./build_all.sh web ios macos
-
-# 只建置 web
-./build_all.sh web
+cd mobile
+git add -A
+git commit -m "feat: 描述你的改動"
 ```
+
+### 步驟二：升版號
+
+```bash
+# 查看目前版本
+./version.sh
+
+# 升版（選一個）
+./version.sh bump patch   # 小修正: 1.0.0 → 1.0.1
+./version.sh bump minor   # 新功能: 1.0.0 → 1.1.0
+./version.sh bump major   # 大改版: 1.0.0 → 2.0.0
+```
+
+### 步驟三：Commit 版號變更
+
+```bash
+git add pubspec.yaml
+git commit -m "release: v1.0.1"
+git push
+```
+
+### 步驟四：一鍵建置所有平台
+
+```bash
+./build_all.sh
+```
+
+建置完成後會顯示：
+```
+平台       狀態       大小       輸出路徑
+------    ------    ------    ----------
+web       ✅ 成功    36M       build/web/
+android   ✅ 成功    25M       build/app/outputs/flutter-apk/app-release.apk
+ios       ✅ 成功    22M       build/ios/iphoneos/Runner.app
+macos     ✅ 成功    47M       build/macos/Build/Products/Release/go_strategy_app.app
+```
+
+### 步驟五：取得建置檔案
+
+建置完成後，各平台的檔案位置請參考下方「快速對照表」。
 
 ---
 
@@ -168,61 +205,50 @@ flutter build linux --release
 
 ## 版本管理
 
-Flutter 的版本格式是 `major.minor.patch+buildNumber`，例如 `1.0.0+15`。
+### 版本格式說明
 
-### 版本資訊腳本
+Flutter 版本格式：`主版本.次版本.修訂版+建置號`
+
+例如：`1.2.3+75`
+- `1` = 主版本（大改版時升級）
+- `2` = 次版本（新功能時升級）
+- `3` = 修訂版（修 bug 時升級）
+- `75` = 建置號（自動使用 git commit 數量）
+
+### 版本指令
 
 ```bash
-# 查看目前版本
+# 查看目前版本與 git commit 對應
 ./version.sh
 
-# 設定新版本
-./version.sh set 1.2.0
+# 升版
+./version.sh bump patch   # 修 bug: 1.0.0 → 1.0.1
+./version.sh bump minor   # 新功能: 1.0.0 → 1.1.0
+./version.sh bump major   # 大改版: 1.0.0 → 2.0.0
 
-# 自動升版
-./version.sh bump patch  # 1.0.0 -> 1.0.1
-./version.sh bump minor  # 1.0.0 -> 1.1.0
-./version.sh bump major  # 1.0.0 -> 2.0.0
+# 直接設定版本
+./version.sh set 2.0.0
 ```
 
-### 版本與 Git Commit 對應
-
-腳本會自動使用 git commit 數量作為 build number，這樣：
-- 每個 commit 都有唯一的 build number
-- 方便追溯哪個版本對應哪個 commit
+### 版本與 Git Commit 的關係
 
 執行 `./version.sh` 會顯示：
 ```
 版本號:        1.0.0
-Build Number:  15
-完整版本:      1.0.0+15
+Build Number:  75
+完整版本:      1.0.0+75
 
-Git Commit:    9394132
-Git SHA Full:  93941326...
-Commit Count:  15
+Git Commit:    7fa221e
+Commit Count:  75
 
-建議的版本字串 (含 git SHA):
-  1.0.0+15 (9394132)
+建議的版本字串:
+  1.0.0+75 (7fa221e)
 ```
 
-### 建議的發布流程
-
-```bash
-# 1. 確保所有改動已 commit
-git add -A && git commit -m "feat: 新功能"
-
-# 2. 升版（會自動用 commit 數量作為 build number）
-./version.sh bump patch
-
-# 3. Commit 版本變更
-git add pubspec.yaml && git commit -m "chore: bump version to $(./version.sh | grep '完整版本' | awk '{print $2}')"
-
-# 4. 建置所有平台
-./build_all.sh
-
-# 5. 檢查輸出
-ls -la build/
-```
+**重點：**
+- Build Number 自動等於 git commit 數量
+- 所有平台使用相同版號
+- 可透過版號追溯到對應的 git commit
 
 ---
 
@@ -242,11 +268,37 @@ flutter pub get
 
 | 平台 | 狀態 | 大小 | 備註 |
 |------|------|------|------|
-| Web | ✅ 已建置 | 36 MB | PWA 可部署 |
+| Web | ✅ 已建置 | 36 MB | PWA 可部署到任何網頁伺服器 |
 | Android APK | ⚠️ 未測試 | - | 需要執行建置 |
-| iOS | ✅ 已建置 | 21.8 MB | 使用 `--no-codesign` |
-| macOS | ✅ 已建置 | 46.7 MB | adhoc 簽名，可直接執行 |
-| Windows | ❌ 需 Windows | - | 無法在 macOS 上交叉編譯 |
-| Linux | ⚠️ 未測試 | - | 需要執行建置 |
+| iOS | ✅ 已建置 | 21.8 MB | 使用 `--no-codesign`，上架需簽名 |
+| macOS | ✅ 已建置 | 46.7 MB | 可直接雙擊執行 |
+| Windows | ❌ 需 Windows | - | 無法在 macOS 上建置 |
+| Linux | ⚠️ 未測試 | - | 無法在 macOS 上建置 |
+
+---
+
+## 常見問題
+
+### Q: 為什麼 Windows/Linux 不能在 Mac 上建置？
+
+Flutter 的桌面版需要對應平台的原生編譯器：
+- Windows 需要 Visual Studio (只有 Windows 有)
+- Linux 需要 GCC/Clang (需要 Linux 環境)
+- macOS/iOS 需要 Xcode (只有 Mac 有)
+
+### Q: 如何確認建置的版本？
+
+1. 執行 `./version.sh` 查看版本和 git commit
+2. 在 App 的「設定」頁面底部會顯示版本號
+3. 建置時會在終端機顯示版本資訊
+
+### Q: 如何讓 iOS app 可以安裝到手機？
+
+需要以下其中一種方式：
+1. **Apple Developer 帳號** - 正式簽名後可安裝
+2. **TestFlight** - 透過 Apple 的測試平台分發
+3. **Ad-hoc 分發** - 需要先註冊裝置 UDID
+
+---
 
 **最後更新:** 2026-01-25
