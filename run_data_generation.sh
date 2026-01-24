@@ -18,19 +18,19 @@ echo "==================================================="
 echo "Starting generation sequence..."
 echo ""
 
-# 1. 9x9 Board (Fast)
-echo "[1/3] Generating 9x9 data (Visits: 500, Depth: 10)..."
-python -m src.scripts.build_opening_book --board-size 9 --visits 500 --depth 10 --start-at now
+# 1. 19x19 Board (Primary Target)
+echo "[1/3] Generating 19x19 data (Visits: 100, Depth: 30)..."
+python -m src.scripts.build_opening_book --board-size 19 --visits 100 --depth 30 --start-at now
 if [ $? -ne 0 ]; then
-    echo "Error generating 9x9 data. Aborting."
+    echo "Error generating 19x19 data. Aborting."
     exit 1
 fi
-echo "Done 9x9."
+echo "Done 19x19."
 echo ""
 
-# 2. 13x13 Board (Fast)
-echo "[2/3] Generating 13x13 data (Visits: 100, Depth: 8)..."
-python -m src.scripts.build_opening_book --board-size 13 --visits 100 --depth 8 --start-at now
+# 2. 13x13 Board
+echo "[2/3] Generating 13x13 data (Visits: 100, Depth: 20)..."
+python -m src.scripts.build_opening_book --board-size 13 --visits 100 --depth 20 --start-at now
 if [ $? -ne 0 ]; then
     echo "Error generating 13x13 data. Aborting."
     exit 1
@@ -38,14 +38,14 @@ fi
 echo "Done 13x13."
 echo ""
 
-# 3. 19x19 Board (Fast)
-echo "[3/3] Generating 19x19 data (Visits: 100, Depth: 4)..."
-python -m src.scripts.build_opening_book --board-size 19 --visits 100 --depth 4 --start-at now
+# 3. 9x9 Board
+echo "[3/3] Generating 9x9 data (Visits: 100, Depth: 15)..."
+python -m src.scripts.build_opening_book --board-size 9 --visits 100 --depth 15 --start-at now
 if [ $? -ne 0 ]; then
-    echo "Error generating 19x19 data. Aborting."
+    echo "Error generating 9x9 data. Aborting."
     exit 1
 fi
-echo "Done 19x19."
+echo "Done 9x9."
 echo ""
 
 echo "==================================================="

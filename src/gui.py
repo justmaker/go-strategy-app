@@ -684,7 +684,7 @@ def main():
         
         # Visits Control
         # Define discrete visit levels (non-linear for better UX)
-        all_visit_levels = [100, 200, 300, 500, 1000, 2000, 5000]
+        all_visit_levels = [100, 200, 300, 1000, 2000, 5000]
         
         # Check if we have an opening book for this configuration
         has_book = False
