@@ -1,5 +1,6 @@
 /// Local SQLite cache service for offline-first functionality.
 /// Mirrors the Python backend cache structure.
+library;
 
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
@@ -125,9 +126,8 @@ class CacheService {
       final existingStoppedRaw = row['stopped_by_limit'];
       final existingDuration = row['calculation_duration'] as double?;
 
-      final existingStopped = existingStoppedRaw != null
-          ? (existingStoppedRaw as int) == 1
-          : null;
+      final existingStopped =
+          existingStoppedRaw != null ? (existingStoppedRaw as int) == 1 : null;
 
       // Rule 1: Completeness - Complete always beats Partial
       if (existingStopped == false && result.stoppedByLimit == true) {
@@ -169,9 +169,7 @@ class CacheService {
         result.modelName,
         result.timestamp ?? DateTime.now().toIso8601String(),
         result.calculationDuration,
-        result.stoppedByLimit == null
-            ? null
-            : (result.stoppedByLimit! ? 1 : 0),
+        result.stoppedByLimit == null ? null : (result.stoppedByLimit! ? 1 : 0),
         result.limitSetting,
       ]);
     }
@@ -250,9 +248,8 @@ class CacheService {
         .toList();
 
     final stoppedByLimitRaw = row['stopped_by_limit'];
-    final stoppedByLimit = stoppedByLimitRaw != null
-        ? (stoppedByLimitRaw as int) == 1
-        : null;
+    final stoppedByLimit =
+        stoppedByLimitRaw != null ? (stoppedByLimitRaw as int) == 1 : null;
 
     return AnalysisResult(
       boardHash: row['board_hash'] as String,

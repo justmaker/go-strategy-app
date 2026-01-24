@@ -1,6 +1,7 @@
 /// KataGo local engine service for on-device analysis.
 ///
 /// Uses Platform Channels to communicate with the native KataGo engine.
+library;
 
 import 'dart:async';
 import 'dart:convert';

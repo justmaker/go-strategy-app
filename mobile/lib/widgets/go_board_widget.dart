@@ -1,4 +1,5 @@
 /// Interactive Go board widget with move suggestions overlay.
+library;
 
 import 'package:flutter/material.dart';
 import '../models/models.dart';
@@ -51,9 +52,8 @@ class GoBoardWidget extends StatelessWidget {
         builder: (context, constraints) {
           final size = constraints.maxWidth;
           return GestureDetector(
-            onTapDown: onTap != null
-                ? (details) => _handleTap(details, size)
-                : null,
+            onTapDown:
+                onTap != null ? (details) => _handleTap(details, size) : null,
             child: CustomPaint(
               size: Size(size, size),
               painter: _BoardPainter(
@@ -78,9 +78,13 @@ class GoBoardWidget extends StatelessWidget {
     final displayX = ((details.localPosition.dx - padding) / cellSize).round();
     final displayY = ((details.localPosition.dy - padding) / cellSize).round();
 
-    if (displayX >= 0 && displayX < board.size && displayY >= 0 && displayY < board.size) {
+    if (displayX >= 0 &&
+        displayX < board.size &&
+        displayY >= 0 &&
+        displayY < board.size) {
       // Convert display coordinates to GTP coordinates (y=0 at bottom)
-      final gtpPoint = BoardPoint.fromDisplayCoords(displayX, displayY, board.size);
+      final gtpPoint =
+          BoardPoint.fromDisplayCoords(displayX, displayY, board.size);
       onTap?.call(gtpPoint);
     }
   }
@@ -215,7 +219,7 @@ class _BoardPainter extends CustomPainter {
       final suggestion = suggestions![i];
       final gtpPoint = BoardPoint.fromGtp(suggestion.move, board.size);
       if (gtpPoint == null) continue;
-      
+
       // Convert GTP coordinates to display coordinates for rendering
       final point = gtpPoint.toDisplayCoords(board.size);
 
@@ -242,7 +246,7 @@ class _BoardPainter extends CustomPainter {
 
       // Draw suggestion circle
       final paint = Paint()
-        ..color = color.withOpacity(0.7)
+        ..color = color.withValues(alpha: 0.7)
         ..style = PaintingStyle.fill;
       canvas.drawCircle(Offset(x, y), radius, paint);
 
@@ -288,7 +292,7 @@ class _BoardPainter extends CustomPainter {
 
         // Draw stone shadow
         final shadowPaint = Paint()
-          ..color = Colors.black.withOpacity(0.3)
+          ..color = Colors.black.withValues(alpha: 0.3)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
         canvas.drawCircle(
           Offset(centerX + 2, centerY + 2),
@@ -326,7 +330,8 @@ class _BoardPainter extends CustomPainter {
               radius: stoneRadius,
             ),
           );
-        canvas.drawCircle(Offset(centerX, centerY), stoneRadius, highlightPaint);
+        canvas.drawCircle(
+            Offset(centerX, centerY), stoneRadius, highlightPaint);
       }
     }
   }

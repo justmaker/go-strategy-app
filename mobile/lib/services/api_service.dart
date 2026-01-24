@@ -1,4 +1,5 @@
 /// API service for communicating with the Go Strategy backend.
+library;
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -77,7 +78,7 @@ class ApiService {
 
     try {
       final response = await _post('/query', request.toJson());
-      
+
       // Check if we got a cache hit
       if (response['found'] == true && response['result'] != null) {
         return AnalysisResult.fromJson(response['result']);
@@ -123,11 +124,13 @@ class ApiService {
     final uri = Uri.parse('$baseUrl$endpoint');
 
     try {
-      final response = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      ).timeout(timeout);
+      final response = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(timeout);
 
       return _handleResponse(response);
     } catch (e) {

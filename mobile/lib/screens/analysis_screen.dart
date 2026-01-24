@@ -1,4 +1,5 @@
 /// Main analysis screen with Go board and move suggestions.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -542,8 +543,8 @@ class _SettingsSheet extends StatelessWidget {
                   game.localEngineRunning
                       ? 'Running (offline analysis available)'
                       : game.localEngineEnabled
-                      ? 'Starting...'
-                      : 'Disabled',
+                          ? 'Starting...'
+                          : 'Disabled',
                   style: TextStyle(
                     fontSize: 12,
                     color: game.localEngineRunning ? Colors.green : Colors.grey,

@@ -1,6 +1,6 @@
 # Go Strategy App - Project Status Report
 
-**Last Updated:** 2026-01-24  
+**Last Updated:** 2026-01-25  
 **Status:** Active Development  
 **Repository:** https://github.com/justmaker/go-strategy-app
 
@@ -115,9 +115,11 @@ All components use **GTP (Go Text Protocol)** standard:
 | Opening Book Service | ✅ Complete | Loads bundled .json.gz |
 | Cache Service | ✅ Complete | Local SQLite persistence |
 | API Service | ✅ Complete | REST client with retry logic |
-| KataGo Service | ⚠️ Scaffold only | Platform channel defined, native code needed |
-| Game Provider | ✅ Complete | State management, offline-first logic |
-| Flutter Analyze | ✅ Clean | 23 info-level warnings (style only) |
+| KataGo Service (Mobile) | ⚠️ Scaffold only | Platform channel defined, native code needed |
+| KataGo Desktop Service | ✅ Complete | Subprocess-based for macOS/Windows/Linux |
+| Game Provider | ✅ Complete | State management, dual slider, offline-first |
+| Flutter Analyze | ✅ Clean | 0 issues |
+| Flutter Tests | ✅ 18 tests passing | BoardPoint, MoveCandidate, BoardState, GameProvider |
 
 ### Platform Support
 
@@ -203,21 +205,31 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 
 ---
 
-## Completed Tasks (2026-01-24)
+## Completed Tasks (2026-01-25)
 
 - [x] **Local KataGo Integration (Desktop)** - `katago_desktop_service.dart`
   - Subprocess-based KataGo for macOS/Windows/Linux
   - Auto-detection of KataGo binary path
   - Real-time progress streaming
 
+- [x] **Dual Slider UI** - Complete implementation
+  - Lookup Visits slider (100-5000) for book/cache threshold
+  - Compute Visits slider (10-200) for live local analysis
+  - Updated `config.dart` with dual slider configuration
+  - Updated `game_provider.dart` with `setLookupVisits()` and `setComputeVisits()`
+  - Updated `analysis_screen.dart` Settings sheet with two chip selectors
+  - Progress display handles both mobile and desktop engine progress
+
+- [x] **Code Quality**
+  - Fixed all lint warnings (dangling doc comments, deprecated APIs)
+  - Added unit tests for GameProvider dual slider logic
+  - Fixed GTP coordinate system tests
+  - Flutter analyze: 0 issues
+  - Flutter tests: 18 passing
+
 ## Pending Tasks
 
 ### High Priority
-
-- [ ] **Dual Slider UI** (partially implemented, needs GameProvider update)
-  - Add "Compute Visits" slider (10-200) for live analysis
-  - Rename current slider to "Lookup Visits" (100-5000)
-  - Update GameProvider to use both values
 
 - [ ] **macOS/iOS Codesign Issue** (cannot be fixed at project level)
   - Root cause: `com.apple.provenance` extended attribute (macOS Sonoma+)
@@ -237,8 +249,8 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 
 ### Low Priority
 
-- [ ] **Flutter Lint Cleanup** - info-level warnings only
 - [ ] **iOS Native Build** - Requires Apple Developer account
+- [ ] **Re-export Opening Book** - Current: 7,769 positions, DB has 60,410
 
 ---
 

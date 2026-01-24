@@ -2,6 +2,7 @@
 ///
 /// Loads bundled opening book data from assets and provides
 /// fast lookups without network access.
+library;
 
 import 'dart:convert';
 import 'dart:io';

@@ -2,6 +2,7 @@
 ///
 /// A cross-platform mobile app for Go (Weiqi/Baduk) strategy analysis
 /// powered by KataGo AI.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

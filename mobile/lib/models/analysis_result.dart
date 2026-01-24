@@ -1,5 +1,6 @@
 /// Data models for Go analysis results.
 /// Mirrors the Python backend models for JSON serialization.
+library;
 
 class MoveCandidate {
   final String move;
