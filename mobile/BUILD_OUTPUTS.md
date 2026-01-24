@@ -55,16 +55,21 @@ flutter build appbundle --release
 ### iOS
 
 ```bash
+# 不簽名建置（開發測試用）
+flutter build ios --release --no-codesign
+
+# 正式簽名建置（上架用）
 flutter build ios --release
 ```
 
 **輸出位置:** `build/ios/iphoneos/Runner.app`
 
+**檔案大小:** 約 21.8 MB
+
 **注意事項:**
 - 需要 macOS 系統
-- 需要 Apple Developer 帳號
-- 需要在 Xcode 中設定簽名憑證
-- 目前受 macOS Sonoma codesign 問題影響
+- `--no-codesign` 可跳過簽名，用於測試
+- 正式上架需要 Apple Developer 帳號並在 Xcode 中設定簽名憑證
 
 ---
 
@@ -76,9 +81,11 @@ flutter build macos --release
 
 **輸出位置:** `build/macos/Build/Products/Release/go_strategy_app.app`
 
-**安裝方式:** 將 `.app` 拖入「應用程式」資料夾
+**檔案大小:** 約 46.7 MB
 
-**注意事項:** 目前受 `com.apple.provenance` codesign 問題影響
+**安裝方式:** 
+- 直接雙擊執行，或
+- 將 `.app` 拖入「應用程式」資料夾
 
 ---
 
@@ -142,11 +149,13 @@ flutter pub get
 
 ## 目前建置狀態
 
-| 平台 | 狀態 | 備註 |
-|------|------|------|
-| Web | ✅ 可建置 | 已測試，36MB |
-| Android APK | ⚠️ 未測試 | 需要執行建置 |
-| iOS | ❌ 受阻 | macOS Sonoma codesign 問題 |
-| macOS | ❌ 受阻 | macOS Sonoma codesign 問題 |
-| Windows | ❌ 需 Windows | 無法在 macOS 上交叉編譯 |
-| Linux | ⚠️ 未測試 | 需要執行建置 |
+| 平台 | 狀態 | 大小 | 備註 |
+|------|------|------|------|
+| Web | ✅ 已建置 | 36 MB | PWA 可部署 |
+| Android APK | ⚠️ 未測試 | - | 需要執行建置 |
+| iOS | ✅ 已建置 | 21.8 MB | 使用 `--no-codesign` |
+| macOS | ✅ 已建置 | 46.7 MB | adhoc 簽名，可直接執行 |
+| Windows | ❌ 需 Windows | - | 無法在 macOS 上交叉編譯 |
+| Linux | ⚠️ 未測試 | - | 需要執行建置 |
+
+**最後更新:** 2026-01-25
