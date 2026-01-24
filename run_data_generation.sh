@@ -19,8 +19,8 @@ echo "Starting generation sequence..."
 echo ""
 
 # 1. 9x9 Board (Fast)
-echo "[1/3] Generating 9x9 data (Visits: 100, Depth: 12)..."
-python -m src.scripts.build_opening_book --board-size 9 --visits 100 --depth 12 --start-at now
+echo "[1/3] Generating 9x9 data (Visits: 500, Depth: 10)..."
+python -m src.scripts.build_opening_book --board-size 9 --visits 500 --depth 10 --start-at now
 if [ $? -ne 0 ]; then
     echo "Error generating 9x9 data. Aborting."
     exit 1

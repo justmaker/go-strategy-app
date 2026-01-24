@@ -303,7 +303,7 @@ class KataGoGTP:
             response_lines = []
             start_time = time.time()
             timeout = 10  # seconds
-            min_visits_needed = min(visits, 10)  # At least this many visits before returning
+            min_visits_needed = max(1, visits)  # Respect requested visits
             
             while True:
                 elapsed = time.time() - start_time
