@@ -251,6 +251,9 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 ## Pending Tasks
 
 ### High Priority
+- [ ] **Verify API Coordinate Consistency**
+  - Check if `src/api.py` logic aligns with recent `board.py` coordinate fixes (GTP standard).
+  - Ensure mobile app API calls map correctly to backend coordinates.
 
 ### Medium Priority
 
@@ -268,6 +271,8 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 
 - [ ] **iOS Native Build** - Requires Apple Developer account
 - [ ] **Re-export Opening Book** - Current: 7,769 positions, DB has 60,410
+- [ ] **UI: Dynamic Sidebar Width** - Replace hardcoded `10rem` padding with dynamic calculation for better screen support.
+- [ ] **Feature: Move History Branching** - Allow users to create variation branches instead of just jumping back in history.
 
 ---
 
