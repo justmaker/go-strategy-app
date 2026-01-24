@@ -17,8 +17,10 @@ set -e  # Exit on error
 # ============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KATAGO_DIR="${SCRIPT_DIR}/katago"
-CONFIG_FILE="${SCRIPT_DIR}/config.yaml"
+# Katago is in the project root, which is one level up from scripts/
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+KATAGO_DIR="${PROJECT_ROOT}/katago"
+CONFIG_FILE="${PROJECT_ROOT}/config.yaml"
 
 # KataGo release info (using Eigen backend for CPU-only, no GPU required)
 # Eigen backend is pure C++ and works on any CPU without OpenCL/CUDA

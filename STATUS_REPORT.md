@@ -63,7 +63,13 @@ go-strategy-app/
 │   ├── cache.py            # SQLite analysis cache
 │   ├── gui.py              # Streamlit web GUI
 │   ├── katago_*.py         # KataGo integration (GTP/Analysis)
-│   └── scripts/            # Data generation scripts
+│   ├── katago_*.py         # KataGo integration (GTP/Analysis)
+│   └── scripts/            # Data generation scripts (Python)
+│
+├── scripts/                # Shell scripts & Utilities
+│   ├── run_data_generation.sh
+│   ├── setup_katago.sh
+│   └── deploy.sh
 │
 ├── mobile/                 # Flutter cross-platform app
 │   ├── lib/
@@ -417,3 +423,4 @@ For questions or handoff, refer to this document and the codebase comments.
 - `mobile/lib/providers/game_provider.dart` - App state management
 - `mobile/lib/services/opening_book_service.dart` - Offline lookup logic
 - `mobile/BUILD_OUTPUTS.md` - 建置指南（中文）
+- `scripts/run_data_generation.sh` - 數據生成腳本
