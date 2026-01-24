@@ -361,6 +361,52 @@ git push origin main
 
 ---
 
+## 下次繼續的待辦事項
+
+### 需要 GPU 才能做的任務
+
+```bash
+# 1. 重新匯出 Opening Book（目前 7,769 位置，DB 有 60,410 位置）
+cd /Users/rexhsu/Documents/go-strategy-app
+source venv/bin/activate
+python -m src.scripts.export_opening_book --min-visits 100 --compress
+
+# 2. GPU 資料生成（擴充 19x19 和 13x13 位置）
+python -m src.scripts.build_opening_book --board-size 19 --visits 100
+python -m src.scripts.build_opening_book --board-size 13 --visits 100
+```
+
+### 不需要 GPU 的任務
+
+```bash
+# 1. 安裝 Java（Android 建置需要）
+brew install openjdk@17
+
+# 2. 建置 Android APK
+cd mobile
+flutter build apk --release
+```
+
+### 快速驗證環境
+
+```bash
+cd /Users/rexhsu/Documents/go-strategy-app
+
+# Python 測試
+source venv/bin/activate
+pytest tests/ -v  # 應該 53 passed
+
+# Flutter 測試
+cd mobile
+flutter analyze   # 應該 0 issues
+flutter test      # 應該 18 passed
+
+# 一鍵建置
+./build_all.sh
+```
+
+---
+
 ## Contact
 
 For questions or handoff, refer to this document and the codebase comments.
@@ -370,3 +416,4 @@ For questions or handoff, refer to this document and the codebase comments.
 - `src/cache.py` - Database schema
 - `mobile/lib/providers/game_provider.dart` - App state management
 - `mobile/lib/services/opening_book_service.dart` - Offline lookup logic
+- `mobile/BUILD_OUTPUTS.md` - 建置指南（中文）
