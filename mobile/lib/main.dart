@@ -12,7 +12,9 @@ import 'providers/providers.dart';
 import 'screens/screens.dart';
 import 'services/services.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AppConfig.init();
   runApp(const GoStrategyApp());
 }
 

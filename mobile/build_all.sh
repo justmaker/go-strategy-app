@@ -22,6 +22,16 @@ echo -e "${BLUE}   Flutter 批次建置腳本${NC}"
 echo -e "${BLUE}======================================${NC}"
 echo ""
 
+# 顯示版本資訊
+VERSION=$(grep "^version:" pubspec.yaml | sed 's/version: //')
+GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GIT_SHA_FULL=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+
+echo -e "版本: ${GREEN}${VERSION}${NC}"
+echo -e "Git Commit: ${YELLOW}${GIT_SHA}${NC}"
+echo -e "Git SHA Full: ${YELLOW}${GIT_SHA_FULL}${NC}"
+echo ""
+
 # 偵測作業系統
 OS="$(uname -s)"
 case "$OS" in

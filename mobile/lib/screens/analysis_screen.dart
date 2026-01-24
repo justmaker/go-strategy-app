@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../widgets/widgets.dart';
@@ -561,6 +562,22 @@ class _SettingsSheet extends StatelessWidget {
 
               // Opening book & cache stats
               _DataStatsWidget(game: game),
+
+              const Divider(),
+
+              // Version info
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Version ${AppConfig.fullVersion}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         );

@@ -1,10 +1,31 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:package_info_plus/package_info_plus.dart';
 
 /// Application configuration
 ///
 /// Change the API_BASE_URL before building the APK to point to your server.
 
 class AppConfig {
+  /// App version info (loaded at runtime)
+  static PackageInfo? _packageInfo;
+
+  /// Initialize app config (call once at startup)
+  static Future<void> init() async {
+    _packageInfo = await PackageInfo.fromPlatform();
+  }
+
+  /// App version (e.g., "1.0.0")
+  static String get appVersion => _packageInfo?.version ?? 'unknown';
+
+  /// Build number (e.g., "1")
+  static String get buildNumber => _packageInfo?.buildNumber ?? '0';
+
+  /// Full version string (e.g., "1.0.0+1")
+  static String get fullVersion => '$appVersion+$buildNumber';
+
+  /// Package name
+  static String get packageName => _packageInfo?.packageName ?? 'unknown';
+
   /// Base URL for the Go Strategy API server
   ///
   /// Examples:

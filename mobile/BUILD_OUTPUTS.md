@@ -166,6 +166,66 @@ flutter build linux --release
 
 ---
 
+## 版本管理
+
+Flutter 的版本格式是 `major.minor.patch+buildNumber`，例如 `1.0.0+15`。
+
+### 版本資訊腳本
+
+```bash
+# 查看目前版本
+./version.sh
+
+# 設定新版本
+./version.sh set 1.2.0
+
+# 自動升版
+./version.sh bump patch  # 1.0.0 -> 1.0.1
+./version.sh bump minor  # 1.0.0 -> 1.1.0
+./version.sh bump major  # 1.0.0 -> 2.0.0
+```
+
+### 版本與 Git Commit 對應
+
+腳本會自動使用 git commit 數量作為 build number，這樣：
+- 每個 commit 都有唯一的 build number
+- 方便追溯哪個版本對應哪個 commit
+
+執行 `./version.sh` 會顯示：
+```
+版本號:        1.0.0
+Build Number:  15
+完整版本:      1.0.0+15
+
+Git Commit:    9394132
+Git SHA Full:  93941326...
+Commit Count:  15
+
+建議的版本字串 (含 git SHA):
+  1.0.0+15 (9394132)
+```
+
+### 建議的發布流程
+
+```bash
+# 1. 確保所有改動已 commit
+git add -A && git commit -m "feat: 新功能"
+
+# 2. 升版（會自動用 commit 數量作為 build number）
+./version.sh bump patch
+
+# 3. Commit 版本變更
+git add pubspec.yaml && git commit -m "chore: bump version to $(./version.sh | grep '完整版本' | awk '{print $2}')"
+
+# 4. 建置所有平台
+./build_all.sh
+
+# 5. 檢查輸出
+ls -la build/
+```
+
+---
+
 ## 清除建置檔案
 
 ```bash
