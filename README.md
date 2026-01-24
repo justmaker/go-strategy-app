@@ -255,27 +255,58 @@ database:
   - [x] Offline-first with local SQLite cache
   - [x] Intelligent merge logic for partial calculations
 
-## Flutter Mobile App
+## Flutter 跨平台 App
 
-The `mobile/` directory contains a Flutter app with:
+`mobile/` 目錄包含 Flutter App：
 
-- **Interactive Go Board**: Custom-painted board with stone placement
-- **AI Analysis**: Real-time move suggestions from KataGo
-- **Offline Support**: Local SQLite cache with sync capability
-- **Cross-Platform**: iOS, Android, and Web support
+- **互動式棋盤**: 自訂繪製的棋盤，支援落子
+- **AI 分析**: 即時的 KataGo 落子建議
+- **離線支援**: 本地 SQLite 快取
+- **跨平台**: iOS、Android、macOS、Web 支援
 
-### Running the Mobile App
+### 開發執行
 
 ```bash
 cd mobile
 flutter pub get
-flutter run
+flutter run           # 預設裝置
+flutter run -d chrome # 網頁版
+flutter run -d macos  # macOS 版
 ```
 
-For web:
+### 建置發布版
+
+詳細說明請參考 [mobile/BUILD_OUTPUTS.md](mobile/BUILD_OUTPUTS.md)
+
 ```bash
-flutter run -d chrome
+cd mobile
+
+# 一鍵建置所有平台
+./build_all.sh
+
+# 或個別建置
+flutter build web --release     # 網頁版
+flutter build macos --release   # macOS
+flutter build ios --release --no-codesign  # iOS
+flutter build apk --release     # Android (需要 Java)
 ```
+
+### 版本管理
+
+```bash
+cd mobile
+./version.sh              # 查看版本
+./version.sh bump patch   # 升版 1.0.0 → 1.0.1
+```
+
+### 建置狀態
+
+| 平台 | 狀態 | 大小 |
+|------|------|------|
+| Web | ✅ 已建置 | 36 MB |
+| macOS | ✅ 已建置 | 46.7 MB |
+| iOS | ✅ 已建置 | 21.8 MB |
+| Android | ⚠️ 需 Java | - |
 
 ## License
 

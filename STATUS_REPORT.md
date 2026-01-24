@@ -1,6 +1,6 @@
 # Go Strategy App - Project Status Report
 
-**Last Updated:** 2026-01-25  
+**最後更新:** 2026-01-25  
 **Status:** Active Development  
 **Repository:** https://github.com/justmaker/go-strategy-app
 
@@ -120,12 +120,13 @@ All components use **GTP (Go Text Protocol)** standard:
 | Game Provider | ✅ Complete | State management, dual slider, offline-first |
 | Flutter Analyze | ✅ Clean | 0 issues |
 | Flutter Tests | ✅ 18 tests passing | BoardPoint, MoveCandidate, BoardState, GameProvider |
+| Python Tests | ✅ 53 tests passing | board.py, cache.py |
 
 ### Platform Support
 
 | Platform | Build Status | Local KataGo | Notes |
 |----------|--------------|--------------|-------|
-| **Android** | ⚠️ Not tested | ❌ Needs NDK | Run: `flutter build apk --release` |
+| **Android** | ⚠️ 需要 Java | ❌ Needs NDK | 系統缺少 Java Runtime |
 | **iOS** | ✅ Built (21.8MB) | ❌ Needs XCFramework | Use `--no-codesign` for testing |
 | **macOS** | ✅ Built (46.7MB) | ✅ Can spawn process | adhoc signed, runs directly |
 | **Windows** | ❌ Needs Windows | ✅ Can spawn process | Cross-compile not possible |
@@ -231,6 +232,15 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
   - macOS: 成功建置 (46.7MB)，adhoc 簽名可直接執行
   - iOS: 成功建置 (21.8MB)，使用 `--no-codesign` 跳過簽名
   - 之前的 codesign 問題已不存在
+
+- [x] **批次建置與版本管理**
+  - `build_all.sh` - 一鍵建置所有可建置平台
+  - `version.sh` - 版本管理（自動使用 git commit 數量作為 build number）
+  - 所有平台使用相同版號，方便追蹤
+
+- [x] **Python 測試** - 53 tests passing
+
+- [x] **README.md 更新** - 加入 Flutter 建置說明（中文）
 
 ## Pending Tasks
 
