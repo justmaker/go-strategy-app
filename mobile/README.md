@@ -48,9 +48,11 @@ class AppConfig {
 }
 ```
 
-## Building the APK
+## Building
 
-### Option 1: Using the build script
+### Android APK
+
+#### Option 1: Using the build script
 
 ```bash
 cd mobile
@@ -62,7 +64,7 @@ cd mobile
 ./build_apk.sh http://192.168.1.100:8000
 ```
 
-### Option 2: Manual build
+#### Option 2: Manual build
 
 ```bash
 cd mobile
@@ -75,6 +77,62 @@ flutter build apk --release
 ```
 
 The APK will be at: `build/app/outputs/flutter-apk/app-release.apk`
+
+### Web (PWA)
+
+Build the web version for deployment as a Progressive Web App:
+
+```bash
+cd mobile
+
+# Get dependencies
+flutter pub get
+
+# Build web release
+flutter build web --release
+```
+
+The web files will be at: `build/web/`
+
+#### Web Deployment Options
+
+1. **Static hosting** (GitHub Pages, Netlify, Vercel):
+   ```bash
+   # Copy build/web/ contents to your hosting service
+   ```
+
+2. **Local testing**:
+   ```bash
+   cd build/web
+   python3 -m http.server 8080
+   # Open http://localhost:8080
+   ```
+
+3. **Docker deployment** (serve with backend API):
+   ```bash
+   # From project root
+   docker-compose up
+   # Web app at http://localhost:8080
+   # API at http://localhost:8000
+   ```
+
+#### Web Configuration
+
+Edit `lib/config.dart` to set the API URL for web:
+
+```dart
+// For web, set your deployment URL
+static const String _webApiUrl = 'https://api.your-domain.com';
+
+// Or use same origin (if web and API are on same server)
+static const String _webApiUrl = '';
+```
+
+**Note**: The backend API must have CORS enabled for web to work from different origins.
+
+### iOS (Simulator only)
+
+Currently blocked by macOS Sonoma+ codesigning issues. Use web version instead.
 
 ## Updating the Opening Book
 

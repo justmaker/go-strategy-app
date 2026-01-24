@@ -1,11 +1,11 @@
 {
-    "name": "go_strategy_app",
-    "short_name": "go_strategy_app",
+    "name": "Go Strategy",
+    "short_name": "GoStrategy",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1a1a2e",
+    "theme_color": "#d4a574",
+    "description": "Go (Weiqi) opening book and strategy analysis tool",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
