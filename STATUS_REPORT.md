@@ -203,23 +203,25 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 
 ---
 
+## Completed Tasks (2026-01-24)
+
+- [x] **Local KataGo Integration (Desktop)** - `katago_desktop_service.dart`
+  - Subprocess-based KataGo for macOS/Windows/Linux
+  - Auto-detection of KataGo binary path
+  - Real-time progress streaming
+
 ## Pending Tasks
 
 ### High Priority
 
-- [ ] **Local KataGo Integration (Desktop)**
-  - macOS: Spawn `/opt/homebrew/bin/katago` as subprocess
-  - Windows: Bundle `katago.exe` and spawn
-  - Implement Platform Channel communication
-
-- [ ] **Dual Slider UI**
+- [ ] **Dual Slider UI** (partially implemented, needs GameProvider update)
   - Add "Compute Visits" slider (10-200) for live analysis
   - Rename current slider to "Lookup Visits" (100-5000)
   - Update GameProvider to use both values
 
-- [ ] **Fix macOS/iOS Codesign Issue**
-  - Root cause: `com.apple.provenance` extended attribute
-  - Workaround: Manual Xcode build or different machine
+- [ ] **macOS/iOS Codesign Issue** (cannot be fixed at project level)
+  - Root cause: `com.apple.provenance` extended attribute (macOS Sonoma+)
+  - Workaround: Use web version or build on older macOS
 
 ### Medium Priority
 
@@ -233,19 +235,10 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
   - Create JNI bridge
   - Test on real device
 
-- [ ] **Sync Opening Book**
-  - DB has 58,734 9x9 records but book only has 2,945
-  - Re-export with updated data
-
 ### Low Priority
 
-- [ ] **Flutter Lint Cleanup**
-  - Fix `dangling_library_doc_comments` warnings
-  - Update deprecated `withOpacity` calls
-
-- [ ] **iOS Native Build**
-  - Requires Apple Developer account
-  - Consider TestFlight distribution
+- [ ] **Flutter Lint Cleanup** - info-level warnings only
+- [ ] **iOS Native Build** - Requires Apple Developer account
 
 ---
 
