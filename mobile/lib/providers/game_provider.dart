@@ -1,8 +1,10 @@
 /// Game provider for state management.
 /// Implements offline-first logic with bundled opening book, local cache,
 /// local KataGo engine, and API fallback.
+library;
 
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
@@ -20,6 +22,7 @@ class GameProvider extends ChangeNotifier {
   final CacheService _cache;
   final OpeningBookService _openingBook;
   final KataGoService _kataGo;
+  final KataGoDesktopService _kataGoDesktop;
 
   BoardState _board;
   AnalysisResult? _lastAnalysis;
@@ -32,29 +35,39 @@ class GameProvider extends ChangeNotifier {
   // Local engine state
   bool _localEngineEnabled = true;
   AnalysisProgress? _analysisProgress;
+  DesktopAnalysisProgress? _desktopAnalysisProgress;
 
-  // Settings
-  int _selectedVisits;
-  final List<int> _availableVisits;
+  // Settings - Dual slider system
+  int _lookupVisits;
+  int _computeVisits;
+  final List<int> _availableLookupVisits;
+  final List<int> _availableComputeVisits;
 
-  List<int> get availableVisits => _availableVisits;
+  List<int> get availableLookupVisits => _availableLookupVisits;
+  List<int> get availableComputeVisits => _availableComputeVisits;
 
   GameProvider({
     required ApiService api,
     required CacheService cache,
     OpeningBookService? openingBook,
     KataGoService? kataGo,
+    KataGoDesktopService? kataGoDesktop,
     int boardSize = 19,
     double komi = 7.5,
-    int defaultVisits = 100,
-    List<int> availableVisits = const [10, 50, 100, 200, 500, 1000, 2000, 5000],
-  })  : _api = api,
-        _cache = cache,
-        _openingBook = openingBook ?? OpeningBookService(),
-        _kataGo = kataGo ?? KataGoService(),
-        _board = BoardState(size: boardSize, komi: komi),
-        _selectedVisits = defaultVisits,
-        _availableVisits = availableVisits;
+    int defaultLookupVisits = 100,
+    int defaultComputeVisits = 50,
+    List<int> availableLookupVisits = const [100, 200, 500, 1000, 2000, 5000],
+    List<int> availableComputeVisits = const [10, 20, 50, 100, 200],
+  }) : _api = api,
+       _cache = cache,
+       _openingBook = openingBook ?? OpeningBookService(),
+       _kataGo = kataGo ?? KataGoService(),
+       _kataGoDesktop = kataGoDesktop ?? KataGoDesktopService(),
+       _board = BoardState(size: boardSize, komi: komi),
+       _lookupVisits = defaultLookupVisits,
+       _computeVisits = defaultComputeVisits,
+       _availableLookupVisits = availableLookupVisits,
+       _availableComputeVisits = availableComputeVisits;
 
   // Getters
   BoardState get board => _board;
@@ -63,16 +76,25 @@ class GameProvider extends ChangeNotifier {
   bool get isAnalyzing => _isAnalyzing;
   String? get error => _error;
   ConnectionStatus get connectionStatus => _connectionStatus;
-  int get selectedVisits => _selectedVisits;
+  int get lookupVisits => _lookupVisits;
+  int get computeVisits => _computeVisits;
   bool get isOnline => _connectionStatus == ConnectionStatus.online;
   bool get isOpeningBookLoaded => _openingBookLoaded;
   OpeningBookService get openingBook => _openingBook;
 
   // Local engine getters
   bool get localEngineEnabled => _localEngineEnabled;
-  bool get localEngineRunning => _kataGo.isRunning;
+  bool get localEngineRunning =>
+      _isDesktop ? _kataGoDesktop.isRunning : _kataGo.isRunning;
   AnalysisProgress? get analysisProgress => _analysisProgress;
+  DesktopAnalysisProgress? get desktopAnalysisProgress =>
+      _desktopAnalysisProgress;
   KataGoService get kataGoService => _kataGo;
+  KataGoDesktopService get kataGoDesktopService => _kataGoDesktop;
+
+  // Platform detection
+  bool get _isDesktop =>
+      !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
 
   /// Initialize the provider
   Future<void> init() async {
@@ -94,11 +116,15 @@ class GameProvider extends ChangeNotifier {
     if (!_localEngineEnabled) return;
 
     try {
-      final success = await _kataGo.start();
-      if (success) {
-        debugPrint('Local KataGo engine started');
+      bool success;
+      if (_isDesktop) {
+        success = await _kataGoDesktop.start();
+        debugPrint(
+          success ? 'Desktop KataGo started' : 'Desktop KataGo failed',
+        );
       } else {
-        debugPrint('Local KataGo engine failed to start');
+        success = await _kataGo.start();
+        debugPrint(success ? 'Mobile KataGo started' : 'Mobile KataGo failed');
       }
       notifyListeners();
     } catch (e) {
@@ -128,18 +154,23 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
 
     final isHealthy = await _api.healthCheck();
-    _connectionStatus =
-        isHealthy ? ConnectionStatus.online : ConnectionStatus.offline;
+    _connectionStatus = isHealthy
+        ? ConnectionStatus.online
+        : ConnectionStatus.offline;
     notifyListeners();
   }
 
   /// Toggle local engine
   void setLocalEngineEnabled(bool enabled) {
     _localEngineEnabled = enabled;
-    if (enabled && !_kataGo.isRunning) {
+    if (enabled && !localEngineRunning) {
       _initLocalEngine();
-    } else if (!enabled && _kataGo.isRunning) {
-      _kataGo.stop();
+    } else if (!enabled) {
+      if (_isDesktop) {
+        _kataGoDesktop.stop();
+      } else {
+        _kataGo.stop();
+      }
     }
     notifyListeners();
   }
@@ -147,11 +178,15 @@ class GameProvider extends ChangeNotifier {
   /// Set board size
   void setBoardSize(int size) {
     if (size != _board.size) {
-      _board =
-          BoardState(size: size, komi: _board.komi, handicap: _board.handicap);
+      _board = BoardState(
+        size: size,
+        komi: _board.komi,
+        handicap: _board.handicap,
+      );
       _lastAnalysis = null;
       _lastAnalysisSource = AnalysisSource.none;
       _analysisProgress = null;
+      _desktopAnalysisProgress = null;
       _error = null;
       notifyListeners();
     }
@@ -165,10 +200,18 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Set visits for analysis
-  void setVisits(int visits) {
-    if (_availableVisits.contains(visits)) {
-      _selectedVisits = visits;
+  /// Set lookup visits threshold (for DB/book queries)
+  void setLookupVisits(int visits) {
+    if (_availableLookupVisits.contains(visits)) {
+      _lookupVisits = visits;
+      notifyListeners();
+    }
+  }
+
+  /// Set compute visits (for live KataGo analysis)
+  void setComputeVisits(int visits) {
+    if (_availableComputeVisits.contains(visits)) {
+      _computeVisits = visits;
       notifyListeners();
     }
   }
@@ -182,6 +225,7 @@ class GameProvider extends ChangeNotifier {
     _lastAnalysis = null;
     _lastAnalysisSource = AnalysisSource.none;
     _analysisProgress = null;
+    _desktopAnalysisProgress = null;
     _error = null;
     notifyListeners();
 
@@ -189,26 +233,19 @@ class GameProvider extends ChangeNotifier {
   }
 
   /// Analyze current position (offline-first with opening book)
-  ///
-  /// Priority order:
-  /// 1. Bundled opening book (instant, always available)
-  /// 2. Local SQLite cache (fast, persisted)
-  /// 3. Local KataGo engine (slow but works offline)
-  /// 4. API call (requires network, caches result)
   Future<void> analyze({bool forceRefresh = false}) async {
     if (_isAnalyzing) return;
 
     _isAnalyzing = true;
     _error = null;
     _analysisProgress = null;
+    _desktopAnalysisProgress = null;
     notifyListeners();
 
     try {
-      // Compute a simple hash for lookups
       final boardHash = _computeSimpleHash();
 
-      // Step 1: Try bundled opening book first (unless force refresh)
-      // Use move-based lookup since we don't have Zobrist hash in Dart
+      // Step 1: Try bundled opening book first
       if (!forceRefresh && _openingBookLoaded) {
         final bookResult = _openingBook.lookupByMoves(
           _board.size,
@@ -224,7 +261,7 @@ class GameProvider extends ChangeNotifier {
         }
       }
 
-      // Step 2: Try local cache (unless force refresh)
+      // Step 2: Try local cache
       if (!forceRefresh) {
         final cachedResult = await _cache.get(
           boardHash: boardHash,
@@ -239,7 +276,7 @@ class GameProvider extends ChangeNotifier {
         }
       }
 
-      // Step 3: Try API first if online (faster than local engine)
+      // Step 3: Try API if online
       if (_connectionStatus == ConnectionStatus.online) {
         try {
           final result = await _api.analyze(
@@ -247,15 +284,12 @@ class GameProvider extends ChangeNotifier {
             moves: _board.movesGtp,
             handicap: _board.handicap,
             komi: _board.komi,
-            visits: _selectedVisits,
+            visits: _lookupVisits,
           );
 
           _lastAnalysis = result;
           _lastAnalysisSource = AnalysisSource.api;
-
-          // Cache the result locally
           await _cache.put(result);
-
           _isAnalyzing = false;
           notifyListeners();
           return;
@@ -265,9 +299,14 @@ class GameProvider extends ChangeNotifier {
       }
 
       // Step 4: Try local KataGo engine
-      if (_localEngineEnabled && _kataGo.isRunning) {
-        await _analyzeWithLocalEngine();
-        return;
+      if (_localEngineEnabled) {
+        if (_isDesktop && _kataGoDesktop.isRunning) {
+          await _analyzeWithDesktopEngine();
+          return;
+        } else if (!_isDesktop && _kataGo.isRunning) {
+          await _analyzeWithMobileEngine();
+          return;
+        }
       }
 
       // Step 5: No analysis available
@@ -284,15 +323,15 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
-  /// Analyze using local KataGo engine
-  Future<void> _analyzeWithLocalEngine() async {
+  /// Analyze using mobile KataGo engine (platform channel)
+  Future<void> _analyzeWithMobileEngine() async {
     final completer = Completer<void>();
 
     await _kataGo.analyze(
       boardSize: _board.size,
       moves: _board.movesGtp,
       komi: _board.komi,
-      maxVisits: _selectedVisits,
+      maxVisits: _computeVisits,
       onProgress: (progress) {
         _analysisProgress = progress;
         notifyListeners();
@@ -302,10 +341,7 @@ class GameProvider extends ChangeNotifier {
         _lastAnalysisSource = AnalysisSource.localEngine;
         _analysisProgress = null;
         _isAnalyzing = false;
-
-        // Cache the result
         _cache.put(result);
-
         notifyListeners();
         if (!completer.isCompleted) completer.complete();
       },
@@ -317,10 +353,9 @@ class GameProvider extends ChangeNotifier {
       },
     );
 
-    // Wait for completion with timeout
     try {
       await completer.future.timeout(
-        Duration(seconds: 120),
+        const Duration(seconds: 120),
         onTimeout: () {
           _kataGo.cancelAnalysis();
           _error = 'Analysis timed out';
@@ -333,13 +368,63 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
+  /// Analyze using desktop KataGo engine (subprocess)
+  Future<void> _analyzeWithDesktopEngine() async {
+    final completer = Completer<void>();
+
+    await _kataGoDesktop.analyze(
+      boardSize: _board.size,
+      moves: _board.movesGtp,
+      komi: _board.komi,
+      maxVisits: _computeVisits,
+      onProgress: (progress) {
+        _desktopAnalysisProgress = progress;
+        notifyListeners();
+      },
+      onResult: (result) {
+        _lastAnalysis = result;
+        _lastAnalysisSource = AnalysisSource.localEngine;
+        _desktopAnalysisProgress = null;
+        _isAnalyzing = false;
+        _cache.put(result);
+        notifyListeners();
+        if (!completer.isCompleted) completer.complete();
+      },
+      onError: (error) {
+        _error = 'Desktop engine error: $error';
+        _isAnalyzing = false;
+        notifyListeners();
+        if (!completer.isCompleted) completer.complete();
+      },
+    );
+
+    try {
+      await completer.future.timeout(
+        const Duration(seconds: 120),
+        onTimeout: () {
+          _kataGoDesktop.cancelAnalysis();
+          _error = 'Analysis timed out';
+          _isAnalyzing = false;
+          notifyListeners();
+        },
+      );
+    } catch (e) {
+      debugPrint('Desktop analysis error: $e');
+    }
+  }
+
   /// Cancel ongoing analysis
   Future<void> cancelAnalysis() async {
     if (!_isAnalyzing) return;
 
-    await _kataGo.cancelAnalysis();
+    if (_isDesktop) {
+      await _kataGoDesktop.cancelAnalysis();
+    } else {
+      await _kataGo.cancelAnalysis();
+    }
     _isAnalyzing = false;
     _analysisProgress = null;
+    _desktopAnalysisProgress = null;
     _error = 'Analysis cancelled';
     notifyListeners();
   }
@@ -358,6 +443,7 @@ class GameProvider extends ChangeNotifier {
       _lastAnalysis = null;
       _lastAnalysisSource = AnalysisSource.none;
       _analysisProgress = null;
+      _desktopAnalysisProgress = null;
       _error = null;
       notifyListeners();
     }
@@ -369,6 +455,7 @@ class GameProvider extends ChangeNotifier {
     _lastAnalysis = null;
     _lastAnalysisSource = AnalysisSource.none;
     _analysisProgress = null;
+    _desktopAnalysisProgress = null;
     _error = null;
     notifyListeners();
   }
@@ -383,7 +470,8 @@ class GameProvider extends ChangeNotifier {
       'opening_book': bookStats,
       'local_engine': {
         'enabled': _localEngineEnabled,
-        'running': _kataGo.isRunning,
+        'running': localEngineRunning,
+        'is_desktop': _isDesktop,
       },
     };
   }
@@ -396,6 +484,7 @@ class GameProvider extends ChangeNotifier {
   @override
   void dispose() {
     _kataGo.dispose();
+    _kataGoDesktop.dispose();
     _api.dispose();
     _cache.close();
     _openingBook.clear();

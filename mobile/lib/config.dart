@@ -31,18 +31,22 @@ class AppConfig {
   /// Default komi value
   static const double defaultKomi = 7.5;
 
-  /// Default analysis visits
-  static const int defaultVisits = 100;
+  /// Default lookup visits (for opening book/cache queries)
+  static const int defaultLookupVisits = 100;
 
-  /// Available visit options for analysis
-  static const List<int> availableVisits = [
-    10,
-    50,
+  /// Default compute visits (for live KataGo analysis)
+  static const int defaultComputeVisits = 50;
+
+  /// Available visit options for lookup (DB/book queries)
+  static const List<int> availableLookupVisits = [
     100,
     200,
     500,
     1000,
     2000,
-    5000
+    5000,
   ];
+
+  /// Available visit options for compute (live analysis)
+  static const List<int> availableComputeVisits = [10, 20, 50, 100, 200];
 }

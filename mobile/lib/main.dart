@@ -1,5 +1,5 @@
 /// Go Strategy Analysis App
-/// 
+///
 /// A cross-platform mobile app for Go (Weiqi/Baduk) strategy analysis
 /// powered by KataGo AI.
 
@@ -69,22 +69,22 @@ class _AppWrapperState extends State<AppWrapper> {
       // Step 1: Initialize opening book service (for offline-first)
       setState(() => _initStatus = 'Loading opening book...');
       _openingBookService = OpeningBookService();
-      
+
       // Step 2: Configure API endpoint from config
       setState(() => _initStatus = 'Connecting to server...');
       _apiService = ApiService(
         baseUrl: AppConfig.apiBaseUrl,
         timeout: AppConfig.connectionTimeout,
       );
-      
+
       // Step 3: Initialize local cache
       setState(() => _initStatus = 'Initializing cache...');
       _cacheService = CacheService();
-      
+
       // Step 4: Initialize local KataGo engine service
       setState(() => _initStatus = 'Preparing local engine...');
       _kataGoService = KataGoService();
-      
+
       // Step 5: Create game provider with all services
       _gameProvider = GameProvider(
         api: _apiService,
@@ -93,8 +93,10 @@ class _AppWrapperState extends State<AppWrapper> {
         kataGo: _kataGoService,
         boardSize: AppConfig.defaultBoardSize,
         komi: AppConfig.defaultKomi,
-        defaultVisits: AppConfig.defaultVisits,
-        availableVisits: AppConfig.availableVisits,
+        defaultLookupVisits: AppConfig.defaultLookupVisits,
+        defaultComputeVisits: AppConfig.defaultComputeVisits,
+        availableLookupVisits: AppConfig.availableLookupVisits,
+        availableComputeVisits: AppConfig.availableComputeVisits,
       );
 
       await _gameProvider.init();

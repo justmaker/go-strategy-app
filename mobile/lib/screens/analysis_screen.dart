@@ -94,7 +94,22 @@ class _AnalysisPanel extends StatelessWidget {
     return Consumer<GameProvider>(
       builder: (context, game, _) {
         if (game.isAnalyzing) {
-          final progress = game.analysisProgress;
+          // Support both mobile and desktop progress
+          final mobileProgress = game.analysisProgress;
+          final desktopProgress = game.desktopAnalysisProgress;
+          final hasProgress = mobileProgress != null || desktopProgress != null;
+
+          // Extract current/max visits from whichever is active
+          int? currentVisits;
+          int? maxVisits;
+          if (mobileProgress != null) {
+            currentVisits = mobileProgress.currentVisits;
+            maxVisits = mobileProgress.maxVisits;
+          } else if (desktopProgress != null) {
+            currentVisits = desktopProgress.currentVisits;
+            maxVisits = desktopProgress.maxVisits;
+          }
+
           return Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -109,10 +124,12 @@ class _AnalysisPanel extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                     const SizedBox(width: 12),
-                    Text(progress != null
-                        ? 'Analyzing locally... ${progress.currentVisits}/${progress.maxVisits} visits'
-                        : 'Analyzing...'),
-                    if (progress != null) ...[
+                    Text(
+                      hasProgress
+                          ? 'Analyzing locally... $currentVisits/$maxVisits visits'
+                          : 'Analyzing...',
+                    ),
+                    if (hasProgress) ...[
                       const SizedBox(width: 12),
                       IconButton(
                         icon: const Icon(Icons.cancel, size: 20),
@@ -124,10 +141,12 @@ class _AnalysisPanel extends StatelessWidget {
                     ],
                   ],
                 ),
-                if (progress != null) ...[
+                if (hasProgress &&
+                    currentVisits != null &&
+                    maxVisits != null) ...[
                   const SizedBox(height: 8),
                   LinearProgressIndicator(
-                    value: progress.currentVisits / progress.maxVisits,
+                    value: currentVisits / maxVisits,
                     backgroundColor: Colors.grey.shade300,
                   ),
                 ],
@@ -145,8 +164,11 @@ class _AnalysisPanel extends StatelessWidget {
                 const Icon(Icons.error_outline, color: Colors.red),
                 const SizedBox(width: 8),
                 Expanded(
-                    child: Text(game.error!,
-                        style: const TextStyle(color: Colors.red))),
+                  child: Text(
+                    game.error!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
               ],
             ),
           );
@@ -268,10 +290,7 @@ class _MoveRow extends StatelessWidget {
           Container(
             width: 24,
             height: 24,
-            decoration: BoxDecoration(
-              color: rankColor,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: rankColor, shape: BoxShape.circle),
             child: Center(
               child: Text(
                 '$rank',
@@ -284,10 +303,7 @@ class _MoveRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Text(
-            move.move,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
+          Text(move.move, style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(width: 16),
           Text('Win: ${move.winratePercent}'),
           const SizedBox(width: 16),
@@ -401,11 +417,7 @@ class _DataStatsWidget extends StatelessWidget {
             final localEntries = localCache?['total_entries'] as int? ?? 0;
             return Row(
               children: [
-                Icon(
-                  Icons.save,
-                  color: Colors.blue.shade300,
-                  size: 16,
-                ),
+                Icon(Icons.save, color: Colors.blue.shade300, size: 16),
                 const SizedBox(width: 8),
                 Text(
                   'Local Cache: $localEntries positions',
@@ -433,8 +445,10 @@ class _SettingsSheet extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Settings',
-                  style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                'Settings',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
               const SizedBox(height: 16),
 
               // Board size
@@ -454,17 +468,44 @@ class _SettingsSheet extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // Visits
-              const Text('Analysis Visits'),
+              // Lookup Visits (for opening book / database queries)
+              const Text('Lookup Visits (Book/Cache threshold)'),
+              const SizedBox(height: 4),
+              Text(
+                'Minimum visits required to use cached analysis',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
-                children: game.availableVisits.map((v) {
+                children: game.availableLookupVisits.map((v) {
                   return ChoiceChip(
                     label: Text('$v'),
-                    selected: game.selectedVisits == v,
+                    selected: game.lookupVisits == v,
                     onSelected: (selected) {
-                      if (selected) game.setVisits(v);
+                      if (selected) game.setLookupVisits(v);
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+
+              // Compute Visits (for live KataGo analysis)
+              const Text('Compute Visits (Live analysis)'),
+              const SizedBox(height: 4),
+              Text(
+                'Visits for local KataGo engine',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: game.availableComputeVisits.map((v) {
+                  return ChoiceChip(
+                    label: Text('$v'),
+                    selected: game.computeVisits == v,
+                    onSelected: (selected) {
+                      if (selected) game.setComputeVisits(v);
                     },
                   );
                 }).toList(),
@@ -501,8 +542,8 @@ class _SettingsSheet extends StatelessWidget {
                   game.localEngineRunning
                       ? 'Running (offline analysis available)'
                       : game.localEngineEnabled
-                          ? 'Starting...'
-                          : 'Disabled',
+                      ? 'Starting...'
+                      : 'Disabled',
                   style: TextStyle(
                     fontSize: 12,
                     color: game.localEngineRunning ? Colors.green : Colors.grey,
