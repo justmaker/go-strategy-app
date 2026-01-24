@@ -4,7 +4,38 @@
 
 ---
 
-## 建置指令與輸出位置
+## 一鍵建置全部平台
+
+```bash
+# 建置此系統可建置的所有平台
+./build_all.sh
+
+# 只建置特定平台
+./build_all.sh web ios macos
+
+# 只建置 web
+./build_all.sh web
+```
+
+---
+
+## 跨平台建置限制
+
+| 建置機器 | Web | Android | iOS | macOS | Windows | Linux |
+|---------|:---:|:-------:|:---:|:-----:|:-------:|:-----:|
+| **macOS** | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **Windows** | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| **Linux** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
+
+**限制說明：**
+- **iOS/macOS** - 只能在 macOS 上建置（需要 Xcode）
+- **Windows** - 只能在 Windows 上建置（需要 Visual Studio）
+- **Linux** - 只能在 Linux 上建置
+- **Web/Android** - 可以在任何平台建置
+
+---
+
+## 各平台建置指令與輸出位置
 
 ### Web (網頁版)
 
