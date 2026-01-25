@@ -2,6 +2,12 @@
 ///
 /// A cross-platform mobile app for Go (Weiqi/Baduk) strategy analysis
 /// powered by KataGo AI.
+///
+/// Features:
+/// - AI-powered move analysis
+/// - Multi-provider authentication (Google, Apple, Microsoft)
+/// - Cloud sync (Google Drive, iCloud, OneDrive)
+/// - Offline-first with local cache
 library;
 
 import 'package:flutter/material.dart';
@@ -52,12 +58,20 @@ class AppWrapper extends StatefulWidget {
 }
 
 class _AppWrapperState extends State<AppWrapper> {
+  // Core services
   late final ApiService _apiService;
   late final CacheService _cacheService;
   late final OpeningBookService _openingBookService;
   late final KataGoService _kataGoService;
   late final GameProvider _gameProvider;
+
+  // Auth & Cloud services
+  late final AuthService _authService;
+  late final CloudStorageManager _cloudStorage;
+  late final GameRecordService _gameRecordService;
+
   bool _initialized = false;
+  bool _showAuthScreen = false;
   String? _error;
   String _initStatus = 'Starting...';
 
@@ -69,26 +83,40 @@ class _AppWrapperState extends State<AppWrapper> {
 
   Future<void> _initServices() async {
     try {
-      // Step 1: Initialize opening book service (for offline-first)
-      setState(() => _initStatus = 'Loading opening book...');
+      // Step 1: Initialize auth service
+      setState(() => _initStatus = '初始化認證服務...');
+      _authService = AuthService();
+      await _authService.init();
+
+      // Step 2: Initialize cloud storage
+      setState(() => _initStatus = '準備雲端服務...');
+      _cloudStorage = CloudStorageManager(_authService);
+
+      // Step 3: Initialize game record service
+      setState(() => _initStatus = '載入棋譜...');
+      _gameRecordService = GameRecordService(_authService, _cloudStorage);
+      await _gameRecordService.init();
+
+      // Step 4: Initialize opening book service (for offline-first)
+      setState(() => _initStatus = '載入定式庫...');
       _openingBookService = OpeningBookService();
 
-      // Step 2: Configure API endpoint from config
-      setState(() => _initStatus = 'Connecting to server...');
+      // Step 5: Configure API endpoint from config
+      setState(() => _initStatus = '連接伺服器...');
       _apiService = ApiService(
         baseUrl: AppConfig.apiBaseUrl,
         timeout: AppConfig.connectionTimeout,
       );
 
-      // Step 3: Initialize local cache
-      setState(() => _initStatus = 'Initializing cache...');
+      // Step 6: Initialize local cache
+      setState(() => _initStatus = '初始化快取...');
       _cacheService = CacheService();
 
-      // Step 4: Initialize local KataGo engine service
-      setState(() => _initStatus = 'Preparing local engine...');
+      // Step 7: Initialize local KataGo engine service
+      setState(() => _initStatus = '準備分析引擎...');
       _kataGoService = KataGoService();
 
-      // Step 5: Create game provider with all services
+      // Step 8: Create game provider with all services
       _gameProvider = GameProvider(
         api: _apiService,
         cache: _cacheService,
@@ -106,10 +134,13 @@ class _AppWrapperState extends State<AppWrapper> {
 
       setState(() {
         _initialized = true;
+        // Show auth screen only if user has never signed in and hasn't dismissed it
+        // For now, always go directly to the app
+        _showAuthScreen = false;
       });
     } catch (e) {
       setState(() {
-        _error = 'Failed to initialize: $e';
+        _error = '初始化失敗: $e';
       });
     }
   }
@@ -118,6 +149,7 @@ class _AppWrapperState extends State<AppWrapper> {
   void dispose() {
     if (_initialized) {
       _gameProvider.dispose();
+      _gameRecordService.dispose();
     }
     super.dispose();
   }
@@ -127,24 +159,27 @@ class _AppWrapperState extends State<AppWrapper> {
     if (_error != null) {
       return Scaffold(
         body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.red),
-              const SizedBox(height: 16),
-              Text(_error!, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _error = null;
-                    _initialized = false;
-                  });
-                  _initServices();
-                },
-                child: const Text('Retry'),
-              ),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(_error!, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _error = null;
+                      _initialized = false;
+                    });
+                    _initServices();
+                  },
+                  child: const Text('重試'),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -165,9 +200,29 @@ class _AppWrapperState extends State<AppWrapper> {
       );
     }
 
-    return ChangeNotifierProvider.value(
-      value: _gameProvider,
-      child: const AnalysisScreen(),
+    // Provide all services to the widget tree
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: _authService),
+        ChangeNotifierProvider.value(value: _cloudStorage),
+        ChangeNotifierProvider.value(value: _gameRecordService),
+        ChangeNotifierProvider.value(value: _gameProvider),
+      ],
+      child: _showAuthScreen
+          ? AuthScreen(
+              onComplete: () => setState(() => _showAuthScreen = false),
+            )
+          : const _MainApp(),
     );
+  }
+}
+
+/// Main app with navigation
+class _MainApp extends StatelessWidget {
+  const _MainApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AnalysisScreen();
   }
 }
