@@ -132,7 +132,7 @@ All components use **GTP (Go Text Protocol)** standard:
 
 | Platform | Build Status | Local KataGo | Notes |
 |----------|--------------|--------------|-------|
-| **Android** | ⚠️ 需要 Java | ❌ Needs NDK | 系統缺少 Java Runtime |
+| **Android** | ✅ Built (54.0MB) | ❌ Needs NDK | KataGo runs via JNI (future work) |
 | **iOS** | ✅ Built (21.8MB) | ❌ Needs XCFramework | Use `--no-codesign` for testing |
 | **macOS** | ✅ Built (46.7MB) | ✅ Can spawn process | adhoc signed, runs directly |
 | **Windows** | ❌ Needs Windows | ✅ Can spawn process | Cross-compile not possible |
@@ -149,7 +149,7 @@ All components use **GTP (Go Text Protocol)** standard:
 | Web | `mobile/build/web/` | 36MB | ✅ Ready |
 | macOS | `mobile/build/macos/Build/Products/Release/go_strategy_app.app` | 46.7MB | ✅ Ready |
 | iOS | `mobile/build/ios/iphoneos/Runner.app` | 21.8MB | ✅ Ready (no codesign) |
-| Android APK | `mobile/build/app/outputs/flutter-apk/app-release.apk` | - | ⚠️ Not built |
+| Android APK | `mobile/build/app/outputs/flutter-apk/app-release.apk` | 54.0MB | ✅ Ready |
 
 ### Build Commands
 
@@ -247,6 +247,10 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 - [x] **Python 測試** - 53 tests passing
 
 - [x] **README.md 更新** - 加入 Flutter 建置說明（中文）
+
+- [x] **Android APK Build** - Successfully built (54MB)
+  - Resolved Java 17 environment issue
+  - Verified `flutter doctor` status
 
 ## Pending Tasks
 
@@ -392,10 +396,6 @@ python -m src.scripts.build_opening_book --board-size 13 --visits 100
 ```bash
 # 1. 安裝 Java（Android 建置需要）
 brew install openjdk@17
-
-# 2. 建置 Android APK
-cd mobile
-flutter build apk --release
 ```
 
 ### 快速驗證環境

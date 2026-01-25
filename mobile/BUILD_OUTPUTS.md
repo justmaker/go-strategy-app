@@ -269,7 +269,7 @@ flutter pub get
 | 平台 | 狀態 | 大小 | 備註 |
 |------|------|------|------|
 | Web | ✅ 已建置 | 36 MB | PWA 可部署到任何網頁伺服器 |
-| Android APK | ⚠️ 未測試 | - | 需要執行建置 |
+| Android APK | ✅ 已建置 | 54 MB | 需要 Java 17 環境 |
 | iOS | ✅ 已建置 | 21.8 MB | 使用 `--no-codesign`，上架需簽名 |
 | macOS | ✅ 已建置 | 46.7 MB | 可直接雙擊執行 |
 | Windows | ❌ 需 Windows | - | 無法在 macOS 上建置 |
