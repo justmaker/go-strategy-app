@@ -34,6 +34,7 @@ class GoBoardWidget extends StatelessWidget {
   final void Function(BoardPoint)? onTap;
   final BoardTheme theme;
   final bool showCoordinates;
+  final bool showMoveNumbers; // New field
 
   const GoBoardWidget({
     super.key,
@@ -42,6 +43,7 @@ class GoBoardWidget extends StatelessWidget {
     this.onTap,
     this.theme = const BoardTheme(),
     this.showCoordinates = true,
+    this.showMoveNumbers = false, // Default false
   });
 
   @override
@@ -69,6 +71,7 @@ class GoBoardWidget extends StatelessWidget {
                   suggestions: suggestions,
                   theme: theme,
                   showCoordinates: showCoordinates,
+                  showMoveNumbers: showMoveNumbers, // Pass to painter
                 ),
               ),
             ),
@@ -104,12 +107,14 @@ class _BoardPainter extends CustomPainter {
   final List<MoveCandidate>? suggestions;
   final BoardTheme theme;
   final bool showCoordinates;
+  final bool showMoveNumbers;
 
   _BoardPainter({
     required this.board,
     this.suggestions,
     required this.theme,
     required this.showCoordinates,
+    required this.showMoveNumbers,
   });
 
   @override
@@ -120,7 +125,6 @@ class _BoardPainter extends CustomPainter {
     final cellSize = boardSize / (board.size - 1);
 
     // Draw board background
-    // Fill the entire canvas
     canvas.drawRect(Offset.zero & size, Paint()..color = theme.boardColor);
 
     // Draw grid lines
@@ -139,9 +143,34 @@ class _BoardPainter extends CustomPainter {
       _drawSuggestions(canvas, padding, cellSize);
     }
 
-    // Draw stones
+    // Draw stones with optional move numbers
     _drawStones(canvas, padding, cellSize);
   }
+
+  // ... (keep _drawGrid, _drawStarPoints, _drawCoordinates, _drawSuggestions as they are) ...
+  // Wait, the tool replaces CONTIGUOUS blocks. I need to be careful not to delete methods not shown.
+  // I will target the class Definition + paint + _drawStones.
+  // Actually, split this into:
+  // 1. Class definition and Constructor.
+  // 2. _drawStones method.
+  
+  // Let's do Class Def + Constructor + paint first.
+  // Actually, I can just replace the Constructor and paint method.
+  // But wait, `_drawStones` is at the end. I need to modify it.
+  
+  // Let's Replace `_BoardPainter` class start up to `paint` method end.
+  // Wait, I can't overwrite hidden methods.
+  // I'll do 2 replacements.
+  
+  // Replacement 1: Constructor and Fields.
+  
+  // Replacement 2: `_drawStones` and `shouldRepaint`.
+  
+  // Let's do Replacement 1.
+
+
+
+
 
   void _drawGrid(Canvas canvas, double padding, double cellSize) {
     final paint = Paint()
@@ -246,6 +275,23 @@ class _BoardPainter extends CustomPainter {
 
     final bestWinrate = suggestions!.first.winrate;
 
+    // Pre-calculate display ranks to group equivalent moves
+    final moveRanks = <int, int>{}; // index -> displayRank
+    int currentRank = 0;
+    String? lastSignature;
+
+    for (int i = 0; i < suggestions!.length; i++) {
+      final move = suggestions![i];
+      // Use the same signature logic as the list to group equivalent moves
+      final signature = '${move.winratePercent}_${move.scoreLeadFormatted}';
+      
+      if (signature != lastSignature) {
+        currentRank++;
+        lastSignature = signature;
+      }
+      moveRanks[i] = currentRank;
+    }
+
     for (int i = 0; i < suggestions!.length; i++) {
       final suggestion = suggestions![i];
       final gtpPoint = BoardPoint.fromGtp(suggestion.move, board.size);
@@ -254,21 +300,28 @@ class _BoardPainter extends CustomPainter {
       // Convert GTP coordinates to display coordinates for rendering
       final point = gtpPoint.toDisplayCoords(board.size);
 
-      // Determine color based on winrate difference (matching GUI logic)
+      final displayRank = moveRanks[i]!;
+
+      // Determine color based on rank (grouped)
+      // Rank 1: Blue (Best), Rank 2: Green (Good), Rank 3+: Orange (OK)
       Color color;
+      
+      // Filter out moves that are too bad (10% drop)
       final winrateDrop = bestWinrate - suggestion.winrate;
-      if (winrateDrop <= 0.005) {
-        // Best move (drop <= 0.5%)
-        color = theme.bestMoveColor;
-      } else if (winrateDrop <= 0.03) {
-        // Good move (drop <= 3%)
-        color = theme.goodMoveColor;
-      } else if (winrateDrop <= 0.10) {
-        // OK move (drop <= 10%)
-        color = theme.okMoveColor;
-      } else {
-        // Skip moves with >10% winrate drop
+      if (winrateDrop > 0.10) {
         continue;
+      }
+
+      if (displayRank > 3) {
+        continue;
+      }
+
+      if (displayRank == 1) {
+        color = theme.bestMoveColor;
+      } else if (displayRank == 2) {
+        color = theme.goodMoveColor;
+      } else {
+        color = theme.okMoveColor;
       }
 
       final x = padding + point.x * cellSize;
@@ -288,10 +341,10 @@ class _BoardPainter extends CustomPainter {
         ..strokeWidth = 2.0;
       canvas.drawCircle(Offset(x, y), radius, borderPaint);
 
-      // Draw rank number
+      // Draw rank number (using the grouped rank)
       final textPainter = TextPainter(
         text: TextSpan(
-          text: '${i + 1}',
+          text: '$displayRank',
           style: TextStyle(
             color: Colors.white,
             fontSize: (cellSize * 0.45).clamp(10.0, 18.0),
@@ -311,6 +364,25 @@ class _BoardPainter extends CustomPainter {
 
   void _drawStones(Canvas canvas, double padding, double cellSize) {
     final stoneRadius = cellSize * 0.45;
+    
+    // Pre-calculate move numbers if needed
+    final moveNumbers = <int, int>{}; // (displayY * size + displayX) -> moveNum
+    if (showMoveNumbers) {
+      // We need to access moves. Assuming BoardState exposes movesGtp or moves.
+      // GameProvider uses movesGtp, so it should be available.
+      // We iterate forward, so later moves overwrite earlier ones (which is correct for current state 
+      // as long as the stone wasn't captured and the spot is empty).
+      // Since we only draw if the board has a stone, mapping the *last* move at a coordinate is correct.
+      for (int i = 0; i < board.movesGtp.length; i++) {
+        final moveStr = board.movesGtp[i];
+        final point = BoardPoint.fromGtp(moveStr, board.size);
+        if (point != null) {
+          final displayPoint = point.toDisplayCoords(board.size);
+          final index = displayPoint.y * board.size + displayPoint.x;
+          moveNumbers[index] = i + 1;
+        }
+      }
+    }
 
     // Iterate in display coordinates (y=0 at top for rendering)
     for (int displayY = 0; displayY < board.size; displayY++) {
@@ -364,6 +436,33 @@ class _BoardPainter extends CustomPainter {
           );
         canvas.drawCircle(
             Offset(centerX, centerY), stoneRadius, highlightPaint);
+            
+        // Draw move number
+        if (showMoveNumbers) {
+          final index = displayY * board.size + displayX;
+          if (moveNumbers.containsKey(index)) {
+            final moveNum = moveNumbers[index]!;
+            final textColor = stone == StoneColor.black ? Colors.white : Colors.black;
+            
+            final textPainter = TextPainter(
+              text: TextSpan(
+                text: '$moveNum',
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: (cellSize * 0.5).clamp(10.0, 20.0),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              textDirection: TextDirection.ltr,
+              textAlign: TextAlign.center,
+            )..layout();
+            
+            textPainter.paint(
+              canvas,
+              Offset(centerX - textPainter.width / 2, centerY - textPainter.height / 2),
+            );
+          }
+        }
       }
     }
   }
@@ -372,6 +471,8 @@ class _BoardPainter extends CustomPainter {
   bool shouldRepaint(covariant _BoardPainter oldDelegate) {
     return oldDelegate.board != board ||
         oldDelegate.suggestions != suggestions ||
-        oldDelegate.theme != theme;
+        oldDelegate.theme != theme ||
+        oldDelegate.showCoordinates != showCoordinates ||
+        oldDelegate.showMoveNumbers != showMoveNumbers;
   }
 }

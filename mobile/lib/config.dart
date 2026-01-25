@@ -47,7 +47,7 @@ class AppConfig {
   static const Duration connectionTimeout = Duration(seconds: 30);
 
   /// Default board size
-  static const int defaultBoardSize = 19;
+  static const int defaultBoardSize = 9;
 
   /// Default komi value
   static const double defaultKomi = 7.5;

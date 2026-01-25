@@ -40,6 +40,9 @@ class GameProvider extends ChangeNotifier {
   AnalysisProgress? _analysisProgress;
   DesktopAnalysisProgress? _desktopAnalysisProgress;
 
+  // Visual preferences
+  bool _showMoveNumbers = true;
+
   // Settings - Dual slider system
   int _lookupVisits;
   int _computeVisits;
@@ -94,6 +97,7 @@ class GameProvider extends ChangeNotifier {
       _desktopAnalysisProgress;
   KataGoService get kataGoService => _kataGo;
   KataGoDesktopService get kataGoDesktopService => _kataGoDesktop;
+  bool get showMoveNumbers => _showMoveNumbers;
 
   // Platform detection
   bool get _isDesktop =>
@@ -219,6 +223,12 @@ class GameProvider extends ChangeNotifier {
         _kataGo.stop();
       }
     }
+    notifyListeners();
+  }
+
+  /// Toggle move numbers on stones
+  void setShowMoveNumbers(bool show) {
+    _showMoveNumbers = show;
     notifyListeners();
   }
 
@@ -503,6 +513,9 @@ class GameProvider extends ChangeNotifier {
 
   /// Clear the board
   void clear() {
+    if (_isAnalyzing) {
+      cancelAnalysis();
+    }
     _board.clear();
     _lastAnalysis = null;
     _lastAnalysisSource = AnalysisSource.none;

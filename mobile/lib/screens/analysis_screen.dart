@@ -84,6 +84,7 @@ class AnalysisScreen extends StatelessWidget {
                   return GoBoardWidget(
                     board: game.board,
                     suggestions: game.lastAnalysis?.topMoves,
+                    showMoveNumbers: game.showMoveNumbers,
                     onTap: game.isAnalyzing
                         ? null
                         : (point) => game.placeStone(point),
@@ -93,8 +94,13 @@ class AnalysisScreen extends StatelessWidget {
             ),
           ),
 
-          // Analysis panel
-          const _AnalysisPanel(),
+          // Analysis panel (Fixed height to prevent board resizing)
+          SizedBox(
+            height: 240,
+            child: SingleChildScrollView(
+              child: const _AnalysisPanel(),
+            ),
+          ),
 
           // Controls
           const _ControlsPanel(),
@@ -104,9 +110,16 @@ class AnalysisScreen extends StatelessWidget {
   }
 
   void _showSettings(BuildContext context) {
+    // Capture the provider from the current context
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+
     showModalBottomSheet(
       context: context,
-      builder: (context) => const _SettingsSheet(),
+      isScrollControlled: true,
+      builder: (context) => ChangeNotifierProvider.value(
+        value: gameProvider,
+        child: const _SettingsSheet(),
+      ),
     );
   }
 }
@@ -236,11 +249,30 @@ class _AnalysisPanel extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                ...analysis.topMoves.asMap().entries.map((entry) {
-                  final i = entry.key;
-                  final move = entry.value;
-                  return _MoveRow(rank: i + 1, move: move);
-                }),
+                ...() {
+                  // Deduplicate moves with similar winrate/lead for the list
+                  final uniqueMoves = <MoveCandidate>[];
+                  final seenMetrics = <String>{};
+
+                  for (final move in analysis.topMoves) {
+                    // Create a signature based on winrate (1 decimal) and lead (1 decimal)
+                    final signature = '${move.winratePercent}_${move.scoreLeadFormatted}';
+                    if (!seenMetrics.contains(signature)) {
+                      seenMetrics.add(signature);
+                      uniqueMoves.add(move);
+                    }
+                  }
+
+                  // Only show top 3 tiers
+                  final topTiers = uniqueMoves.take(3).toList();
+
+                  return topTiers.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final move = entry.value;
+                    // Use the tier index for dense ranking (1, 2, 3)
+                    return _MoveRow(rank: i + 1, move: move);
+                  });
+                }(),
               ],
             ),
           ),
@@ -480,7 +512,7 @@ class _SettingsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<GameProvider>(
       builder: (context, game, _) {
-        return Container(
+        return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -613,6 +645,16 @@ class _SettingsSheet extends StatelessWidget {
                   Icons.memory,
                   color: game.localEngineRunning ? Colors.green : Colors.grey,
                 ),
+              ),
+              const Divider(),
+
+              // Visual Settings
+              SwitchListTile(
+                title: const Text('Show Move Numbers'),
+                subtitle: const Text('Display sequence numbers on stones'),
+                value: game.showMoveNumbers,
+                onChanged: (value) => game.setShowMoveNumbers(value),
+                secondary: const Icon(Icons.numbers),
               ),
               const Divider(),
 
