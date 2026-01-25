@@ -31,9 +31,45 @@ The UI shows the source of each analysis:
 
 ## Prerequisites
 
-1. **Flutter SDK** (3.5.0+): [Installation Guide](https://flutter.dev/docs/get-started/install)
-2. **Android SDK** (for Android builds)
-3. **Java 11+** (for Android builds)
+1. **Flutter SDK** (3.38+): [Installation Guide](https://flutter.dev/docs/get-started/install)
+2. **Xcode** (for iOS/macOS builds)
+3. **Android SDK** (for Android builds) - see setup below
+4. **Java 17** (for Android builds with Gradle 8.9+)
+
+### Android SDK Setup (macOS with Homebrew)
+
+Flutter 3.38 requires Android SDK 36, Build Tools 36.0.0, NDK 28.2, and Java 17:
+
+```bash
+# 1. Install Java 17
+brew install openjdk@17
+
+# 2. Install Android command line tools
+brew install --cask android-commandlinetools
+
+# 3. Configure Flutter to use the SDK
+flutter config --android-sdk /opt/homebrew/share/android-commandlinetools
+
+# 4. Set environment and install SDK components
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+export PATH="$JAVA_HOME/bin:$PATH"
+export ANDROID_SDK_ROOT=/opt/homebrew/share/android-commandlinetools
+
+# Accept licenses
+yes | sdkmanager --licenses
+
+# Install required components
+sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358"
+
+# 5. Verify setup
+flutter doctor -v
+```
+
+**Important**: Always set `JAVA_HOME` before running Android builds:
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+export PATH="$JAVA_HOME/bin:$PATH"
+```
 
 ## Configuration
 
@@ -244,6 +280,38 @@ Endpoints used:
 flutter clean
 flutter pub get
 flutter build apk --release
+```
+
+### Android: "JAVA_HOME not set" or wrong Java version
+```bash
+# Set Java 17 (required for Gradle 8.9)
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+export PATH="$JAVA_HOME/bin:$PATH"
+
+# Verify
+java -version  # Should show 17.x
+```
+
+### Android: "SDK not found" or wrong SDK path
+```bash
+# Reconfigure Flutter SDK path
+flutter config --android-sdk /opt/homebrew/share/android-commandlinetools
+
+# Verify
+flutter doctor -v | grep "Android SDK"
+```
+
+### Android: "NDK not found" or license issues
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+export PATH="$JAVA_HOME/bin:$PATH"
+export ANDROID_SDK_ROOT=/opt/homebrew/share/android-commandlinetools
+
+# Accept all licenses
+yes | sdkmanager --licenses
+
+# Install NDK
+sdkmanager "ndk;28.2.13676358"
 ```
 
 ### Opening book not loading

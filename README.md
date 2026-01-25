@@ -306,7 +306,34 @@ cd mobile
 | Web | ✅ 已建置 | 36 MB |
 | macOS | ✅ 已建置 | 46.7 MB |
 | iOS | ✅ 已建置 | 21.8 MB |
-| Android | ⚠️ 需 Java | - |
+| Android | ✅ 已建置 | 158 MB (debug) |
+
+### Android 建置環境 (macOS)
+
+```bash
+# 1. 安裝 Java 17
+brew install openjdk@17
+
+# 2. 安裝 Android SDK
+brew install --cask android-commandlinetools
+
+# 3. 設定 Flutter Android SDK 路徑
+flutter config --android-sdk /opt/homebrew/share/android-commandlinetools
+
+# 4. 安裝必要的 SDK 元件
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+export PATH="$JAVA_HOME/bin:$PATH"
+export ANDROID_SDK_ROOT=/opt/homebrew/share/android-commandlinetools
+
+yes | sdkmanager --licenses
+sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358"
+
+# 5. 建置 APK
+cd mobile
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+export PATH="$JAVA_HOME/bin:$PATH"
+flutter build apk --debug
+```
 
 ## License
 
