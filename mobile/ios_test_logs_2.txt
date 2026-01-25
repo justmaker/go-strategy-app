@@ -1,0 +1,42 @@
+Launching lib/main.dart on iPhone 17 Pro in debug mode...
+Running Xcode build...                                          
+Xcode build done.                                           10.1s
+Target native_assets required define SdkRoot but it was not provided
+Syncing files to device iPhone 17 Pro...                           133ms
+
+Flutter run key commands.
+r Hot reload. 🔥🔥🔥
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on iPhone 17 Pro is available at: http://127.0.0.1:50069/_ZIsEiAsFIc=/
+The Flutter DevTools debugger and profiler on iPhone 17 Pro is available at: http://127.0.0.1:50069/_ZIsEiAsFIc=/devtools/?uri=ws://127.0.0.1:50069/_ZIsEiAsFIc=/ws
+flutter: Opening book loaded: 7769 entries
+flutter: Breakdown: {9: 2945, 13: 3004, 19: 1820}
+
+══╡ EXCEPTION CAUGHT BY SERVICES LIBRARY ╞══════════════════════════════════════════════════════════
+The following MissingPluginException was thrown while activating platform stream on channel
+com.gostratefy.go_strategy_app/katago_events:
+MissingPluginException(No implementation found for method listen on channel
+com.gostratefy.go_strategy_app/katago_events)
+
+When the exception was thrown, this was the stack:
+#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:365:7)
+<asynchronous suspension>
+#1      EventChannel.receiveBroadcastStream.<anonymous closure> (package:flutter/src/services/platform_channel.dart:712:11)
+<asynchronous suspension>
+════════════════════════════════════════════════════════════════════════════════════════════════════
+
+flutter: Error starting KataGo: MissingPluginException(No implementation found for method startEngine on channel com.gostratefy.go_strategy_app/katago)
+flutter: Mobile KataGo failed
+flutter: [OpeningBook] HIT: 19:7.5:
+flutter: [OpeningBook] HIT: 13:7.5:
+flutter: [OpeningBook] HIT: 9:7.5:
+flutter: [OpeningBook] HIT: 9:7.5:B[E5]
+flutter: [OpeningBook] MISS: 9:7.5:B[E5];W[E7] (Entries: 7768)
+flutter: [OpeningBook] MISS: 9:7.5:B[E5];W[E7];B[G6] (Entries: 7768)
+flutter: [OpeningBook] MISS: 9:7.5:B[E5];W[E7];B[G6];W[F3] (Entries: 7768)
+flutter: [OpeningBook] HIT: 9:7.5:

@@ -193,7 +193,15 @@ class _BoardPainter extends CustomPainter {
       height: 1.0,
     );
 
-    final halfPadding = padding / 2;
+    // Calculate grid boundaries based on width (since grid is width-based)
+    // The grid is always square based on width logic
+    final gridBottomY = padding + (board.size - 1) * cellSize;
+    
+    // Center labels in the padding area relative to grid
+    // Top Y center: padding / 2
+    // Bottom Y center: gridBottomY + padding / 2
+    final topYCenter = padding / 2;
+    final bottomYCenter = gridBottomY + padding / 2;
 
     for (int i = 0; i < board.size; i++) {
       // Column labels (A-T)
@@ -207,11 +215,11 @@ class _BoardPainter extends CustomPainter {
       // Horizontal center for column labels is fixed by the grid line
       final colX = padding + i * cellSize - colPainter.width / 2;
       
-      // Top labels: Center vertically in top padding
-      colPainter.paint(canvas, Offset(colX, halfPadding - colPainter.height / 2));
+      // Top labels
+      colPainter.paint(canvas, Offset(colX, topYCenter - colPainter.height / 2));
       
-      // Bottom labels: Center vertically in bottom padding
-      colPainter.paint(canvas, Offset(colX, size.height - halfPadding - colPainter.height / 2));
+      // Bottom labels
+      colPainter.paint(canvas, Offset(colX, bottomYCenter - colPainter.height / 2));
 
       // Row labels (1-19)
       final rowLabel = '${board.size - i}';
@@ -223,6 +231,7 @@ class _BoardPainter extends CustomPainter {
 
       // Vertical center for row labels is fixed by the grid line
       final rowY = padding + i * cellSize - rowPainter.height / 2;
+      final halfPadding = padding / 2;
       
       // Left labels: Center horizontally in left padding
       rowPainter.paint(canvas, Offset(halfPadding - rowPainter.width / 2, rowY));
