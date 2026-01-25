@@ -1,87 +1,83 @@
-# Go Strategy App - UI Specification
+# Go Strategy App - UI 設計規範
 
-> **Goal**: Ensure a consistent, high-quality user experience across Mobile (Flutter) and Web (Streamlit/React) platforms.
+> **目標**: 確保在移動端 (Flutter) 和網頁端 (Streamlit/React) 平台上提供一致且高品質的使用者體驗。
 
-## 1. Visual Design Standards
+## 1. 視覺設計標準
 
-### 1.1 Suggestion Ranking & Coloring
-AI suggestions are grouped into **3 Tiers** based on Winrate and Score Lead. This "Dense Ranking" logic (1, 2, 3) must be consistent visually.
+### 1.1 建議棋步分級與配色
+AI 建議棋步將根據勝率 (Winrate) 和領先目數 (Score Lead) 分為 **3 個等級 (Tiers)**。
+我們採用 **密集排名 (Dense Ranking)** 邏輯 (1, 2, 3)，即相同品質的棋步共用同一個排名。
 
-| Rank | Tier Name | Color Logic | Hex Code (Ref) |
-|------|-----------|-------------|----------------|
-| **1** | **Best** | Primary Action | `Colors.blue` / `#2196F3` |
-| **2** | **Good** | Safe/Solid | `Colors.green` / `#4CAF50` |
-| **3** | **OK** | Warning/Alternative | `Colors.orange` / `#FF9800` |
+| 排名 (Rank) | 等級名稱 | 顏色邏輯 | 色碼參考 (Hex) |
+|---|---|---|---|
+| **1** | **最佳 (Best)** | 主要建議 | `Colors.blue` / `#2196F3` |
+| **2** | **好手 (Good)** | 安全/次佳 | `Colors.green` / `#4CAF50` |
+| **3** | **普通 (OK)** | 警告/備選 | `Colors.orange` / `#FF9800` |
 
-**Visual Reference:**
-<p align="center">
-  <img src="images/ui_board_ranks.png" width="300" alt="Board Ranking Example">
-  <br>
-  <em>Moves are clearly numbered 1, 2, 3 with corresponding colors. Unsuitable moves are hidden.</em>
-</p>
+*注意：僅顯示前 3 個等級的棋步 (Top 3 Tiers)。若有第 4 級以後的建議，應予以隱藏。*
 
-### 1.2 Board Aesthetics
-- **Background**: Wooden Texture or CSS Color `#DEB887` (Burlywood).
-- **Stones**: 
-  - **Black**: `#000000` with slight radial gradient (grey highlight).
-  - **White**: `#FFFFFF` with grey border stroke `1px`.
-- **Shadows**: Soft drop shadow (offset 2px, blurred) under stones for depth.
-- **Move Numbers**: Auto-contrasting numbers (White on Black, Black on White) centered on stones. Default to **OFF**, toggleable standard.
+*(待補正確截圖: 顯示 1, 2, 3 級別的棋盤畫面)*
 
----
-
-## 2. Analysis Interface
-
-### 2.1 Sidebar Information
-The analysis panel (or Sidebar on desktop) must display the top suggestions synchronized with the board.
-
-**Requirements:**
-- **List Items**: Must show Rank (Circle Icon), Move Coordinate (e.g., "Q16"), Winrate %, and Score Lead.
-- **Consistency**: The Rank Number in the list **must match** the Rank Number on the board (Dense Rank 1-2-3).
-- **Actions**: Clicking a list item should highlight or preview the move on the board.
-
-**Visual Reference:**
-<p align="center">
-  <img src="images/ui_sidebar_stats.png" width="300" alt="Sidebar Analysis Stats">
-  <br>
-  <em>Top moves list showing Winrate, Lead, and Visit counts.</em>
-</p>
-
-### 2.2 History Record (Kifu)
-- A dedicated tab/section for "Move History".
-- Format: `Move N: [Color] [Coordinate]` (e.g., "Move 52: White D10").
-- Navigation: Tapping a history item should jump the board state to that move (Undo/Redo logic).
+### 1.2 棋盤美學
+- **背景**: 木紋材質或 CSS 顏色 `#DEB887` (Burlywood)。
+- **棋子**:
+  - **黑棋**: `#000000`，帶有微幅放射狀漸層 (灰色高光)。
+  - **白棋**: `#FFFFFF`，帶有灰色邊框線條 `1px` 以增加對比。
+- **陰影**: 棋子下方需有柔和的落影 (offset 2px, blurred) 以增加立體感。
+- **手數顯示**:
+  - 自動對比色 (黑底白字，白底黑字)。
+  - 字體為粗體 Sans-serif。
+  - 預設為 **關閉**，可透過設定開啟。
 
 ---
 
-## 3. Interaction Design
+## 2. 分析介面 (Sidebar/Panel)
 
-### 3.1 Input Handling
-- **Tap**: Place stone (Ghost stone on hover for Desktop).
-- **Invalid Moves**:
-  - **Ko**: Shake animation or Toast message "Ko rule violation".
-  - **Suicide**: Toast message "Suicide is forbidden".
-- **Turn structure**: Black -> White -> Black... (Handicap aware).
+### 2.1 側邊欄資訊
+桌面端顯示於側邊，移動端顯示於下方面板。必須與棋盤上的建議同步。
 
-### 3.2 Analysis States
-| State | Visual Indicator | Message |
-|-------|------------------|---------|
-| **Idle** | None | "Tap to analyze" |
-| **Loading** | Spinner / Progress Bar | "Analyzing... (N/M visits)" |
-| **Complete** | Results List | Top moves displayed |
-| **Error** | Red Badge / Banner | Error description text |
+**需求:**
+- **列表項目**: 需顯示排名 (圓形圖示)、座標 (如 "Q16")、勝率 %、以及領先目數。
+- **一致性**: 列表中的排名數字 **必須** 與棋盤上的排名數字 (1-2-3) 完全一致。
+- **互動**: 點擊列表項目應在棋盤上預覽該棋步。
+
+*(待補正確截圖: 僅顯示 Top 3 的列表)*
+
+### 2.2 歷史紀錄 (Kifu)
+- 獨立的 "歷史紀錄" (History) 分頁。
+- 格式: `Move N: [顏色] [座標]` (例如: "Move 52: White D10")。
+- 互動: 點擊紀錄可跳轉至該手數的棋盤狀態。
 
 ---
 
-## 4. Platform Specifics Checklist
+## 3. 互動設計
 
-- [x] **Mobile (Flutter)**: 
-  - Bottom-sheet settings.
-  - Tabbed Analysis Panel (Analysis / History).
-  - Touch-optimized sizing (min 44px tap targets).
-- [ ] **Web (Streamlit/React)**:
-  - Sidebar layout.
-  - Keyboard shortcuts (Left/Right arrows for history).
-  - Hover effects on intersections.
+### 3.1 輸入處理
+- **點擊**: 落子 (桌面端支援滑鼠懸停 Ghost stone)。
+- **無效棋步**:
+  - **打劫 (Ko)**: 違反打劫規則時，顯示提示訊息或震動回饋 "打劫規則限制 (Ko rule violation)"。
+  - **自殺手**: 顯示提示 "禁止自殺 (Suicide is forbidden)"。
+- **輪次**: 黑 -> 白 -> 黑 (需支援讓子局邏輯)。
 
-*This specification is a living document. Update screenshots when UI components are polished.*
+### 3.2 分析狀態
+| 狀態 | 視覺指標 | 訊息文字 |
+|---|---|---|
+| **閒置** | 無 | "點擊棋盤進行分析" |
+| **載入中** | 旋轉圈 / 進度條 | "正在分析... (N/M visits)" |
+| **完成** | 結果列表 | 顯示 Top 3 建議棋步 |
+| **錯誤** | 紅色標籤 / 橫幅 | 錯誤描述文字 |
+
+---
+
+## 4. 跨平台檢查清單
+
+- [x] **移動端 (Flutter)**:
+  - 底部設定選單 (Bottom Sheet)。
+  - 分頁式分析面板 (分析 / 紀錄)。
+  - 觸控優化尺寸 (點擊目標最小 44px)。
+- [ ] **網頁端 (Streamlit/React)**:
+  - 側邊欄佈局。
+  - 鍵盤快速鍵 (左右鍵切換手數)。
+  - 交叉點懸停效果 (Hover effects)。
+
+*本規範文件將持續更新。當 UI 元件修改完成後，請更新相關截圖。*
