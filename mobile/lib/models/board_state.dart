@@ -71,8 +71,13 @@ class BoardPoint {
 class GameMove {
   final StoneColor color;
   final BoardPoint point;
+  final List<BoardPoint> captives;
+  final BoardPoint? previousKoPoint;
 
-  const GameMove(this.color, this.point);
+  const GameMove(this.color, this.point, {
+    this.captives = const [],
+    this.previousKoPoint,
+  });
 
   /// Convert to GTP format (e.g., "B Q16")
   String toGtp(int boardSize) {
@@ -111,6 +116,7 @@ class BoardState {
   final int size;
   final List<List<StoneColor>> _stones;
   final List<GameMove> _moves;
+  BoardPoint? _koPoint; // Track illegal Ko point
   double komi;
   int handicap;
 
@@ -167,15 +173,69 @@ class BoardState {
   /// Get number of moves played
   int get moveCount => _moves.length;
 
-  /// Place a stone (without capture logic for now)
+  /// Place a stone with standard Go rules (capture and suicide detection)
   bool placeStone(BoardPoint point) {
     if (!isEmpty(point.x, point.y)) {
       return false;
     }
+    
+    // Check for Ko violation
+    if (point == _koPoint) {
+      return false;
+    }
 
     final color = nextPlayer;
+    
+    // Temporarily place stone
     _stones[point.y][point.x] = color;
-    _moves.add(GameMove(color, point));
+    
+    // Check for captures
+    final captives = <BoardPoint>[];
+    final opponent = color == StoneColor.black ? StoneColor.white : StoneColor.black;
+    
+    for (final neighbor in _getNeighbors(point)) {
+      if (getStoneAt(neighbor) == opponent) {
+        final group = _getGroup(neighbor);
+        if (!_hasLiberties(group)) {
+          captives.addAll(group);
+        }
+      }
+    }
+    
+    // Update Ko point (Simple Ko: capture 1, self-group size 1, self-group liberties 1)
+    BoardPoint? newKoPoint;
+    
+    if (captives.isNotEmpty) {
+      // Remove captured stones
+      for (final p in captives) {
+        _stones[p.y][p.x] = StoneColor.empty;
+      }
+      
+      // Calculate Ko
+      if (captives.length == 1) {
+        final selfGroup = _getGroup(point);
+        // If we captured 1 and are left with 1 liberty and size 1 => Ko
+        if (selfGroup.length == 1 && _countLiberties(selfGroup) == 1) {
+          newKoPoint = captives.first;
+        }
+      }
+    } else {
+      // Check for suicide
+      final group = _getGroup(point);
+      if (!_hasLiberties(group)) {
+        // Forbidden suicide: Revert placement
+        _stones[point.y][point.x] = StoneColor.empty;
+        return false;
+      }
+    }
+    
+    _moves.add(GameMove(
+      color, 
+      point, 
+      captives: captives, 
+      previousKoPoint: _koPoint
+    ));
+    _koPoint = newKoPoint;
     return true;
   }
 
@@ -185,6 +245,16 @@ class BoardState {
 
     final lastMove = _moves.removeLast();
     _stones[lastMove.point.y][lastMove.point.x] = StoneColor.empty;
+    
+    // Restore captives
+    final opponent = lastMove.color == StoneColor.black ? StoneColor.white : StoneColor.black;
+    for (final p in lastMove.captives) {
+      _stones[p.y][p.x] = opponent;
+    }
+    
+    // Restore Ko state
+    _koPoint = lastMove.previousKoPoint;
+    
     return true;
   }
 
@@ -205,6 +275,7 @@ class BoardState {
       }
     }
     newBoard._moves.addAll(_moves);
+    newBoard._koPoint = _koPoint;
     return newBoard;
   }
 
@@ -251,5 +322,57 @@ class BoardState {
   /// Get star points in display coordinates (y=0 at top, for rendering)
   List<BoardPoint> get starPointsForDisplay {
     return starPoints.map((p) => p.toDisplayCoords(size)).toList();
+  }
+
+  // --- Helper Methods ---
+
+  List<BoardPoint> _getNeighbors(BoardPoint p) {
+    final points = <BoardPoint>[];
+    if (p.x > 0) points.add(BoardPoint(p.x - 1, p.y));
+    if (p.x < size - 1) points.add(BoardPoint(p.x + 1, p.y));
+    if (p.y > 0) points.add(BoardPoint(p.x, p.y - 1));
+    if (p.y < size - 1) points.add(BoardPoint(p.x, p.y + 1));
+    return points;
+  }
+
+  Set<BoardPoint> _getGroup(BoardPoint start) {
+    final color = getStoneAt(start);
+    final group = <BoardPoint>{};
+    final queue = <BoardPoint>[start];
+    group.add(start);
+
+    while (queue.isNotEmpty) {
+      final current = queue.removeAt(0);
+      for (final neighbor in _getNeighbors(current)) {
+        if (getStoneAt(neighbor) == color && !group.contains(neighbor)) {
+          group.add(neighbor);
+          queue.add(neighbor);
+        }
+      }
+    }
+    return group;
+  }
+
+  bool _hasLiberties(Set<BoardPoint> group) {
+    for (final stone in group) {
+      for (final neighbor in _getNeighbors(stone)) {
+        if (getStoneAt(neighbor) == StoneColor.empty) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  int _countLiberties(Set<BoardPoint> group) {
+    final liberties = <BoardPoint>{};
+    for (final stone in group) {
+      for (final neighbor in _getNeighbors(stone)) {
+        if (getStoneAt(neighbor) == StoneColor.empty) {
+          liberties.add(neighbor);
+        }
+      }
+    }
+    return liberties.length;
   }
 }

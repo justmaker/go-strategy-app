@@ -375,7 +375,9 @@ class _BoardPainter extends CustomPainter {
       // Since we only draw if the board has a stone, mapping the *last* move at a coordinate is correct.
       for (int i = 0; i < board.movesGtp.length; i++) {
         final moveStr = board.movesGtp[i];
-        final point = BoardPoint.fromGtp(moveStr, board.size);
+        final gameMove = GameMove.fromGtp(moveStr, board.size);
+        final point = gameMove?.point;
+        
         if (point != null) {
           final displayPoint = point.toDisplayCoords(board.size);
           final index = displayPoint.y * board.size + displayPoint.x;

@@ -97,9 +97,7 @@ class AnalysisScreen extends StatelessWidget {
           // Analysis panel (Fixed height to prevent board resizing)
           SizedBox(
             height: 240,
-            child: SingleChildScrollView(
-              child: const _AnalysisPanel(),
-            ),
+            child: const _AnalysisPanel(),
           ),
 
           // Controls
@@ -124,8 +122,127 @@ class AnalysisScreen extends StatelessWidget {
   }
 }
 
-class _AnalysisPanel extends StatelessWidget {
+class _AnalysisPanel extends StatefulWidget {
   const _AnalysisPanel();
+
+  @override
+  State<_AnalysisPanel> createState() => _AnalysisPanelState();
+}
+
+class _AnalysisPanelState extends State<_AnalysisPanel>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 36,
+          child: TabBar(
+            controller: _tabController,
+            tabs: const [Tab(text: 'Analysis'), Tab(text: 'History Record')],
+            labelColor: Theme.of(context).primaryColor,
+            indicatorColor: Theme.of(context).primaryColor,
+            unselectedLabelColor: Colors.grey,
+            labelStyle:
+                const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: const [
+              SingleChildScrollView(child: _AnalysisView()),
+              _HistoryView(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HistoryView extends StatelessWidget {
+  const _HistoryView();
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<GameProvider>(
+      builder: (context, game, _) {
+        final moves = game.board.movesGtp;
+        if (moves.isEmpty) {
+          return const Center(
+            child: Text('No moves played yet',
+                style: TextStyle(color: Colors.grey)),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: moves.length,
+          itemBuilder: (context, index) {
+            final moveStr = moves[index];
+            final parts = moveStr.split(' ');
+            final colorCode = parts[0];
+            final coord = parts.length > 1 ? parts[1] : '';
+            final isBlack = colorCode == 'B';
+
+            return Container(
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+              ),
+              child: ListTile(
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                leading: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isBlack ? Colors.black : Colors.white,
+                    border: isBlack ? null : Border.all(color: Colors.black),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${index + 1}',
+                      style: TextStyle(
+                        color: isBlack ? Colors.white : Colors.black,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                title: Text(
+                  '${isBlack ? "Black" : "White"} placed at $coord',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _AnalysisView extends StatelessWidget {
+  const _AnalysisView();
 
   @override
   Widget build(BuildContext context) {
