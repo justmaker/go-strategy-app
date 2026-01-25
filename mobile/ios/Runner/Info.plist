@@ -61,5 +61,10 @@
 	<!-- Google Sign-In Client ID -->
 	<key>GIDClientID</key>
 	<string>YOUR_CLIENT_ID.apps.googleusercontent.com</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

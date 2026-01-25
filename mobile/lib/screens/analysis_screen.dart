@@ -18,6 +18,28 @@ class AnalysisScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Go Strategy'),
         actions: [
+          // Board size selector
+          Consumer<GameProvider>(
+            builder: (context, game, _) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment(value: 9, label: Text('9')),
+                  ButtonSegment(value: 13, label: Text('13')),
+                  ButtonSegment(value: 19, label: Text('19')),
+                ],
+                selected: {game.board.size},
+                onSelectionChanged: (sizes) {
+                  game.setBoardSize(sizes.first);
+                },
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  padding: MaterialStateProperty.all(EdgeInsets.zero),
+                ),
+                showSelectedIcon: false,
+              ),
+            ),
+          ),
           // Connection status indicator
           Consumer<GameProvider>(
             builder: (context, game, _) {
@@ -190,27 +212,37 @@ class _AnalysisPanel extends StatelessWidget {
 
         return Container(
           padding: const EdgeInsets.all(12),
-          color: Colors.grey.shade100,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    'Top Moves',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const Spacer(),
-                  _SourceChip(source: game.lastAnalysisSource),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ...analysis.topMoves.asMap().entries.map((entry) {
-                final i = entry.key;
-                final move = entry.value;
-                return _MoveRow(rank: i + 1, move: move);
-              }),
-            ],
+          decoration: BoxDecoration(
+            color: Colors.grey.shade900,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey.shade800),
+          ),
+          child: DefaultTextStyle(
+            style: const TextStyle(color: Colors.white),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Top Moves',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const Spacer(),
+                    _SourceChip(source: game.lastAnalysisSource),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...analysis.topMoves.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final move = entry.value;
+                  return _MoveRow(rank: i + 1, move: move);
+                }),
+              ],
+            ),
           ),
         );
       },
@@ -233,22 +265,22 @@ class _SourceChip extends StatelessWidget {
     switch (source) {
       case AnalysisSource.openingBook:
         label = 'Book';
-        backgroundColor = Colors.green.shade100;
+        backgroundColor = Colors.green.shade900;
         icon = Icons.menu_book;
         break;
       case AnalysisSource.localCache:
         label = 'Cache';
-        backgroundColor = Colors.blue.shade100;
+        backgroundColor = Colors.blue.shade900;
         icon = Icons.save;
         break;
       case AnalysisSource.localEngine:
         label = 'Local';
-        backgroundColor = Colors.purple.shade100;
+        backgroundColor = Colors.purple.shade900;
         icon = Icons.memory;
         break;
       case AnalysisSource.api:
         label = 'Live';
-        backgroundColor = Colors.orange.shade100;
+        backgroundColor = Colors.orange.shade900;
         icon = Icons.cloud;
         break;
       case AnalysisSource.none:
@@ -256,12 +288,14 @@ class _SourceChip extends StatelessWidget {
     }
 
     return Chip(
-      avatar: Icon(icon, size: 14),
+      avatar: Icon(icon, size: 14, color: Colors.white),
       label: Text(label),
       backgroundColor: backgroundColor,
       padding: EdgeInsets.zero,
-      labelStyle: const TextStyle(fontSize: 10),
+      labelStyle: const TextStyle(fontSize: 10, color: Colors.white),
       visualDensity: VisualDensity.compact,
+      side: BorderSide.none,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
     );
   }
 }
@@ -306,15 +340,19 @@ class _MoveRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Text(move.move, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text(move.move,
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold, color: Colors.white)),
           const SizedBox(width: 16),
-          Text('Win: ${move.winratePercent}'),
+          Text('Win: ${move.winratePercent}',
+              style: const TextStyle(color: Colors.white)),
           const SizedBox(width: 16),
-          Text('Lead: ${move.scoreLeadFormatted}'),
+          Text('Lead: ${move.scoreLeadFormatted}',
+              style: const TextStyle(color: Colors.white)),
           const Spacer(),
           Text(
             '${move.visits}v',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+            style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
           ),
         ],
       ),
@@ -345,7 +383,7 @@ class _ControlsPanel extends StatelessWidget {
                 label: const Text('Clear'),
               ),
               ElevatedButton.icon(
-                onPressed: game.isAnalyzing || game.board.moveCount == 0
+                onPressed: game.isAnalyzing
                     ? null
                     : () => game.analyze(forceRefresh: true),
                 icon: const Icon(Icons.refresh),

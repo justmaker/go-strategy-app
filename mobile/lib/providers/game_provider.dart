@@ -4,9 +4,12 @@
 library;
 
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 
@@ -108,7 +111,13 @@ class GameProvider extends ChangeNotifier {
     checkConnection();
 
     // Try to start local engine (non-blocking)
-    _initLocalEngine();
+    await _initLocalEngine();
+
+    // Trigger initial analysis (for empty board)
+    // Use validation to prevent race conditions
+    if (_lastAnalysis == null) {
+      analyze();
+    }
   }
 
   /// Initialize local KataGo engine
@@ -118,7 +127,27 @@ class GameProvider extends ChangeNotifier {
     try {
       bool success;
       if (_isDesktop) {
-        success = await _kataGoDesktop.start();
+        // Extract assets for Desktop KataGo
+        final appDir = await getApplicationSupportDirectory();
+        final katagoDir = Directory(path.join(appDir.path, 'katago'));
+        if (!await katagoDir.exists()) {
+          await katagoDir.create(recursive: true);
+        }
+
+        final configPath = await _extractAsset(
+          'assets/katago/analysis.cfg',
+          path.join(katagoDir.path, 'analysis.cfg'),
+        );
+
+        final modelPath = await _extractAsset(
+          'assets/katago/model.bin.gz',
+          path.join(katagoDir.path, 'model.bin.gz'),
+        );
+
+        success = await _kataGoDesktop.start(
+          configPath: configPath,
+          modelPath: modelPath,
+        );
         debugPrint(
           success ? 'Desktop KataGo started' : 'Desktop KataGo failed',
         );
@@ -132,6 +161,23 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
+  /// Helper to extract bundled asset to filesystem
+  Future<String> _extractAsset(String assetPath, String targetPath) async {
+    final file = File(targetPath);
+    if (!await file.exists()) {
+      try {
+        final data = await rootBundle.load(assetPath);
+        await file.writeAsBytes(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        );
+      } catch (e) {
+        debugPrint('Error extracting asset $assetPath: $e');
+        // Return target path anyway, maybe it exists or service handles missing file
+      }
+    }
+    return targetPath;
+  }
+
   /// Load bundled opening book
   Future<void> _loadOpeningBook() async {
     try {
@@ -139,6 +185,7 @@ class GameProvider extends ChangeNotifier {
       _openingBookLoaded = _openingBook.isLoaded;
       if (_openingBook.isLoaded) {
         debugPrint('Opening book loaded: ${_openingBook.totalEntries} entries');
+        debugPrint('Breakdown: ${_openingBook.entriesByBoardSize}');
       } else if (_openingBook.loadError != null) {
         debugPrint('Opening book load error: ${_openingBook.loadError}');
       }
@@ -189,6 +236,9 @@ class GameProvider extends ChangeNotifier {
       _desktopAnalysisProgress = null;
       _error = null;
       notifyListeners();
+      
+      // Trigger new analysis for the new board size
+      analyze();
     }
   }
 
@@ -446,6 +496,8 @@ class GameProvider extends ChangeNotifier {
       _desktopAnalysisProgress = null;
       _error = null;
       notifyListeners();
+      
+      analyze();
     }
   }
 
@@ -458,6 +510,8 @@ class GameProvider extends ChangeNotifier {
     _desktopAnalysisProgress = null;
     _error = null;
     notifyListeners();
+    
+    analyze();
   }
 
   /// Get combined statistics
