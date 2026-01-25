@@ -84,7 +84,11 @@ class KataGoDesktopService {
   }
 
   /// Start the KataGo engine
-  Future<bool> start({String? katagoPath, String? modelPath}) async {
+  Future<bool> start({
+    required String configPath,
+    String? katagoPath,
+    String? modelPath,
+  }) async {
     if (_status == KataGoDesktopStatus.running) return true;
     _status = KataGoDesktopStatus.starting;
 
@@ -92,12 +96,14 @@ class KataGoDesktopService {
       katagoPath ??= await findKataGoPath();
       if (katagoPath == null) {
         _status = KataGoDesktopStatus.error;
+        debugPrint('KataGo executable not found');
         return false;
       }
 
-      final args = ['analysis'];
+      final args = ['analysis', '-config', configPath];
       if (modelPath != null) args.addAll(['-model', modelPath]);
 
+      debugPrint('Starting KataGo: $katagoPath ${args.join(' ')}');
       _process = await Process.start(katagoPath, args);
 
       _stdoutSubscription = _process!.stdout
@@ -192,10 +198,13 @@ class KataGoDesktopService {
 
   List<List<String>> _formatMovesForKataGo(List<String> moves) {
     final result = <List<String>>[];
-    var isBlack = true;
     for (final move in moves) {
-      result.add([isBlack ? 'B' : 'W', move.toUpperCase()]);
-      isBlack = !isBlack;
+      final parts = move.split(' ');
+      if (parts.length == 2) {
+        result.add([parts[0].toLowerCase(), parts[1].toLowerCase()]);
+      } else {
+        result.add(['b', move.toLowerCase()]);
+      }
     }
     return result;
   }
@@ -207,6 +216,7 @@ class KataGoDesktopService {
 
   void _handleStdoutLine(String line) {
     if (line.isEmpty) return;
+    debugPrint('[KataGo STDOUT] $line');
     try {
       final data = jsonDecode(line) as Map<String, dynamic>;
       final id = data['id'] as String?;
@@ -254,6 +264,7 @@ class KataGoDesktopService {
   }
 
   void _handleStderrLine(String line) {
+    debugPrint('[KataGo STDERR] $line');
     if (line.contains('Error')) _errorCallback?.call(line);
   }
 

@@ -50,17 +50,26 @@ class GoBoardWidget extends StatelessWidget {
       aspectRatio: 1.0,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final size = constraints.maxWidth;
-          return GestureDetector(
-            onTapDown:
-                onTap != null ? (details) => _handleTap(details, size) : null,
-            child: CustomPaint(
-              size: Size(size, size),
-              painter: _BoardPainter(
-                board: board,
-                suggestions: suggestions,
-                theme: theme,
-                showCoordinates: showCoordinates,
+          // Ensure we use the smaller dimension to stay square
+          final size = constraints.maxWidth < constraints.maxHeight
+              ? constraints.maxWidth
+              : constraints.maxHeight;
+
+          return SizedBox(
+            width: size,
+            height: size,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown:
+                  onTap != null ? (details) => _handleTap(details, size) : null,
+              child: CustomPaint(
+                size: Size(size, size),
+                painter: _BoardPainter(
+                  board: board,
+                  suggestions: suggestions,
+                  theme: theme,
+                  showCoordinates: showCoordinates,
+                ),
               ),
             ),
           );
@@ -70,7 +79,7 @@ class GoBoardWidget extends StatelessWidget {
   }
 
   void _handleTap(TapDownDetails details, double widgetSize) {
-    final padding = showCoordinates ? widgetSize * 0.05 : 0.0;
+    final padding = showCoordinates ? widgetSize * 0.10 : widgetSize * 0.02;
     final boardSizePixels = widgetSize - padding * 2;
     final cellSize = boardSizePixels / (board.size - 1);
 
@@ -105,18 +114,14 @@ class _BoardPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final padding = showCoordinates ? size.width * 0.05 : 0.0;
+    // Sufficient padding to prevent clipping on all platforms (especially Web)
+    final padding = showCoordinates ? size.width * 0.10 : size.width * 0.02;
     final boardSize = size.width - padding * 2;
     final cellSize = boardSize / (board.size - 1);
 
     // Draw board background
-    final boardRect = Rect.fromLTWH(
-      padding - cellSize / 2,
-      padding - cellSize / 2,
-      boardSize + cellSize,
-      boardSize + cellSize,
-    );
-    canvas.drawRect(boardRect, Paint()..color = theme.boardColor);
+    // Fill the entire canvas
+    canvas.drawRect(Offset.zero & size, Paint()..color = theme.boardColor);
 
     // Draw grid lines
     _drawGrid(canvas, padding, cellSize);
@@ -183,9 +188,12 @@ class _BoardPainter extends CustomPainter {
     const columns = 'ABCDEFGHJKLMNOPQRST';
     final textStyle = TextStyle(
       color: theme.lineColor,
-      fontSize: cellSize * 0.4,
-      fontWeight: FontWeight.w500,
+      fontSize: (cellSize * 0.5).clamp(10.0, 16.0),
+      fontWeight: FontWeight.bold,
+      height: 1.0,
     );
+
+    final halfPadding = padding / 2;
 
     for (int i = 0; i < board.size; i++) {
       // Column labels (A-T)
@@ -193,20 +201,34 @@ class _BoardPainter extends CustomPainter {
       final colPainter = TextPainter(
         text: TextSpan(text: colLabel, style: textStyle),
         textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
       )..layout();
 
+      // Horizontal center for column labels is fixed by the grid line
       final colX = padding + i * cellSize - colPainter.width / 2;
-      colPainter.paint(canvas, Offset(colX, size.height - padding * 0.8));
+      
+      // Top labels: Center vertically in top padding
+      colPainter.paint(canvas, Offset(colX, halfPadding - colPainter.height / 2));
+      
+      // Bottom labels: Center vertically in bottom padding
+      colPainter.paint(canvas, Offset(colX, size.height - halfPadding - colPainter.height / 2));
 
       // Row labels (1-19)
       final rowLabel = '${board.size - i}';
       final rowPainter = TextPainter(
         text: TextSpan(text: rowLabel, style: textStyle),
         textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
       )..layout();
 
+      // Vertical center for row labels is fixed by the grid line
       final rowY = padding + i * cellSize - rowPainter.height / 2;
-      rowPainter.paint(canvas, Offset(padding * 0.1, rowY));
+      
+      // Left labels: Center horizontally in left padding
+      rowPainter.paint(canvas, Offset(halfPadding - rowPainter.width / 2, rowY));
+      
+      // Right labels: Center horizontally in right padding
+      rowPainter.paint(canvas, Offset(size.width - halfPadding - rowPainter.width / 2, rowY));
     }
   }
 
@@ -263,8 +285,9 @@ class _BoardPainter extends CustomPainter {
           text: '${i + 1}',
           style: TextStyle(
             color: Colors.white,
-            fontSize: cellSize * 0.35,
+            fontSize: (cellSize * 0.45).clamp(10.0, 18.0),
             fontWeight: FontWeight.bold,
+            height: 1.0,
           ),
         ),
         textDirection: TextDirection.ltr,

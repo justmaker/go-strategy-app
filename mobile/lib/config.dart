@@ -34,11 +34,11 @@ class AppConfig {
   /// - Production: 'https://api.your-domain.com'
   /// - Web (same origin): '' (empty for relative URLs)
 
-  // Network IP for mobile devices
-  static const String _mobileApiUrl = 'http://10.20.90.254:8000';
+  // For iOS Simulator / Android Emulator testing on local machine
+  static const String _mobileApiUrl = 'http://127.0.0.1:8001';
 
   // For web, use localhost or configure your deployment URL
-  static const String _webApiUrl = 'http://localhost:8000';
+  static const String _webApiUrl = 'http://localhost:8001';
 
   /// Get the appropriate API base URL based on platform
   static String get apiBaseUrl => kIsWeb ? _webApiUrl : _mobileApiUrl;

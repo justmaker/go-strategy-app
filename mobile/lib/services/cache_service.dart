@@ -3,7 +3,11 @@
 library;
 
 import 'dart:convert';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart'
+    if (dart.library.html) 'package:sqflite/sqflite.dart'; // No-op for web
 import 'package:path/path.dart';
 import '../models/models.dart';
 
@@ -17,6 +21,12 @@ class CacheService {
   /// Initialize the database
   Future<void> init() async {
     if (_database != null) return;
+
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      // Initialize FFI for desktop platforms
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+    }
 
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, _dbName);

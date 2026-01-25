@@ -44,6 +44,7 @@ dependencies:
   
   # File handling
   archive: ^4.0.2
+  sqflite_common_ffi: ^2.4.0+2
 
 dev_dependencies:
   flutter_test:
@@ -58,4 +59,5 @@ flutter:
     - assets/opening_book.json
     - assets/opening_book.json.gz
     - assets/katago/model.bin.gz
+    - assets/katago/analysis.cfg
     - assets/katago/README.md

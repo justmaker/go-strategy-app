@@ -6,6 +6,7 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../models/models.dart';
 
@@ -203,10 +204,24 @@ class OpeningBookService {
   /// Returns null if not found.
   AnalysisResult? lookupByMoves(
       int boardSize, double komi, List<String> moves) {
-    if (!_isLoaded) return null;
+    if (!_isLoaded) {
+      debugPrint('[OpeningBook] Not loaded yet');
+      return null;
+    }
 
     final moveKey = buildMoveKeyFromGtp(boardSize, komi, moves);
     final entry = _moveIndex[moveKey];
+    
+    if (entry == null) {
+      debugPrint('[OpeningBook] MISS: $moveKey (Entries: ${_moveIndex.length})');
+      // Debug: print first 5 keys to see format
+      if (_moveIndex.isNotEmpty && _moveIndex.length < 5) {
+        debugPrint('Sample Keys: ${_moveIndex.keys.take(5).join(", ")}');
+      }
+    } else {
+        debugPrint('[OpeningBook] HIT: $moveKey');
+    }
+    
     return entry?.toAnalysisResult();
   }
 
