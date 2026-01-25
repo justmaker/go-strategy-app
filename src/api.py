@@ -6,7 +6,7 @@ Exposes the analysis engine via HTTP endpoints for cross-platform clients.
 Usage:
     # Start the server
     uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
-    
+
     # Or run directly
     python -m src.api
 """
@@ -19,7 +19,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .analyzer import GoAnalyzer
+import os
+
+from .analyzer import GoAnalyzer, CacheMissError
 from .board import create_board
 from .cache import AnalysisCache
 from .config import load_config
@@ -29,8 +31,10 @@ from .config import load_config
 # Pydantic Models (OpenAPI Schema)
 # ============================================================================
 
+
 class BoardSize(int, Enum):
     """Supported board sizes."""
+
     SMALL = 9
     MEDIUM = 13
     LARGE = 19
@@ -38,34 +42,42 @@ class BoardSize(int, Enum):
 
 class MoveCandidateResponse(BaseModel):
     """A candidate move with analysis statistics."""
+
     move: str = Field(..., description="GTP coordinate (e.g., 'Q16', 'D4')")
     winrate: float = Field(..., ge=0, le=1, description="Win rate as decimal (0.0-1.0)")
     score_lead: float = Field(..., description="Score lead (positive = ahead)")
     visits: int = Field(..., ge=0, description="Number of MCTS visits for this move")
-    
+
     class Config:
         json_schema_extra = {
             "example": {
                 "move": "Q16",
                 "winrate": 0.523,
                 "score_lead": 0.8,
-                "visits": 150
+                "visits": 150,
             }
         }
 
 
 class AnalysisResponse(BaseModel):
     """Complete analysis result for a board position."""
+
     board_hash: str = Field(..., description="Zobrist hash of the position")
     board_size: int = Field(..., description="Board size (9, 13, or 19)")
     komi: float = Field(..., description="Komi value")
-    moves_sequence: str = Field(..., description="Move sequence string (e.g., 'B[Q16];W[D4]')")
-    top_moves: List[MoveCandidateResponse] = Field(..., description="Top candidate moves")
+    moves_sequence: str = Field(
+        ..., description="Move sequence string (e.g., 'B[Q16];W[D4]')"
+    )
+    top_moves: List[MoveCandidateResponse] = Field(
+        ..., description="Top candidate moves"
+    )
     engine_visits: int = Field(..., description="Total visits used for analysis")
     model_name: str = Field(..., description="KataGo model name")
     from_cache: bool = Field(..., description="Whether result was from cache")
-    timestamp: Optional[str] = Field(None, description="Analysis timestamp (ISO format)")
-    
+    timestamp: Optional[str] = Field(
+        None, description="Analysis timestamp (ISO format)"
+    )
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -80,20 +92,33 @@ class AnalysisResponse(BaseModel):
                 "engine_visits": 150,
                 "model_name": "kata1-b18c384",
                 "from_cache": False,
-                "timestamp": "2024-01-21T20:00:00"
+                "timestamp": "2024-01-21T20:00:00",
             }
         }
 
 
 class AnalyzeRequest(BaseModel):
     """Request body for /analyze endpoint."""
-    board_size: int = Field(default=19, ge=9, le=19, description="Board size (9, 13, or 19)")
-    moves: List[str] = Field(default=[], description="List of moves in GTP format (e.g., ['B Q16', 'W D4'])")
-    handicap: int = Field(default=0, ge=0, le=9, description="Number of handicap stones (0-9)")
-    komi: Optional[float] = Field(default=None, description="Komi value (default: 7.5, or 0.5 for handicap)")
-    visits: Optional[int] = Field(default=None, ge=1, description="Override default visit count")
-    force_refresh: bool = Field(default=False, description="Bypass cache and force new analysis")
-    
+
+    board_size: int = Field(
+        default=19, ge=9, le=19, description="Board size (9, 13, or 19)"
+    )
+    moves: List[str] = Field(
+        default=[], description="List of moves in GTP format (e.g., ['B Q16', 'W D4'])"
+    )
+    handicap: int = Field(
+        default=0, ge=0, le=9, description="Number of handicap stones (0-9)"
+    )
+    komi: Optional[float] = Field(
+        default=None, description="Komi value (default: 7.5, or 0.5 for handicap)"
+    )
+    visits: Optional[int] = Field(
+        default=None, ge=1, description="Override default visit count"
+    )
+    force_refresh: bool = Field(
+        default=False, description="Bypass cache and force new analysis"
+    )
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -102,34 +127,37 @@ class AnalyzeRequest(BaseModel):
                 "handicap": 0,
                 "komi": 7.5,
                 "visits": 150,
-                "force_refresh": False
+                "force_refresh": False,
             }
         }
 
 
 class QueryRequest(BaseModel):
     """Request body for /query endpoint (cache lookup only)."""
-    board_size: int = Field(default=19, ge=9, le=19, description="Board size (9, 13, or 19)")
+
+    board_size: int = Field(
+        default=19, ge=9, le=19, description="Board size (9, 13, or 19)"
+    )
     moves: List[str] = Field(default=[], description="List of moves in GTP format")
-    handicap: int = Field(default=0, ge=0, le=9, description="Number of handicap stones")
+    handicap: int = Field(
+        default=0, ge=0, le=9, description="Number of handicap stones"
+    )
     komi: Optional[float] = Field(default=None, description="Komi value")
-    
+
     class Config:
         json_schema_extra = {
-            "example": {
-                "board_size": 9,
-                "moves": ["B E5"],
-                "handicap": 0,
-                "komi": 7.5
-            }
+            "example": {"board_size": 9, "moves": ["B E5"], "handicap": 0, "komi": 7.5}
         }
 
 
 class QueryResponse(BaseModel):
     """Response for /query endpoint."""
+
     found: bool = Field(..., description="Whether position was found in cache")
-    result: Optional[AnalysisResponse] = Field(None, description="Analysis result if found")
-    
+    result: Optional[AnalysisResponse] = Field(
+        None, description="Analysis result if found"
+    )
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -139,25 +167,37 @@ class QueryResponse(BaseModel):
                     "board_size": 9,
                     "komi": 7.5,
                     "moves_sequence": "B[E5]",
-                    "top_moves": [{"move": "C3", "winrate": 0.48, "score_lead": -0.2, "visits": 100}],
+                    "top_moves": [
+                        {
+                            "move": "C3",
+                            "winrate": 0.48,
+                            "score_lead": -0.2,
+                            "visits": 100,
+                        }
+                    ],
                     "engine_visits": 500,
                     "model_name": "kata1-b18c384",
                     "from_cache": True,
-                    "timestamp": "2024-01-21T19:00:00"
-                }
+                    "timestamp": "2024-01-21T19:00:00",
+                },
             }
         }
 
 
 class HealthResponse(BaseModel):
     """Health check response."""
+
     status: str = Field(..., description="Service status")
     cache_entries: int = Field(..., description="Number of cached positions")
     katago_running: bool = Field(..., description="Whether KataGo engine is running")
+    cache_only_mode: bool = Field(
+        default=False, description="Whether running in cache-only mode (no GPU)"
+    )
 
 
 class ErrorResponse(BaseModel):
     """Error response."""
+
     detail: str = Field(..., description="Error message")
 
 
@@ -165,10 +205,12 @@ class ErrorResponse(BaseModel):
 # Application State
 # ============================================================================
 
+
 class AppState:
     """Application state container."""
+
     analyzer: Optional[GoAnalyzer] = None
-    config = None
+    config: Optional["AppConfig"] = None  # type: ignore
 
 
 state = AppState()
@@ -178,18 +220,28 @@ state = AppState()
 # Lifespan Management
 # ============================================================================
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle (startup/shutdown)."""
     # Startup
     print("Starting Go Strategy API...")
     state.config = load_config()
-    state.analyzer = GoAnalyzer(config=state.config)
-    state.analyzer.start()
-    print(f"KataGo started. Cache has {state.analyzer.cache.count()} entries.")
-    
+
+    # Check for cache-only mode (no GPU/KataGo required)
+    cache_only = os.environ.get("GO_API_CACHE_ONLY", "").lower() in ("1", "true", "yes")
+
+    if cache_only:
+        print("Running in CACHE-ONLY mode (no KataGo, no GPU required)")
+        state.analyzer = GoAnalyzer(config=state.config, cache_only=True)
+        print(f"Cache has {state.analyzer.cache.count()} entries.")
+    else:
+        state.analyzer = GoAnalyzer(config=state.config)
+        state.analyzer.start()
+        print(f"KataGo started. Cache has {state.analyzer.cache.count()} entries.")
+
     yield
-    
+
     # Shutdown
     print("Shutting down Go Strategy API...")
     if state.analyzer:
@@ -238,6 +290,7 @@ app.add_middleware(
 # Endpoints
 # ============================================================================
 
+
 @app.get(
     "/health",
     response_model=HealthResponse,
@@ -251,6 +304,7 @@ async def health_check():
         status="ok",
         cache_entries=state.analyzer.cache.count() if state.analyzer else 0,
         katago_running=state.analyzer.is_running() if state.analyzer else False,
+        cache_only_mode=state.analyzer.cache_only if state.analyzer else False,
     )
 
 
@@ -277,11 +331,11 @@ async def analyze_position(request: AnalyzeRequest):
     """Analyze a board position."""
     if not state.analyzer:
         raise HTTPException(status_code=500, detail="Analyzer not initialized")
-    
+
     # Validate board size
     if request.board_size not in (9, 13, 19):
         raise HTTPException(status_code=400, detail="Board size must be 9, 13, or 19")
-    
+
     try:
         result = state.analyzer.analyze(
             board_size=request.board_size,
@@ -291,7 +345,7 @@ async def analyze_position(request: AnalyzeRequest):
             visits=request.visits,
             force_refresh=request.force_refresh,
         )
-        
+
         return AnalysisResponse(
             board_hash=result.board_hash,
             board_size=result.board_size,
@@ -311,9 +365,13 @@ async def analyze_position(request: AnalyzeRequest):
             from_cache=result.from_cache,
             timestamp=result.timestamp,
         )
-        
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except CacheMissError as e:
+        raise HTTPException(
+            status_code=404, detail=f"Position not in cache (cache-only mode): {str(e)}"
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
@@ -334,48 +392,50 @@ async def query_cache(request: QueryRequest):
     """Query cache for a position without running analysis."""
     if not state.analyzer:
         raise HTTPException(status_code=500, detail="Analyzer not initialized")
-    
+
     try:
         # Build board state to get canonical hash
         komi = request.komi
         if komi is None:
             komi = 0.5 if request.handicap >= 2 else 7.5
-            
+
         board = create_board(
             size=request.board_size,
             handicap=request.handicap,
             komi=komi,
             moves=request.moves if request.moves else None,
         )
-        
+
         # Get canonical hash for symmetry-aware lookup
         canonical_hash, transform_used = board.compute_canonical_hash()
-        
+
         # Query cache
         cached = state.analyzer.cache.get(
             canonical_hash,
             komi=board.komi,
             required_visits=None,  # Get highest visits available
         )
-        
+
         if cached is None:
             return QueryResponse(found=False, result=None)
-        
+
         # Transform moves back if needed
         from .board import SymmetryTransform, get_inverse_transform, transform_gtp_coord
-        
+
         top_moves = cached.top_moves
         if transform_used != SymmetryTransform.IDENTITY:
             inverse = get_inverse_transform(transform_used)
             top_moves = []
             for m in cached.top_moves:
                 new_coord = transform_gtp_coord(m.move, request.board_size, inverse)
-                top_moves.append(MoveCandidateResponse(
-                    move=new_coord,
-                    winrate=m.winrate,
-                    score_lead=m.score_lead,
-                    visits=m.visits,
-                ))
+                top_moves.append(
+                    MoveCandidateResponse(
+                        move=new_coord,
+                        winrate=m.winrate,
+                        score_lead=m.score_lead,
+                        visits=m.visits,
+                    )
+                )
         else:
             top_moves = [
                 MoveCandidateResponse(
@@ -386,7 +446,7 @@ async def query_cache(request: QueryRequest):
                 )
                 for m in cached.top_moves
             ]
-        
+
         return QueryResponse(
             found=True,
             result=AnalysisResponse(
@@ -401,7 +461,7 @@ async def query_cache(request: QueryRequest):
                 timestamp=cached.timestamp,
             ),
         )
-        
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -418,7 +478,7 @@ async def get_stats():
     """Return cache statistics."""
     if not state.analyzer:
         raise HTTPException(status_code=500, detail="Analyzer not initialized")
-    
+
     return state.analyzer.get_cache_stats()
 
 
@@ -428,6 +488,7 @@ async def get_stats():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "src.api:app",
         host="0.0.0.0",
