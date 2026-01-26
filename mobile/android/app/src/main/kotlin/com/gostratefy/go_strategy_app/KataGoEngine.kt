@@ -14,17 +14,20 @@ import java.util.concurrent.atomic.AtomicInteger
  * Manages the KataGo process and communicates via GTP/Analysis protocol.
  */
 class KataGoEngine(private val context: Context) {
+    // JNI Native Methods
+    private external fun startNative(config: String, model: String): Boolean
+    private external fun writeToProcess(data: String)
+    private external fun readFromProcess(): String
+    private external fun stopNative()
+
     companion object {
+        init {
+            System.loadLibrary("katago_mobile")
+        }
         private const val TAG = "KataGoEngine"
-        private const val KATAGO_BINARY = "libkatago.so"
         private const val MODEL_FILE = "model.bin.gz"
     }
 
-    private var process: Process? = null
-    private var stdin: BufferedWriter? = null
-    private var stdout: BufferedReader? = null
-    private var stderr: BufferedReader? = null
-    
     private val isRunning = AtomicBoolean(false)
     private val queryId = AtomicInteger(0)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -34,92 +37,40 @@ class KataGoEngine(private val context: Context) {
     private var errorCallback: ((String) -> Unit)? = null
 
     /**
-     * Initialize and start the KataGo engine.
+     * Initialize and start the KataGo engine via JNI.
      */
     suspend fun start(): Boolean = withContext(Dispatchers.IO) {
-        if (isRunning.get()) {
-            Log.w(TAG, "Engine already running")
-            return@withContext true
-        }
+        if (isRunning.get()) return@withContext true
 
         try {
-            // Get paths
-            val nativeLibDir = context.applicationInfo.nativeLibraryDir
-            val katagoPath = "$nativeLibDir/$KATAGO_BINARY"
+            val modelPath = extractModel() ?: return@withContext false
+            val configPath = createConfigFile()
+
+            Log.i(TAG, "Starting Native KataGo...")
+            val success = startNative(configPath, modelPath)
             
-            // Extract model to cache dir if needed
-            val modelPath = extractModel()
-            if (modelPath == null) {
-                Log.e(TAG, "Failed to extract model")
+            if (success) {
+                isRunning.set(true)
+                startOutputReaders()
+                Log.i(TAG, "Native KataGo started")
+                return@withContext true
+            } else {
+                Log.e(TAG, "Failed to start Native KataGo")
                 return@withContext false
             }
-            
-            // Create config file
-            val configPath = createConfigFile()
-            
-            Log.i(TAG, "Starting KataGo: $katagoPath")
-            Log.i(TAG, "Model: $modelPath")
-            Log.i(TAG, "Config: $configPath")
-            
-            // Start process
-            val pb = ProcessBuilder(
-                katagoPath,
-                "analysis",
-                "-config", configPath,
-                "-model", modelPath
-            )
-            pb.directory(context.cacheDir)
-            pb.environment()["LD_LIBRARY_PATH"] = nativeLibDir
-            
-            process = pb.start()
-            stdin = process!!.outputStream.bufferedWriter()
-            stdout = process!!.inputStream.bufferedReader()
-            stderr = process!!.errorStream.bufferedReader()
-            
-            isRunning.set(true)
-            
-            // Start reading stdout and stderr
-            startOutputReaders()
-            
-            // Wait a bit for startup
-            delay(500)
-            
-            Log.i(TAG, "KataGo started successfully")
-            return@withContext true
-            
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start KataGo", e)
-            errorCallback?.invoke("Failed to start engine: ${e.message}")
+            Log.e(TAG, "Start Native Error", e)
             return@withContext false
         }
     }
 
-    /**
-     * Stop the KataGo engine.
-     */
     fun stop() {
         if (!isRunning.get()) return
-        
-        try {
-            // Send quit command
-            stdin?.write("{\"id\":\"quit\",\"action\":\"terminate\"}\n")
-            stdin?.flush()
-            
-            // Wait briefly then force kill
-            Thread.sleep(500)
-            process?.destroyForcibly()
-            
-        } catch (e: Exception) {
-            Log.w(TAG, "Error stopping engine", e)
-        } finally {
-            process = null
-            stdin = null
-            stdout = null
-            stderr = null
-            isRunning.set(false)
-            scope.cancel()
-        }
+        stopNative()
+        isRunning.set(false)
+        scope.cancel()
     }
+
 
     /**
      * Analyze a position.

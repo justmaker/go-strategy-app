@@ -1,7 +1,7 @@
 #include "core/global.h"
 
 namespace MainCmds {
-  int analysis(const std::vector<std::string>& args);
+  int analysis(const std::vector<std::string>& args, std::istream& in, std::ostream& out);
   int benchmark(const std::vector<std::string>& args);
   int contribute(const std::vector<std::string>& args);
   int evalsgf(const std::vector<std::string>& args);
@@ -58,7 +58,7 @@ namespace MainCmds {
   int searchentropyanalysis(const std::vector<std::string>& args);
 
   int sandbox();
-}
+}  // namespace MainCmds
 
 namespace Version {
   std::string getKataGoVersion();
@@ -66,4 +66,4 @@ namespace Version {
   std::string getKataGoVersionFullInfo();
   std::string getGitRevision();
   std::string getGitRevisionWithBackend();
-}
+}  // namespace Version
