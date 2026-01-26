@@ -33,8 +33,11 @@ until adb shell getprop sys.boot_completed | grep -m 1 "1"; do
   sleep 2
 done
 
-# 5. Install & Run
-echo "[5/5] Installing APK..."
+# 5. Build, Install & Run
+echo "[5/6] Building APK..."
+(cd mobile && flutter build apk --release)
+
+echo "[6/6] Installing APK..."
 APK_PATH="mobile/build/app/outputs/flutter-apk/app-release.apk"
 if [ -f "$APK_PATH" ]; then
     adb install "$APK_PATH"

@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'dart:io';
+
 /// Application configuration
 ///
 /// Change the API_BASE_URL before building the APK to point to your server.
@@ -34,14 +36,20 @@ class AppConfig {
   /// - Production: 'https://api.your-domain.com'
   /// - Web (same origin): '' (empty for relative URLs)
 
+
+
   // For iOS Simulator / Android Emulator testing on local machine
-  static const String _mobileApiUrl = 'http://127.0.0.1:8001';
+  static String get _mobileApiUrl {
+    if (kIsWeb) return _webApiUrl;
+    if (Platform.isAndroid) return 'http://10.0.2.2:8001';
+    return 'http://127.0.0.1:8001';
+  }
 
   // For web, use localhost or configure your deployment URL
   static const String _webApiUrl = 'http://localhost:8001';
 
   /// Get the appropriate API base URL based on platform
-  static String get apiBaseUrl => kIsWeb ? _webApiUrl : _mobileApiUrl;
+  static String get apiBaseUrl => _mobileApiUrl;
 
   /// Connection timeout for API requests
   static const Duration connectionTimeout = Duration(seconds: 30);
