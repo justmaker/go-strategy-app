@@ -282,22 +282,22 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 - [x] **Install Virtualization Tools**
   - [x] Install UTM: `brew install --cask utm`
   - [x] Install CrystalFetch (ISO downloader): `brew install crystal-fetch`
-- [ ] **Setup Windows VM**
-  - [ ] Use CrystalFetch to download "Windows 11" (Apple Silicon/ARM64 version)
-  - [ ] Create new VM in UTM -> Virtualize -> Windows
-  - [ ] Mount the downloaded ISO and install Windows 11
-  - [ ] Install "Spice Tools" (Guest Additions) in Windows for clipboard/resolution support
+- [ ] **Setup Windows VM (Manual Steps)**
+  - [ ] **Download ISO**: Open CrystalFetch, download "Windows 11 (Apple Silicon/ARM64)"
+  - [ ] **Create VM**: Open UTM -> Create New -> Virtualize -> Windows -> Select ISO
+  - [ ] **Important**: Check "Install drivers and SPICE tools" during setup
+  - [ ] **Install Windows**: Complete the OOBE (Out of Box Experience)
 - [ ] **Configure Windows Development Environment**
-  - [ ] Install Grid (Git for Windows)
-  - [ ] Install [Flutter SDK for Windows](https://docs.flutter.dev/get-started/install/windows)
-  - [ ] Install **Visual Studio 2022 Community**
-    - **Crucial:** Select "Desktop development with C++" workload
-  - [ ] Enable Developer Mode in Windows Settings
+  - [ ] **Run Automation Script**: Copy `scripts/windows_setup.ps1` to VM and run with PowerShell (Admin)
+    - Installs: Git, Flutter, Visual Studio 2022 (C++ Desktop)
+  - [ ] Restart VM
+  - [ ] Verify: Open Terminal -> `flutter doctor`
 - [ ] **Build Windows App**
-  - [ ] Clone repo inside Windows VM
-  - [ ] Run `flutter config --enable-windows-desktop`
-  - [ ] Run `flutter pub get`
-  - [ ] Run `flutter run -d windows`
+  - [ ] `git clone https://github.com/justmaker/go-strategy-app.git`
+  - [ ] `cd go-strategy-app/mobile`
+  - [ ] `flutter config --enable-windows-desktop`
+  - [ ] `flutter pub get`
+  - [ ] `flutter run -d windows`
 
 ---
 
