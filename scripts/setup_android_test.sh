@@ -2,6 +2,8 @@
 set -e
 
 echo "=== Android Setup & Test Script ==="
+export ANDROID_HOME="/opt/homebrew/share/android-commandlinetools"
+export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 
 # 1. Ensure System Image is Installed
 echo "[1/5] Ensuring System Image is fully installed..."
