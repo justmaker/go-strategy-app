@@ -1,0 +1,1 @@
+../../../../../../../../android/app/src/main/cpp/katago/cpp/tests/results/sampletest2-basic/0.startposes.txt

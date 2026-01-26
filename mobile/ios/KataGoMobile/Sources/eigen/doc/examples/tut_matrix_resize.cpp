@@ -1,0 +1,1 @@
+../../../../../../android/app/src/main/cpp/eigen/doc/examples/tut_matrix_resize.cpp

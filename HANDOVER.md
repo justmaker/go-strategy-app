@@ -1,34 +1,30 @@
 # Development Progress & Handover Note
-**Date:** 2026-01-25
-**Status:** iOS Simulator & Web (Layout Fixed, Core Functionality Working)
+**Date:** 2026-01-27
+**Status:** Windows Setup & Android Release Automation Complete
 
 ## 📌 Accomplished Today
-1.  **AI Analysis Integration (Localhost Fix)**
-    *   Enabled iOS Simulator to connect to local Python backend (`127.0.0.1:8001`) for KataGo analysis.
-    *   Updated `Info.plist` to allow arbitrary loads (HTTP) for local testing.
-    *   **Result**: When opening book misses, the app successfully requests live analysis from the Mac host.
+1.  **Windows Setup Automation (UTM/VM)**
+    *   Refined `scripts/windows_setup.ps1` to include automatic **KataGo (Eigen)** and **Model** downloads.
+    *   Fixed zip extraction logic to handle nested subdirectories within the KataGo release bundle.
+    *   Verified the script ensures `katago.exe` is at `C:\Program Files\KataGo` for easy detection by the Flutter app.
 
-2.  **UI/UX Improvements (Go Board)**
-    *   **Coordinate Alignment**: Completely rewrote `_drawCoordinates` in `go_board_widget.dart`. Coordinates are now absolutely centered in their padding areas, ensuring perfect symmetry.
-    *   **Background**: Extended the wood texture background to cover the entire widget area, solving the "floating coordinates" and "cut-off" issues.
-    *   **Visibility**: Optimized font sizes (dynamic scaling + minimum 10pt) and boldness for 19x19 boards.
-    *   **Padding**: Standardized padding to **10%** across all platforms to prevent Web clipping while maintaining a tight look on mobile.
+2.  **Android Release Workflow**
+    *   Created `release_android.sh` to handle automated build, git tagging, and uploading to GitHub Releases.
+    *   Integrated `version.sh` to automatically sync the app's build number with the git commit count.
 
-3.  **Platform Compatibility Fixes**
-    *   **Database (sqflite)**: Solved `databaseFactory not initialized` error on Desktop/Web.
-        *   Added `sqflite_common_ffi` for MacOS support.
-        *   Added **Conditional Import** in `cache_service.dart` to prevent Web builds from crashing when trying to load FFI.
+3.  **Project Status Tracking**
+    *   Updated `STATUS_REPORT.md` with the latest milestones and reorganized task priorities.
 
 ## ⚠️ Known Issues / Pending Tasks
-1.  **Web Analysis Backend**: Currently, the Web version points to `localhost:3001` (client) but needs to correctly route API requests to the Python backend (`localhost:8001`). Cross-Origin Resource Sharing (CORS) on the Python server is enabled, but might need verification if moving to a real device.
-2.  **Performance**: On 19x19 analysis, the UI response is good, but the Python backend (on CPU) might be slow. GPU acceleration for KataGo on the Mac host is configured but should be double-checked if analysis times exceed 5-10s.
+1.  **Windows VM Performance**: Local KataGo analysis on the VM will be CPU-bound and slower than native macOS.
+2.  **API Coordinate Mapping**: Still need to verify if the frontend coordinate mapping perfectly matches the backend for all board sizes.
 
 ## 🚀 Next Steps (For tomorrow)
-1.  **Verify Web Functionality**: Since we just killed the Web process to fix the "frozen" state, the next session should start by cleanly running `flutter run -d chrome --web-port=3000` to confirm the database fix works in practice.
-2.  **Cloud Sync**: The settings menu has a placeholder for "Account & Cloud". The next major feature is integrating Google Drive/Cloud sync for SGFs and analysis history.
-3.  **Release Build**: iOS release build (`flutter build ios`) compilation was successful earlier, but final signing/deployment to a real device hasn't been tested yet.
+1.  **Run Windows Setup**: Execute the new `windows_setup.ps1` inside the VM and verify the full app build/run flow.
+2.  **Physical Device Testing**: Test the Android APK on a real device to profile KataGo NDK performance.
+3.  **Coordinate Verification**: Run integration tests between the Flutter GUI and Python API to confirm coordinate consistency.
 
 ## 🛠 Command Reference
-*   **Run iOS Simulator**: `flutter run -d <UUID> --no-pub`
-*   **Run Web**: `flutter run -d chrome --web-port=3000`
+*   **Run Windows Setup**: `powershell -ExecutionPolicy Bypass -File .\scripts\windows_setup.ps1` (Inside VM)
+*   **Release Android**: `./release_android.sh`
 *   **Start Backend**: `export PYTHONPATH=$PYTHONPATH:. && source venv/bin/activate && export PORT=8001 && uvicorn src.api:app --host 0.0.0.0 --port 8001`

@@ -10,9 +10,7 @@ This pod encapsulates the KataGo Go engine code for local execution on iOS devic
   s.author           = { 'Rex Hsu' => 'email@example.com' }
   s.source           = { :path => '.' }
   s.source_files = [
-    'Sources/**/*.{h,cpp,mm,hpp}',
-    'Sources/katago/cpp/**/*.{h,cpp}',
-    'Sources/katago/cpp/external/**/*.{h,cpp}'
+    'Sources/**/*.{h,cpp,mm,hpp}'
   ]
   s.public_header_files = 'Sources/KataGoWrapper.h'
   

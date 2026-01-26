@@ -1,0 +1,1 @@
+../../../../../../android/app/src/main/cpp/eigen/doc/snippets/DirectionWise_hnormalized.cpp

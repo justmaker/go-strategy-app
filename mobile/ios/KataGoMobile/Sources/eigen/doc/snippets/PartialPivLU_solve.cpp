@@ -1,0 +1,1 @@
+../../../../../../android/app/src/main/cpp/eigen/doc/snippets/PartialPivLU_solve.cpp

@@ -1,0 +1,1 @@
+../../../../../android/app/src/main/cpp/eigen/scripts/eigen_monitor_perf.sh

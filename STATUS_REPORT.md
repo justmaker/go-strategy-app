@@ -212,6 +212,16 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 
 ---
 
+## Completed Tasks (2026-01-27)
+
+- [x] **Windows Setup Automation Refinement**: 
+  - Updated `scripts/windows_setup.ps1` to include automatic downloading and configuration of KataGo (Eigen version) and a default neural network model.
+  - Refined zip extraction logic to handle nested directories and ensure `katago.exe` is correctly placed in `C:\Program Files\KataGo`.
+
+- [x] **Android Release Automation**:
+  - Created `release_android.sh` to automate the Flutter build, git tagging, and uploading of the APK to GitHub Releases.
+  - Integrated `version.sh` to ensure consistent versioning across platforms using git commit counts.
+
 ## Completed Tasks (2026-01-25)
 
 - [x] **Local KataGo Integration (Desktop)** - `katago_desktop_service.dart`
@@ -261,10 +271,6 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 
 ### Medium Priority
 
-- [x] **Android Release Automation**
-  - Created `release_android.sh` for automated build, tagging, and GitHub Release upload.
-  - Integrated `version.sh` for consistent build numbering.
-
 - [ ] **GPU Data Generation**
   - 19x19: Expand from 46 to 10,000+ positions
   - 13x13: Expand from 1,630 to 5,000+ positions
@@ -292,7 +298,6 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
   - [ ] **Important**: Check "Install drivers and SPICE tools" during setup
   - [ ] **Install Windows**: Complete the OOBE (Out of Box Experience)
 - [ ] **Configure Windows Development Environment**
-  - [x] **Update Automation Script**: `scripts/windows_setup.ps1` now includes Git, Flutter, Visual Studio, KataGo, and Model downloads.
   - [ ] **Run Script in VM**: Run with PowerShell (Admin) inside Windows 11 VM.
   - [ ] Restart VM
   - [ ] Verify: Open Terminal -> `flutter doctor`

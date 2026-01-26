@@ -1,0 +1,1 @@
+../../../../../../../android/app/src/main/cpp/katago/cpp/tests/models/g170-b6c96-s175395328-d26788732-info.txt

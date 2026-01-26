@@ -283,7 +283,7 @@ int MainCmds::analysis(const vector<string>& args, std::istream& in, std::ostrea
     "avoidMoves"};
 
   ThreadSafeQueue<string*> toWriteQueue;
-  auto writeLoop = [&toWriteQueue, &logAllResponses, &logger]() {
+  auto writeLoop = [&toWriteQueue, &logAllResponses, &logger, &out]() {
     while(true) {
       string* message;
       bool suc = toWriteQueue.waitPop(message);

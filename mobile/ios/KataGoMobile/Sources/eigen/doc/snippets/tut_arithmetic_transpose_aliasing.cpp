@@ -1,0 +1,1 @@
+../../../../../../android/app/src/main/cpp/eigen/doc/snippets/tut_arithmetic_transpose_aliasing.cpp

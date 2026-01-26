@@ -1,0 +1,1 @@
+../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Matrix_variadic_ctor_cxx11.cpp

@@ -1,0 +1,66 @@
+Changing current working directory to: /Users/rexhsu/Documents/go-strategy-app/mobile
+Warning: Building for device with codesigning disabled. You will have to manually codesign before deploying to device.
+Building com.gostratefy.goStrategyApp for device (ios-release)...
+Running Xcode build...                                          
+Xcode build done.                                            4.2s
+Failed to build iOS app
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:154:2
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:170:2
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:187:2
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:198:2
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:199:2
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:203:4
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:208:2
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:216:2
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:222:2
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:223:2
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:227:4
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:259:2
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:265:2
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/rand.h:300:2
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external/nlohmann_json/json.hpp:5163:20
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external/nlohmann_json/json.hpp:5417:20
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external/nlohmann_json/json.hpp:5848:16
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external/nlohmann_json/json.hpp:6458:20
+
+Semantic Issue (Xcode): Use of undeclared identifier 'assert'
+/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external/nlohmann_json/json.hpp:6459:20
+
+Error (Xcode): too many errors emitted, stopping now
+
+Encountered error while building for device.

@@ -1,7 +1,8 @@
 #include <android/log.h>
-#include <ext/stdio_filebuf.h> // GCC/Clang extension for filebuf from fd
 #include <iostream>
 #include <jni.h>
+#include <memory>
+#include <streambuf>
 #include <string>
 #include <thread>
 #include <unistd.h>
@@ -14,13 +15,59 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
+// Custom streambuf for reading from a file descriptor
+class fdinbuf : public std::streambuf {
+protected:
+  int fd;
+  char buffer[1];
+
+public:
+  fdinbuf(int _fd) : fd(_fd) { setg(buffer, buffer, buffer); }
+
+protected:
+  virtual int_type underflow() override {
+    if (gptr() < egptr()) {
+      return traits_type::to_int_type(*gptr());
+    }
+    ssize_t n = read(fd, buffer, 1);
+    if (n <= 0) {
+      return traits_type::eof();
+    }
+    setg(buffer, buffer, buffer + 1);
+    return traits_type::to_int_type(*gptr());
+  }
+};
+
+// Custom streambuf for writing to a file descriptor
+class fdoutbuf : public std::streambuf {
+protected:
+  int fd;
+
+public:
+  fdoutbuf(int _fd) : fd(_fd) {}
+
+protected:
+  virtual int_type overflow(int_type c) override {
+    if (c != traits_type::eof()) {
+      char z = static_cast<char>(c);
+      if (write(fd, &z, 1) != 1) {
+        return traits_type::eof();
+      }
+    }
+    return c;
+  }
+  virtual std::streamsize xsputn(const char *s, std::streamsize n) override {
+    return write(fd, s, n);
+  }
+};
+
 // Global state
 static std::thread g_kataGoThread;
 static int g_pipeIn[2];  // Java -> KataGo
 static int g_pipeOut[2]; // KataGo -> Java
 
-static std::unique_ptr<__gnu_cxx::stdio_filebuf<char>> g_bufIn;
-static std::unique_ptr<__gnu_cxx::stdio_filebuf<char>> g_bufOut;
+static std::unique_ptr<fdinbuf> g_bufIn;
+static std::unique_ptr<fdoutbuf> g_bufOut;
 static std::unique_ptr<std::istream> g_kpCin;
 static std::unique_ptr<std::ostream> g_kpCout;
 
@@ -50,12 +97,11 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_startNative(
   // Wrap pipes in streams
   // g_pipeIn[0] is read end (for KataGo)
   // g_pipeOut[1] is write end (for KataGo)
-  g_bufIn.reset(new __gnu_cxx::stdio_filebuf<char>(g_pipeIn[0], std::ios::in));
-  g_bufOut.reset(
-      new __gnu_cxx::stdio_filebuf<char>(g_pipeOut[1], std::ios::out));
+  g_bufIn = std::make_unique<fdinbuf>(g_pipeIn[0]);
+  g_bufOut = std::make_unique<fdoutbuf>(g_pipeOut[1]);
 
-  g_kpCin.reset(new std::istream(g_bufIn.get()));
-  g_kpCout.reset(new std::ostream(g_bufOut.get()));
+  g_kpCin = std::make_unique<std::istream>(g_bufIn.get());
+  g_kpCout = std::make_unique<std::ostream>(g_bufOut.get());
 
   // Prepare Args
   // argv[0] is program name
@@ -70,9 +116,6 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_startNative(
   // Launch Thread
   g_kataGoThread = std::thread([args]() {
     LOGI("KataGo Thread Started");
-    // We call analysis(args, in, out)
-    // Note: MainCmds::analysis must be modified to accept streams!
-    // We assume we did that modification.
     try {
       MainCmds::analysis(args, *g_kpCin, *g_kpCout);
     } catch (const std::exception &e) {
@@ -94,13 +137,14 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_writeToProcess(
     JNIEnv *env, jobject thiz, jstring data) {
 
   const char *str = env->GetStringUTFChars(data, nullptr);
+  if (!str)
+    return;
   std::string input(str);
   env->ReleaseStringUTFChars(data, str);
 
   // Write to g_pipeIn[1]
   input += "\n"; // Ensure newline
   write(g_pipeIn[1], input.c_str(), input.size());
-  // No flush needed for unbuffered pipe write usually, but maybe?
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -108,13 +152,6 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_readFromProcess(
     JNIEnv *env, jobject thiz) {
 
   // Read from g_pipeOut[0]
-  // Blocking read?
-  // We should read line by line.
-
-  // Simplest: Read one char at a time until newline to construct a line?
-  // Or use a FILE* or fdopen?
-
-  // Let's use low-level read loop to get a line.
   std::string line;
   char c;
   while (read(g_pipeOut[0], &c, 1) > 0) {
@@ -129,9 +166,5 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_readFromProcess(
 extern "C" JNIEXPORT void JNICALL
 Java_com_gostratefy_go_1strategy_1app_KataGoEngine_stopNative(JNIEnv *env,
                                                               jobject thiz) {
-  // Write quit command logic handled by Java sending "quit" json?
-  // Or we close pipes.
   close(g_pipeIn[1]); // Close write end, KataGo sees EOF
-                      // Wait for thread? It detached.
-                      // Cleanup
 }

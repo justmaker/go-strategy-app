@@ -1,0 +1,1 @@
+../../../../../android/app/src/main/cpp/eigen/failtest/ternary_2.cpp

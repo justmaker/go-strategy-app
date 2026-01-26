@@ -1,0 +1,1 @@
+../../../../../../android/app/src/main/cpp/katago/cpp/tests/testtrainingwrite.cpp
