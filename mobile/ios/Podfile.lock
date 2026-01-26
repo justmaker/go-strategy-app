@@ -40,6 +40,7 @@ PODS:
   - GTMSessionFetcher/Core (3.5.0)
   - GTMSessionFetcher/Full (3.5.0):
     - GTMSessionFetcher/Core
+  - KataGoMobile (0.0.1)
   - package_info_plus (0.4.5):
     - Flutter
   - PromisesObjC (2.4.0)
@@ -59,6 +60,7 @@ DEPENDENCIES:
   - Flutter (from `Flutter`)
   - flutter_secure_storage (from `.symlinks/plugins/flutter_secure_storage/ios`)
   - google_sign_in_ios (from `.symlinks/plugins/google_sign_in_ios/darwin`)
+  - KataGoMobile (from `KataGoMobile`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - sign_in_with_apple (from `.symlinks/plugins/sign_in_with_apple/ios`)
@@ -82,6 +84,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_secure_storage/ios"
   google_sign_in_ios:
     :path: ".symlinks/plugins/google_sign_in_ios/darwin"
+  KataGoMobile:
+    :path: KataGoMobile
   package_info_plus:
     :path: ".symlinks/plugins/package_info_plus/ios"
   shared_preferences_foundation:
@@ -103,6 +107,7 @@ SPEC CHECKSUMS:
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
   GTMAppAuth: f69bd07d68cd3b766125f7e072c45d7340dea0de
   GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
+  KataGoMobile: f13439bca3bb82f3b6fd2af10e96ab4588102200
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
@@ -110,6 +115,6 @@ SPEC CHECKSUMS:
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
   webview_flutter_wkwebview: 8ebf4fded22593026f7dbff1fbff31ea98573c8d
 
-PODFILE CHECKSUM: 25b3ba4e82b9dec36c16f310cc25064340c6b32a
+PODFILE CHECKSUM: 63073c35e7ad1bc16f6da33f58836728e2614a74
 
 COCOAPODS: 1.16.2

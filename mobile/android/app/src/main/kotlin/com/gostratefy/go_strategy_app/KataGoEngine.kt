@@ -75,6 +75,9 @@ class KataGoEngine(private val context: Context) {
     /**
      * Analyze a position.
      */
+    /**
+     * Analyze a position.
+     */
     fun analyze(
         boardSize: Int,
         moves: List<String>,
@@ -94,8 +97,7 @@ class KataGoEngine(private val context: Context) {
             val query = buildAnalysisQuery(id, boardSize, moves, komi, maxVisits)
             Log.d(TAG, "Sending query: $query")
             
-            stdin?.write(query + "\n")
-            stdin?.flush()
+            writeToProcess(query)
             
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send query", e)
@@ -117,8 +119,7 @@ class KataGoEngine(private val context: Context) {
                 put("action", "terminate")
                 put("terminateId", queryId)
             }
-            stdin?.write(cmd.toString() + "\n")
-            stdin?.flush()
+            writeToProcess(cmd.toString())
         } catch (e: Exception) {
             Log.w(TAG, "Failed to cancel analysis", e)
         }
@@ -180,7 +181,7 @@ class KataGoEngine(private val context: Context) {
             
             # Disable features not needed for analysis
             logSearchInfo = false
-            logToStderr = false
+            logToStderr = true
         """.trimIndent()
 
         configFile.writeText(config)
@@ -220,41 +221,33 @@ class KataGoEngine(private val context: Context) {
     }
 
     private fun startOutputReaders() {
-        // Read stdout (analysis results)
+        // Read stdout (analysis results) from Native via JNI
         scope.launch {
-            try {
-                stdout?.forEachLine { line ->
-                    if (line.isNotBlank()) {
+            Log.i(TAG, "Starting Output Reader Loop")
+            while (isRunning.get()) {
+                try {
+                    // Blocking read from native pipe
+                    val line = readFromProcess()
+                    if (line.isNotEmpty()) {
                         Log.d(TAG, "KataGo stdout: $line")
                         processOutput(line)
+                    } else {
+                        // Empty line might mean EOF or just empty flush? 
+                        // Yield to prevent tight loop if non-blocking (though native is blocking)
+                        yield()
                     }
-                }
-            } catch (e: Exception) {
-                if (isRunning.get()) {
-                    Log.e(TAG, "Error reading stdout", e)
+                } catch (e: Exception) {
+                    if (isRunning.get()) {
+                        Log.e(TAG, "Error reading from process", e)
+                    }
+                    delay(100) // Backoff on error
                 }
             }
+            Log.i(TAG, "Output Reader Loop Ended")
         }
 
-        // Read stderr (logs/errors)
-        scope.launch {
-            try {
-                stderr?.forEachLine { line ->
-                    if (line.isNotBlank()) {
-                        Log.d(TAG, "KataGo stderr: $line")
-                        // Check for fatal errors
-                        if (line.contains("error", ignoreCase = true) || 
-                            line.contains("failed", ignoreCase = true)) {
-                            errorCallback?.invoke(line)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                if (isRunning.get()) {
-                    Log.e(TAG, "Error reading stderr", e)
-                }
-            }
-        }
+        // Standard error is not captured in current Native impl
+        // If needed, we would add another pipe in native-lib.cpp
     }
 
     private fun processOutput(line: String) {

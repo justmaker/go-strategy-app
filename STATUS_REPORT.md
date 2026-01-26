@@ -267,9 +267,9 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
   - Run on GPU machine for speed
 
 - [ ] **Android KataGo**
-  - Compile KataGo with Android NDK
-  - Create JNI bridge
-  - Test on real device
+  - [ ] Compile KataGo with Android NDK
+  - [x] Create JNI bridge (Kotlin wrapper fixed, C++ native-lib ready)
+  - [ ] Test on real device
 
 ### Low Priority
 
@@ -277,6 +277,27 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 - [ ] **Re-export Opening Book** - Current: 7,769 positions, DB has 60,410
 - [ ] **UI: Dynamic Sidebar Width** - Replace hardcoded `10rem` padding with dynamic calculation for better screen support.
 - [ ] **Feature: Move History Branching** - Allow users to create variation branches instead of just jumping back in history.
+
+### Windows Build Environment Setup (UTM Strategy)
+- [x] **Install Virtualization Tools**
+  - [x] Install UTM: `brew install --cask utm`
+  - [x] Install CrystalFetch (ISO downloader): `brew install crystal-fetch`
+- [ ] **Setup Windows VM**
+  - [ ] Use CrystalFetch to download "Windows 11" (Apple Silicon/ARM64 version)
+  - [ ] Create new VM in UTM -> Virtualize -> Windows
+  - [ ] Mount the downloaded ISO and install Windows 11
+  - [ ] Install "Spice Tools" (Guest Additions) in Windows for clipboard/resolution support
+- [ ] **Configure Windows Development Environment**
+  - [ ] Install Grid (Git for Windows)
+  - [ ] Install [Flutter SDK for Windows](https://docs.flutter.dev/get-started/install/windows)
+  - [ ] Install **Visual Studio 2022 Community**
+    - **Crucial:** Select "Desktop development with C++" workload
+  - [ ] Enable Developer Mode in Windows Settings
+- [ ] **Build Windows App**
+  - [ ] Clone repo inside Windows VM
+  - [ ] Run `flutter config --enable-windows-desktop`
+  - [ ] Run `flutter pub get`
+  - [ ] Run `flutter run -d windows`
 
 ---
 
