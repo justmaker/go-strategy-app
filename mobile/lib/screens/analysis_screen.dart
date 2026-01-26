@@ -301,7 +301,11 @@ class _AnalysisView extends StatelessWidget {
                     maxVisits != null) ...[
                   const SizedBox(height: 8),
                   LinearProgressIndicator(
+<<<<<<< HEAD
                     value: currentVisits / maxVisits,
+=======
+                    value: progress.currentVisits / progress.maxVisits,
+>>>>>>> 1b2624b (Update Gradle versions, mobile files, and Dart services)
                     backgroundColor: Colors.grey.shade300,
                   ),
                 ],

@@ -185,8 +185,7 @@ class KataGoService {
               _handleAnalysisEvent(event['data'] as String?);
               break;
             case 'error':
-              _errorCallback
-                  ?.call(event['message'] as String? ?? 'Unknown error');
+              _errorCallback?.call(event['message'] as String? ?? 'Unknown error');
               break;
           }
         }
@@ -236,9 +235,7 @@ class KataGoService {
           bestMove: bestMove,
           isComplete: !isDuringSearch,
         );
-
         _progressCallback?.call(progress);
-
         // If complete, convert to AnalysisResult
         if (!isDuringSearch && moveInfos != null) {
           final result = _convertToAnalysisResult(data);
