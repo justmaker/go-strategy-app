@@ -21,6 +21,9 @@ include_directories(${KATAGO_ROOT})
 # However, KataGo code uses include "core/..." so root is fine.
 # But some externals might need includes.
 include_directories(${KATAGO_ROOT}/external)
+include_directories(${KATAGO_ROOT}/external/tclap-1.2.5/include)
+include_directories(${KATAGO_ROOT}/external/nlohmann_json)
+include_directories(${KATAGO_ROOT}/external/filesystem-1.5.8/include)
 
 # --- Sources ---
 # Collect all KataGo sources

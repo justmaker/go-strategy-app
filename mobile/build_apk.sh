@@ -17,6 +17,15 @@ set -e
 
 cd "$(dirname "$0")"
 
+# Set JAVA_HOME for Apple Silicon Macs if not set
+if [[ "$OSTYPE" == "darwin"* ]] && [ -z "$JAVA_HOME" ]; then
+    if [ -d "/opt/homebrew/opt/openjdk@17" ]; then
+        export JAVA_HOME="/opt/homebrew/opt/openjdk@17"
+        export PATH="$JAVA_HOME/bin:$PATH"
+        echo -e "\033[1;33mUsing JAVA_HOME: $JAVA_HOME\033[0m"
+    fi
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'

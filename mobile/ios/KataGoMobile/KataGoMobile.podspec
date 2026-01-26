@@ -9,7 +9,11 @@ This pod encapsulates the KataGo Go engine code for local execution on iOS devic
   s.license          = { :type => 'MIT', :file => 'Sources/katago/LICENSE' }
   s.author           = { 'Rex Hsu' => 'email@example.com' }
   s.source           = { :path => '.' }
-  s.source_files = 'Sources/**/*.{h,cpp,mm,hpp}'
+  s.source_files = [
+    'Sources/**/*.{h,cpp,mm,hpp}',
+    'Sources/katago/cpp/**/*.{h,cpp}',
+    'Sources/katago/cpp/external/**/*.{h,cpp}'
+  ]
   s.public_header_files = 'Sources/KataGoWrapper.h'
   
   # Exclude non-ios backends and tests
@@ -19,7 +23,7 @@ This pod encapsulates the KataGo Go engine code for local execution on iOS devic
     'Sources/katago/cpp/neuralnet/opencl*',
     'Sources/katago/cpp/neuralnet/cuda*',
     'Sources/katago/cpp/neuralnet/tensorrt*',
-    'Sources/katago/cpp/command/checksgf.cpp' # Example of unused
+    'Sources/katago/cpp/command/checksgf.cpp'
   ]
 
   s.ios.deployment_target = '13.0'

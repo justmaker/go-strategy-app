@@ -1,0 +1,128 @@
+Running Gradle task 'assembleRelease'...                        
+Warning: The plugin google_sign_in_android requires Android SDK version 36 or higher.
+For more information about build configuration, see https://flutter.dev/to/review-gradle-config.
+Warning: The plugin package_info_plus requires Android SDK version 36 or higher.
+For more information about build configuration, see https://flutter.dev/to/review-gradle-config.
+Warning: The plugin path_provider_android requires Android SDK version 36 or higher.
+For more information about build configuration, see https://flutter.dev/to/review-gradle-config.
+Warning: The plugin shared_preferences_android requires Android SDK version 36 or higher.
+For more information about build configuration, see https://flutter.dev/to/review-gradle-config.
+Warning: The plugin webview_flutter_android requires Android SDK version 36 or higher.
+For more information about build configuration, see https://flutter.dev/to/review-gradle-config.
+Your project is configured to compile against Android SDK 34, but the following plugin(s) require to be compiled against a higher Android SDK version:
+- google_sign_in_android compiles against Android SDK 36
+- package_info_plus compiles against Android SDK 36
+- path_provider_android compiles against Android SDK 36
+- shared_preferences_android compiles against Android SDK 36
+- webview_flutter_android compiles against Android SDK 36
+Fix this issue by compiling against the highest Android SDK version (they are backward compatible).
+Add the following to /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/build.gradle:
+
+    android {
+        compileSdk = 36
+        ...
+    }
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 5340 bytes (99.7% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:buildCMakeRelease[arm64-v8a]'.
+> com.android.ide.common.process.ProcessException: ninja: Entering directory `/Users/rexhsu/Documents/go-strategy-app/mobile/build/.cxx/release/2t384a5x/arm64-v8a'
+  [1/96] Building CXX object CMakeFiles/katago_mobile.dir/native-lib.cpp.o
+  FAILED: CMakeFiles/katago_mobile.dir/native-lib.cpp.o 
+  /opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -DNO_GIT_REVISION -DUSE_BACKEND_EIGEN -Dkatago_mobile_EXPORTS -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/eigen -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O3 -DNDEBUG  -fPIC   -O3 -std=gnu++17 -MD -MT CMakeFiles/katago_mobile.dir/native-lib.cpp.o -MF CMakeFiles/katago_mobile.dir/native-lib.cpp.o.d -o CMakeFiles/katago_mobile.dir/native-lib.cpp.o -c /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/native-lib.cpp
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/native-lib.cpp:2:10: fatal error: 'ext/stdio_filebuf.h' file not found
+      2 | #include <ext/stdio_filebuf.h> // GCC/Clang extension for filebuf from fd
+        |          ^~~~~~~~~~~~~~~~~~~~~
+  1 error generated.
+  [2/96] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/command/analysis.cpp.o
+  FAILED: CMakeFiles/katago_mobile.dir/katago/cpp/command/analysis.cpp.o 
+  /opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -DNO_GIT_REVISION -DUSE_BACKEND_EIGEN -Dkatago_mobile_EXPORTS -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/eigen -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O3 -DNDEBUG  -fPIC   -O3 -std=gnu++17 -MD -MT CMakeFiles/katago_mobile.dir/katago/cpp/command/analysis.cpp.o -MF CMakeFiles/katago_mobile.dir/katago/cpp/command/analysis.cpp.o.d -o CMakeFiles/katago_mobile.dir/katago/cpp/command/analysis.cpp.o -c /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/analysis.cpp
+  In file included from /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/analysis.cpp:1:
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/../command/commandline.h:7:10: fatal error: 'tclap/CmdLine.h' file not found
+      7 | #include <tclap/CmdLine.h>
+        |          ^~~~~~~~~~~~~~~~~
+  1 error generated.
+  [3/96] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/command/commandline.cpp.o
+  FAILED: CMakeFiles/katago_mobile.dir/katago/cpp/command/commandline.cpp.o 
+  /opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -DNO_GIT_REVISION -DUSE_BACKEND_EIGEN -Dkatago_mobile_EXPORTS -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/eigen -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O3 -DNDEBUG  -fPIC   -O3 -std=gnu++17 -MD -MT CMakeFiles/katago_mobile.dir/katago/cpp/command/commandline.cpp.o -MF CMakeFiles/katago_mobile.dir/katago/cpp/command/commandline.cpp.o.d -o CMakeFiles/katago_mobile.dir/katago/cpp/command/commandline.cpp.o -c /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/commandline.cpp
+  In file included from /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/commandline.cpp:1:
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/../command/commandline.h:7:10: fatal error: 'tclap/CmdLine.h' file not found
+      7 | #include <tclap/CmdLine.h>
+        |          ^~~~~~~~~~~~~~~~~
+  1 error generated.
+  [4/96] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/command/contribute.cpp.o
+  FAILED: CMakeFiles/katago_mobile.dir/katago/cpp/command/contribute.cpp.o 
+  /opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -DNO_GIT_REVISION -DUSE_BACKEND_EIGEN -Dkatago_mobile_EXPORTS -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/eigen -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O3 -DNDEBUG  -fPIC   -O3 -std=gnu++17 -MD -MT CMakeFiles/katago_mobile.dir/katago/cpp/command/contribute.cpp.o -MF CMakeFiles/katago_mobile.dir/katago/cpp/command/contribute.cpp.o.d -o CMakeFiles/katago_mobile.dir/katago/cpp/command/contribute.cpp.o -c /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/contribute.cpp
+  In file included from /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/contribute.cpp:20:
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/../command/commandline.h:7:10: fatal error: 'tclap/CmdLine.h' file not found
+      7 | #include <tclap/CmdLine.h>
+        |          ^~~~~~~~~~~~~~~~~
+  1 error generated.
+  [5/96] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/command/gatekeeper.cpp.o
+  FAILED: CMakeFiles/katago_mobile.dir/katago/cpp/command/gatekeeper.cpp.o 
+  /opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -DNO_GIT_REVISION -DUSE_BACKEND_EIGEN -Dkatago_mobile_EXPORTS -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/eigen -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O3 -DNDEBUG  -fPIC   -O3 -std=gnu++17 -MD -MT CMakeFiles/katago_mobile.dir/katago/cpp/command/gatekeeper.cpp.o -MF CMakeFiles/katago_mobile.dir/katago/cpp/command/gatekeeper.cpp.o.d -o CMakeFiles/katago_mobile.dir/katago/cpp/command/gatekeeper.cpp.o -c /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/gatekeeper.cpp
+  In file included from /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/gatekeeper.cpp:14:
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/../command/commandline.h:7:10: fatal error: 'tclap/CmdLine.h' file not found
+      7 | #include <tclap/CmdLine.h>
+        |          ^~~~~~~~~~~~~~~~~
+  1 error generated.
+  [6/96] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/command/demoplay.cpp.o
+  FAILED: CMakeFiles/katago_mobile.dir/katago/cpp/command/demoplay.cpp.o 
+  /opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -DNO_GIT_REVISION -DUSE_BACKEND_EIGEN -Dkatago_mobile_EXPORTS -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/eigen -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O3 -DNDEBUG  -fPIC   -O3 -std=gnu++17 -MD -MT CMakeFiles/katago_mobile.dir/katago/cpp/command/demoplay.cpp.o -MF CMakeFiles/katago_mobile.dir/katago/cpp/command/demoplay.cpp.o.d -o CMakeFiles/katago_mobile.dir/katago/cpp/command/demoplay.cpp.o -c /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/demoplay.cpp
+  In file included from /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/demoplay.cpp:16:
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/../command/commandline.h:7:10: fatal error: 'tclap/CmdLine.h' file not found
+      7 | #include <tclap/CmdLine.h>
+        |          ^~~~~~~~~~~~~~~~~
+  1 error generated.
+  [7/96] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/command/gputest.cpp.o
+  FAILED: CMakeFiles/katago_mobile.dir/katago/cpp/command/gputest.cpp.o 
+  /opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -DNO_GIT_REVISION -DUSE_BACKEND_EIGEN -Dkatago_mobile_EXPORTS -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/eigen -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O3 -DNDEBUG  -fPIC   -O3 -std=gnu++17 -MD -MT CMakeFiles/katago_mobile.dir/katago/cpp/command/gputest.cpp.o -MF CMakeFiles/katago_mobile.dir/katago/cpp/command/gputest.cpp.o.d -o CMakeFiles/katago_mobile.dir/katago/cpp/command/gputest.cpp.o -c /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/gputest.cpp
+  In file included from /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/gputest.cpp:9:
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/../command/commandline.h:7:10: fatal error: 'tclap/CmdLine.h' file not found
+      7 | #include <tclap/CmdLine.h>
+        |          ^~~~~~~~~~~~~~~~~
+  1 error generated.
+  [8/96] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/command/evalsgf.cpp.o
+  FAILED: CMakeFiles/katago_mobile.dir/katago/cpp/command/evalsgf.cpp.o 
+  /opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -DNO_GIT_REVISION -DUSE_BACKEND_EIGEN -Dkatago_mobile_EXPORTS -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/eigen -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O3 -DNDEBUG  -fPIC   -O3 -std=gnu++17 -MD -MT CMakeFiles/katago_mobile.dir/katago/cpp/command/evalsgf.cpp.o -MF CMakeFiles/katago_mobile.dir/katago/cpp/command/evalsgf.cpp.o.d -o CMakeFiles/katago_mobile.dir/katago/cpp/command/evalsgf.cpp.o -c /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/evalsgf.cpp
+  In file included from /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/evalsgf.cpp:11:
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/../command/commandline.h:7:10: fatal error: 'tclap/CmdLine.h' file not found
+      7 | #include <tclap/CmdLine.h>
+        |          ^~~~~~~~~~~~~~~~~
+  1 error generated.
+  [9/96] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/command/benchmark.cpp.o
+  FAILED: CMakeFiles/katago_mobile.dir/katago/cpp/command/benchmark.cpp.o 
+  /opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -DNO_GIT_REVISION -DUSE_BACKEND_EIGEN -Dkatago_mobile_EXPORTS -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/eigen -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O3 -DNDEBUG  -fPIC   -O3 -std=gnu++17 -MD -MT CMakeFiles/katago_mobile.dir/katago/cpp/command/benchmark.cpp.o -MF CMakeFiles/katago_mobile.dir/katago/cpp/command/benchmark.cpp.o.d -o CMakeFiles/katago_mobile.dir/katago/cpp/command/benchmark.cpp.o -c /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/benchmark.cpp
+  In file included from /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/benchmark.cpp:11:
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/../command/commandline.h:7:10: fatal error: 'tclap/CmdLine.h' file not found
+      7 | #include <tclap/CmdLine.h>
+        |          ^~~~~~~~~~~~~~~~~
+  1 error generated.
+  [10/96] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/command/genbook.cpp.o
+  FAILED: CMakeFiles/katago_mobile.dir/katago/cpp/command/genbook.cpp.o 
+  /opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -DNO_GIT_REVISION -DUSE_BACKEND_EIGEN -Dkatago_mobile_EXPORTS -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/eigen -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O3 -DNDEBUG  -fPIC   -O3 -std=gnu++17 -MD -MT CMakeFiles/katago_mobile.dir/katago/cpp/command/genbook.cpp.o -MF CMakeFiles/katago_mobile.dir/katago/cpp/command/genbook.cpp.o.d -o CMakeFiles/katago_mobile.dir/katago/cpp/command/genbook.cpp.o -c /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/genbook.cpp
+  In file included from /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/genbook.cpp:17:
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/../command/commandline.h:7:10: fatal error: 'tclap/CmdLine.h' file not found
+      7 | #include <tclap/CmdLine.h>
+        |          ^~~~~~~~~~~~~~~~~
+  1 error generated.
+  ninja: build stopped: subcommand failed.
+
+  C++ build system [build] failed while executing:
+      /opt/homebrew/share/android-commandlinetools/cmake/3.22.1/bin/ninja \
+        -C \
+        /Users/rexhsu/Documents/go-strategy-app/mobile/build/.cxx/release/2t384a5x/arm64-v8a \
+        katago_mobile
+    from /Users/rexhsu/Documents/go-strategy-app/mobile/android/app
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 23s
+Running Gradle task 'assembleRelease'...                           24.2s
+Gradle task assembleRelease failed with exit code 1

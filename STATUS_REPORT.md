@@ -1,6 +1,6 @@
 # Go Strategy App - Project Status Report
 
-**最後更新:** 2026-01-25  
+**最後更新:** 2026-01-27  
 **Status:** Active Development  
 **Repository:** https://github.com/justmaker/go-strategy-app
 
@@ -261,15 +261,19 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 
 ### Medium Priority
 
+- [x] **Android Release Automation**
+  - Created `release_android.sh` for automated build, tagging, and GitHub Release upload.
+  - Integrated `version.sh` for consistent build numbering.
+
 - [ ] **GPU Data Generation**
   - 19x19: Expand from 46 to 10,000+ positions
   - 13x13: Expand from 1,630 to 5,000+ positions
   - Run on GPU machine for speed
 
-- [ ] **Android KataGo**
-  - [ ] Compile KataGo with Android NDK
+- [ ] **Android KataGo Validation**
+  - [ ] Verify NDK binary performance on physical devices.
   - [x] Create JNI bridge (Kotlin wrapper fixed, C++ native-lib ready)
-  - [ ] Test on real device
+  - [ ] Test on real device (Performance profiling)
 
 ### Low Priority
 
@@ -288,8 +292,8 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
   - [ ] **Important**: Check "Install drivers and SPICE tools" during setup
   - [ ] **Install Windows**: Complete the OOBE (Out of Box Experience)
 - [ ] **Configure Windows Development Environment**
-  - [ ] **Run Automation Script**: Copy `scripts/windows_setup.ps1` to VM and run with PowerShell (Admin)
-    - Installs: Git, Flutter, Visual Studio 2022 (C++ Desktop)
+  - [x] **Update Automation Script**: `scripts/windows_setup.ps1` now includes Git, Flutter, Visual Studio, KataGo, and Model downloads.
+  - [ ] **Run Script in VM**: Run with PowerShell (Admin) inside Windows 11 VM.
   - [ ] Restart VM
   - [ ] Verify: Open Terminal -> `flutter doctor`
 - [ ] **Build Windows App**
