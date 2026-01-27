@@ -1,1 +1,3 @@
-../../../../android/app/src/main/cpp/eigen/.gitattributes
+*.sh                         eol=lf
+debug/msvc/*.dat             eol=crlf
+debug/msvc/*.natvis          eol=crlf
