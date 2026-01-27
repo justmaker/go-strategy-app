@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Cwise_abs.cpp
+Array3d v(1, -2, -3);
+cout << v.abs() << endl;

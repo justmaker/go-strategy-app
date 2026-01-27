@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Cwise_log10.cpp
+Array4d v(-1, 0, 1, 2);
+cout << log10(v) << endl;

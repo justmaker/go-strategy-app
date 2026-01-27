@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/MatrixBase_zero.cpp
+cout << Matrix2d::Zero() << endl;
+cout << RowVector4i::Zero() << endl;

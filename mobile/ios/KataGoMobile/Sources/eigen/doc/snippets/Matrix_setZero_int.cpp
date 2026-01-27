@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Matrix_setZero_int.cpp
+VectorXf v;
+v.setZero(3);
+cout << v << endl;

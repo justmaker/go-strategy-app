@@ -1,1 +1,12 @@
-../../../../../android/app/src/main/cpp/eigen/doc/TopicEigenExpressionTemplates.dox
+namespace Eigen {
+
+/** \page TopicEigenExpressionTemplates Expression templates in Eigen
+
+
+TODO: write this dox page!
+
+Is linked from the tutorial on arithmetic ops.
+
+*/
+
+}

@@ -133,7 +133,7 @@ All components use **GTP (Go Text Protocol)** standard:
 | Platform | Build Status | Local KataGo | Notes |
 |----------|--------------|--------------|-------|
 | **Android** | ✅ Built (69.2MB) | ✅ Integrated via JNI | KataGo runs natively on Android NDK |
-| **iOS** | ✅ Built (21.8MB) | ❌ Needs XCFramework | Use `--no-codesign` for testing |
+| **iOS** | ✅ Built (31.5MB) | ✅ Integrated via Pod | Use `--no-codesign` for testing |
 | **macOS** | ✅ Built (46.7MB) | ✅ Can spawn process | adhoc signed, runs directly |
 | **Windows** | ❌ Needs Windows | ✅ Can spawn process | Cross-compile not possible |
 | **Web** | ✅ Built (36MB) | ❌ Not possible | PWA ready |
@@ -221,6 +221,11 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 - [x] **Android Release Automation**:
   - Created `release_android.sh` to automate the Flutter build, git tagging, and uploading of the APK to GitHub Releases.
   - Integrated `version.sh` to ensure consistent versioning across platforms using git commit counts.
+- [x] **iOS Local KataGo Integration**:
+  - Successfully integrated KataGo C++ engine into iOS build using a CocoaPods pod (`KataGoMobile`).
+  - Resolved build errors related to `assert` macro, missing headers (`zip.h`, `tclap`, `filesystem`), and linker errors (Version info, zlib).
+  - Mirroring system established for sharing C++ code between Android and iOS without redundancy in source control (mirrored via script, committed for build capability).
+  - Successfully built release iOS app with native engine support.
 
 ## Completed Tasks (2026-01-25)
 
@@ -284,7 +289,7 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 
 ### Low Priority
 
-- [ ] **iOS Native Build** - Requires Apple Developer account
+- [x] **iOS Native Build** - Integrated and verified (no codesign)
 - [ ] **Re-export Opening Book** - Current: 7,769 positions, DB has 60,410
 - [ ] **UI: Dynamic Sidebar Width** - Replace hardcoded `10rem` padding with dynamic calculation for better screen support.
 - [ ] **Feature: Move History Branching** - Allow users to create variation branches instead of just jumping back in history.

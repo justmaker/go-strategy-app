@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/MatrixBase_cwiseArg.cpp
+MatrixXcf v = MatrixXcf::Random(2, 3);
+cout << v << endl << endl;
+cout << v.cwiseArg() << endl;

@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/MatrixBase_ones_int.cpp
+cout << 6 * RowVectorXi::Ones(4) << endl;
+cout << VectorXf::Ones(2) << endl;

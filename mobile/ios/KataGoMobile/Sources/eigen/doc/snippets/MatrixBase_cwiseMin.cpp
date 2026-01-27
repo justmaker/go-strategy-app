@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/MatrixBase_cwiseMin.cpp
+Vector3d v(2, 3, 4), w(4, 2, 3);
+cout << v.cwiseMin(w) << endl;

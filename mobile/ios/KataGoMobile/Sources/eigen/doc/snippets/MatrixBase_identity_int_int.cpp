@@ -1,1 +1,1 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/MatrixBase_identity_int_int.cpp
+cout << MatrixXd::Identity(4, 3) << endl;

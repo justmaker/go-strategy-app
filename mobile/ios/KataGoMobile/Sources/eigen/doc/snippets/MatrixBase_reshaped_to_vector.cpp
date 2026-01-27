@@ -1,1 +1,4 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/MatrixBase_reshaped_to_vector.cpp
+Matrix4i m = Matrix4i::Random();
+cout << "Here is the matrix m:" << endl << m << endl;
+cout << "Here is m.reshaped().transpose():" << endl << m.reshaped().transpose() << endl;
+cout << "Here is m.reshaped<RowMajor>().transpose():  " << endl << m.reshaped<RowMajor>().transpose() << endl;

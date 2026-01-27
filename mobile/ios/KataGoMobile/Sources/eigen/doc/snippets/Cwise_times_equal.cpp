@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Cwise_times_equal.cpp
+Array3d v(1, 2, 3), w(2, 3, 0);
+v *= w;
+cout << v << endl;

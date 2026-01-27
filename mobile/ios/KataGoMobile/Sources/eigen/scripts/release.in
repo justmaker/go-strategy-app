@@ -1,1 +1,3 @@
-../../../../../android/app/src/main/cpp/eigen/scripts/release.in
+#!/bin/sh
+
+cmake -DCMAKE_BUILD_TYPE=Release .

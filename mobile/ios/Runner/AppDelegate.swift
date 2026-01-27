@@ -1,6 +1,6 @@
 import Flutter
 import UIKit
-// import KataGoMobile // If using module, or bridging header if not. Using module via Pod.
+import KataGoMobile
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -46,7 +46,7 @@ import UIKit
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
   
-  private func startEngine(result: FlutterResult) {
+  private func startEngine(result: @escaping FlutterResult) {
       if isRunning {
           result(true)
           return

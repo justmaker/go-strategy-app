@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Cwise_cube.cpp
+Array3d v(2, 3, 4);
+cout << v.cube() << endl;

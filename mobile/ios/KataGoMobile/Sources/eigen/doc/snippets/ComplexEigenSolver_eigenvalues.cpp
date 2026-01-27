@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/ComplexEigenSolver_eigenvalues.cpp
+MatrixXcf ones = MatrixXcf::Ones(3, 3);
+ComplexEigenSolver<MatrixXcf> ces(ones, /* computeEigenvectors = */ false);
+cout << "The eigenvalues of the 3x3 matrix of ones are:" << endl << ces.eigenvalues() << endl;

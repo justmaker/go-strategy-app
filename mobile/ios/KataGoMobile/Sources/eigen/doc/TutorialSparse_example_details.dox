@@ -1,1 +1,4 @@
-../../../../../android/app/src/main/cpp/eigen/doc/TutorialSparse_example_details.dox
+/**
+\page TutorialSparse_example_details
+\include Tutorial_sparse_example_details.cpp
+*/

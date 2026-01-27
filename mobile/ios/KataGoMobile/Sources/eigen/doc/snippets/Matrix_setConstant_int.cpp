@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Matrix_setConstant_int.cpp
+VectorXf v;
+v.setConstant(3, 5);
+cout << v << endl;

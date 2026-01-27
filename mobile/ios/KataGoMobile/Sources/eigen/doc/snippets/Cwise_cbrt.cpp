@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Cwise_cbrt.cpp
+Array3d v(1, 2, 4);
+cout << v.cbrt() << endl;

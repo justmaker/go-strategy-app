@@ -1,1 +1,6 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/tut_arithmetic_transpose_inplace.cpp
+MatrixXf a(2, 3);
+a << 1, 2, 3, 4, 5, 6;
+cout << "Here is the initial matrix a:\n" << a << endl;
+
+a.transposeInPlace();
+cout << "and after being transposed:\n" << a << endl;

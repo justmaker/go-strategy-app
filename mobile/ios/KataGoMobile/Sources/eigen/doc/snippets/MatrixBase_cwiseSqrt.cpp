@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/MatrixBase_cwiseSqrt.cpp
+Vector3d v(1, 2, 4);
+cout << v.cwiseSqrt() << endl;

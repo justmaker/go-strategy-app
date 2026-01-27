@@ -1,1 +1,1 @@
-../../../../../../../android/app/src/main/cpp/katago/cpp/tests/analysis/clear_cache.txt
+{"id":"foo","action":"clear_cache"}

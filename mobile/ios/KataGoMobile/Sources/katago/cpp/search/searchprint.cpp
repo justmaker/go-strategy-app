@@ -1,1 +1,1 @@
-../../../../../../android/app/src/main/cpp/katago/cpp/search/searchprint.cpp
+#include "../search/searchprint.h"

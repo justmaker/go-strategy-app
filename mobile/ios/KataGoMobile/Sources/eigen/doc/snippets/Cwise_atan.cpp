@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Cwise_atan.cpp
+ArrayXd v = ArrayXd::LinSpaced(5, 0, 1);
+cout << v.atan() << endl;

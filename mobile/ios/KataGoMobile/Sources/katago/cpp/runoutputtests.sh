@@ -1,1 +1,6 @@
-../../../../../android/app/src/main/cpp/katago/cpp/runoutputtests.sh
+#!/bin/bash -eux
+{
+./katago runoutputtests | tee tests/results/runOutputTests.txt
+
+exit 0
+}

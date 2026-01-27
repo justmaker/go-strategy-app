@@ -1,1 +1,1 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/MatrixBase_zero_int_int.cpp
+cout << MatrixXi::Zero(2, 3) << endl;

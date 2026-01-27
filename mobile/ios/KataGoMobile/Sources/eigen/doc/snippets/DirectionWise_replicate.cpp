@@ -1,1 +1,4 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/DirectionWise_replicate.cpp
+MatrixXi m = MatrixXi::Random(2, 3);
+cout << "Here is the matrix m:" << endl << m << endl;
+cout << "m.colwise().replicate<3>() = ..." << endl;
+cout << m.colwise().replicate<3>() << endl;

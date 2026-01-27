@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Cwise_arg.cpp
+ArrayXcf v = ArrayXcf::Random(3);
+cout << v << endl << endl;
+cout << arg(v) << endl;

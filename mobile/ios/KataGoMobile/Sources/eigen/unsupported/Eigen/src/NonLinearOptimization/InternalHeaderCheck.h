@@ -1,1 +1,4 @@
-../../../../../../../../android/app/src/main/cpp/eigen/unsupported/Eigen/src/NonLinearOptimization/InternalHeaderCheck.h
+#ifndef EIGEN_NONLINEAROPTIMIZATION_MODULE_H
+#error \
+    "Please include unsupported/Eigen/NonLinearOptimization instead of including headers inside the src directory directly."
+#endif

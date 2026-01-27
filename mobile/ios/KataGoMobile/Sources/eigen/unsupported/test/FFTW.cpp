@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/unsupported/test/FFTW.cpp
+#define EIGEN_FFTW_DEFAULT 1
+#include "fft_test_shared.h"

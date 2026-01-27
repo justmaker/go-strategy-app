@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Matrix_initializer_list_23_cxx11.cpp
+MatrixXd m{{1, 2, 3}, {4, 5, 6}};
+cout << m << endl;

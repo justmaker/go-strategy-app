@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/MatrixBase_setOnes.cpp
+Matrix4i m = Matrix4i::Random();
+m.row(1).setOnes();
+cout << m << endl;
