@@ -8,7 +8,9 @@
     *   Fixed zip extraction logic to handle nested subdirectories within the KataGo release bundle.
     *   Verified the script ensures `katago.exe` is at `C:\Program Files\KataGo` for easy detection by the Flutter app.
 
-2.  **Android Release Workflow**
+2.  **Android Release Workflow & Native Integration**
+    *   Resolved major C++ build issues for Android (clashing headers, missing symbols, zlib).
+    *   Successfully integrated KataGo C++ engine via JNI (Native NDK).
     *   Created `release_android.sh` to handle automated build, git tagging, and uploading to GitHub Releases.
     *   Integrated `version.sh` to automatically sync the app's build number with the git commit count.
 
