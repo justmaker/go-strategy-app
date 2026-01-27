@@ -164,7 +164,7 @@ flutter build web --release
 flutter build apk --release
 # Output: build/app/outputs/flutter-apk/app-release.apk
 
-# macOS (currently blocked)
+# macOS
 flutter build macos --release
 # Output: build/macos/Build/Products/Release/go_strategy_app.app
 
@@ -297,9 +297,9 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 ### Windows Build Environment Setup (UTM Strategy)
 - [x] **Install Virtualization Tools**
   - [x] Install UTM: `brew install --cask utm`
-  - [x] Install CrystalFetch (ISO downloader): `brew install crystal-fetch`
+  - [x] Download Windows 11 ARM64 ISO from Microsoft Official Site
 - [ ] **Setup Windows VM (Manual Steps)**
-  - [ ] **Download ISO**: Open CrystalFetch, download "Windows 11 (Apple Silicon/ARM64)"
+  - [x] **Download ISO**: Downloaded from Microsoft Official Site
   - [ ] **Create VM**: Open UTM -> Create New -> Virtualize -> Windows -> Select ISO
   - [ ] **Important**: Check "Install drivers and SPICE tools" during setup
   - [ ] **Install Windows**: Complete the OOBE (Out of Box Experience)

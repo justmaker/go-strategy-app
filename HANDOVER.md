@@ -14,7 +14,12 @@
     *   Created `release_android.sh` to handle automated build, git tagging, and uploading to GitHub Releases.
     *   Integrated `version.sh` to automatically sync the app's build number with the git commit count.
 
-3.  **Project Status Tracking**
+3.  **macOS Build & Release Support**
+    *   Verified `flutter build macos --release` works successfully (60.8MB bundle).
+    *   Created `release_macos.sh` to automate zipping and uploading macOS app to GitHub Releases.
+    *   Updated documentation to reflect macOS and iOS as fully buildable platforms.
+
+4.  **Project Status Tracking**
     *   Updated `STATUS_REPORT.md` with the latest milestones and reorganized task priorities.
 
 ## ⚠️ Known Issues / Pending Tasks
@@ -29,4 +34,6 @@
 ## 🛠 Command Reference
 *   **Run Windows Setup**: `powershell -ExecutionPolicy Bypass -File .\scripts\windows_setup.ps1` (Inside VM)
 *   **Release Android**: `./release_android.sh`
+*   **Release macOS**: `./release_macos.sh`
+*   **Release iOS**: `./release_ios.sh` (Zips existing build/ios/iphoneos/Runner.app)
 *   **Start Backend**: `export PYTHONPATH=$PYTHONPATH:. && source venv/bin/activate && export PORT=8001 && uvicorn src.api:app --host 0.0.0.0 --port 8001`
