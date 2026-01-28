@@ -4,8 +4,10 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as path;
@@ -490,12 +492,11 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Compute a simple hash for the current board position
+  /// Compute a stable MD5 hash for the current board position
   String _computeSimpleHash() {
-    final buffer = StringBuffer();
-    buffer.write('${_board.size}:${_board.komi}:');
-    buffer.write(_board.movesGtp.join(';'));
-    return buffer.toString().hashCode.toRadixString(16).padLeft(16, '0');
+    final movesStr = _board.movesGtp.join(';');
+    final data = '${_board.size}:${_board.komi}:$movesStr';
+    return md5.convert(utf8.encode(data)).toString();
   }
 
   /// Undo last move

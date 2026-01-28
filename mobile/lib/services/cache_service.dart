@@ -3,12 +3,13 @@
 library;
 
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, File, Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart'
     if (dart.library.html) 'package:sqflite/sqflite.dart'; // No-op for web
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/models.dart';
 
 /// Local cache service using SQLite
@@ -22,13 +23,26 @@ class CacheService {
   Future<void> init() async {
     if (_database != null) return;
 
+    String dbPath;
+
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       // Initialize FFI for desktop platforms
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
+
+      // For desktop, getApplicationSupportDirectory is more reliable
+      final appDir = await getApplicationSupportDirectory();
+      dbPath = appDir.path;
+      
+      // Ensure the directory exists (CRITICAL for FFI)
+      final dir = Directory(dbPath);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+    } else {
+      dbPath = await getDatabasesPath();
     }
 
-    final dbPath = await getDatabasesPath();
     final path = join(dbPath, _dbName);
 
     _database = await openDatabase(

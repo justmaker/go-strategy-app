@@ -40,32 +40,6 @@ class AnalysisScreen extends StatelessWidget {
               ),
             ),
           ),
-          // Connection status indicator
-          Consumer<GameProvider>(
-            builder: (context, game, _) {
-              IconData icon;
-              Color color;
-              switch (game.connectionStatus) {
-                case ConnectionStatus.online:
-                  icon = Icons.cloud_done;
-                  color = Colors.green;
-                  break;
-                case ConnectionStatus.offline:
-                  icon = Icons.cloud_off;
-                  color = Colors.red;
-                  break;
-                case ConnectionStatus.checking:
-                  icon = Icons.cloud_sync;
-                  color = Colors.orange;
-                  break;
-              }
-              return IconButton(
-                icon: Icon(icon, color: color),
-                onPressed: () => game.checkConnection(),
-                tooltip: game.connectionStatus.name,
-              );
-            },
-          ),
           // Settings
           IconButton(
             icon: const Icon(Icons.settings),
@@ -742,27 +716,6 @@ class _SettingsSheet extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // Local engine toggle
-              SwitchListTile(
-                title: const Text('Local KataGo Engine'),
-                subtitle: Text(
-                  game.localEngineRunning
-                      ? 'Running (offline analysis available)'
-                      : game.localEngineEnabled
-                          ? 'Starting...'
-                          : 'Disabled',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: game.localEngineRunning ? Colors.green : Colors.grey,
-                  ),
-                ),
-                value: game.localEngineEnabled,
-                onChanged: (value) => game.setLocalEngineEnabled(value),
-                secondary: Icon(
-                  Icons.memory,
-                  color: game.localEngineRunning ? Colors.green : Colors.grey,
-                ),
-              ),
               const Divider(),
 
               // Visual Settings

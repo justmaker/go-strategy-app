@@ -26,16 +26,12 @@
    *此腳本會自動安裝：Git, Flutter SDK, Visual Studio Build Tools, 以及 Windows 版 KataGo。*
 
 3. **搬移專案至本地磁碟 (C 槽) - 重要!**:
-   - **注意**: 若直接在 UTM 的共用資料夾 (`Z:`) 建置，會因為 `ERROR_INVALID_FUNCTION` (符號連結限制) 而失敗。
-   - **首次複製**:
+   - **注意**: 若直接在 UTM 的共用資料夾 (`Z:`) 建置，會因為檔案系統限制而失敗。
+   - **使用腳本同步 (推薦 - 已排掉 iOS/Android 等無效檔案)**:
+     在虛擬機內開啟 PowerShell，進入 `Z:` 槽的 mobile 目錄執行：
      ```powershell
-     mkdir C:\src
-     xcopy /E /I Z:\go-strategy-app C:\src\go-strategy-app
-     ```
-   - **後續更新 (差異同步 - 推薦!)**:
-     使用 `robocopy` 僅同步有變動的檔案（類似 rsync）：
-     ```powershell
-     robocopy Z:\go-strategy-app C:\src\go-strategy-app /E /XO /NP /R:3 /W:5
+     cd Z:\go-strategy-app\mobile
+     PowerShell -ExecutionPolicy Bypass -File .\sync_windows.ps1
      ```
    - 進入本地目錄進行後續操作：
      ```powershell
@@ -45,29 +41,35 @@
 4. **重啟環境**:
    - 建議重新開機，確保 `flutter` 指令與編譯器環境變數生效。
 
-## 3. 編譯 Windows 版本
+## 3. 編譯 Windows 版本 (全自動版 - 推薦)
 
-1. **進入本地專案目錄**:
+在虛擬機中直接執行以下指令，即可完成「同步、編譯、打包」所有步驟：
+```powershell
+cd Z:\go-strategy-app\mobile
+PowerShell -ExecutionPolicy Bypass -File .\build_windows_full.ps1
+```
+
+編譯完成後的 `.zip` 檔會自動出現在 Mac 端的 `mobile/build/windows-app.zip`。
+
+---
+
+## 4. 手動編譯步驟 (若自動腳本失敗時使用)
+
+1. **同步專案**:
+   ```powershell
+   PowerShell -ExecutionPolicy Bypass -File .\sync_windows.ps1
+   ```
+
+2. **進入本地專案目錄並編譯**:
    ```powershell
    cd C:\src\go-strategy-app\mobile
-   ```
-
-2. **取得依賴套件**:
-   ```powershell
-   flutter pub get
-   ```
-
-3. **執行建置**:
-   ```powershell
    flutter build windows --release
    ```
 
-## 4. 產出位置
-
-編譯成功的執行檔將位於：
-`C:\src\go-strategy-app\mobile\build\windows\x64\runner\Release`
-
-您可以將整個 `Release` 資料夾複製回 `Z:` 槽，以便在 Mac 端存取。
+3. **打包成果**:
+   ```powershell
+   PowerShell -ExecutionPolicy Bypass -File .\release_windows.ps1
+   ```
 
 ---
 

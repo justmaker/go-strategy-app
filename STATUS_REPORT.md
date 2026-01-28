@@ -135,7 +135,7 @@ All components use **GTP (Go Text Protocol)** standard:
 | **Android** | ✅ Built (69.2MB) | ✅ Integrated via JNI | KataGo runs natively on Android NDK |
 | **iOS** | ✅ Built (31.5MB) | ✅ Integrated via Pod | Use `--no-codesign` for testing |
 | **macOS** | ✅ Built (46.7MB) | ✅ Can spawn process | adhoc signed, runs directly |
-| **Windows** | ❌ Needs Windows | ✅ Can spawn process | Cross-compile not possible |
+| **Windows** | ✅ Built (via VM) | ✅ Can spawn process | Ready (via UTM/robocopy) |
 | **Web** | ✅ Built (36MB) | ❌ Not possible | PWA ready |
 
 ---
