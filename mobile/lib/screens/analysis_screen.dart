@@ -47,37 +47,83 @@ class AnalysisScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Board
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Consumer<GameProvider>(
-                builder: (context, game, _) {
-                  return GoBoardWidget(
-                    board: game.board,
-                    suggestions: game.lastAnalysis?.topMoves,
-                    showMoveNumbers: game.showMoveNumbers,
-                    onTap: game.isAnalyzing
-                        ? null
-                        : (point) => game.placeStone(point),
-                  );
-                },
-              ),
-            ),
-          ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth > 700;
 
-          // Analysis panel (Fixed height to prevent board resizing)
-          SizedBox(
-            height: 240,
-            child: const _AnalysisPanel(),
-          ),
-
-          // Controls
-          const _ControlsPanel(),
-        ],
+          if (isWide) {
+            // Landscape layout for tablets/desktop
+            return Row(
+              children: [
+                // Logic: Board on the left (Square if possible)
+                Expanded(
+                  flex: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Center(
+                      child: AspectRatio(
+                        aspectRatio: 1.0,
+                        child: _buildBoard(context),
+                      ),
+                    ),
+                  ),
+                ),
+                // Sidebar on the right
+                Container(
+                  width: 350,
+                  decoration: BoxDecoration(
+                    border: Border(left: BorderSide(color: Colors.grey.shade300)),
+                    color: Colors.grey.shade50,
+                  ),
+                  child: Column(
+                    children: [
+                      const Expanded(child: _AnalysisPanel()),
+                      const Divider(height: 1),
+                      const _ControlsPanel(),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          } else {
+            // Portrait layout (Standard Mobile)
+            return Column(
+              children: [
+                // Board
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: _buildBoard(context),
+                  ),
+                ),
+                // Analysis panel
+                SizedBox(
+                  height: 240,
+                  child: const _AnalysisPanel(),
+                ),
+                // Controls
+                const _ControlsPanel(),
+              ],
+            );
+          }
+        },
       ),
+    );
+  }
+
+  Widget _buildBoard(BuildContext context) {
+    return Consumer<GameProvider>(
+      builder: (context, game, _) {
+        return GoBoardWidget(
+          board: game.board,
+          suggestions: game.lastAnalysis?.topMoves,
+          showMoveNumbers: game.showMoveNumbers,
+          onTap: game.isAnalyzing
+              ? null
+              : (point) => game.placeStone(point),
+        );
+      },
     );
   }
 

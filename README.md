@@ -191,6 +191,15 @@ go-strategy-app/
 └── README.md
 ```
 
+## 📚 Documentation
+
+| 文件 | 用途 |
+|------|------|
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | 使用者操作說明書 |
+| [docs/QUICK_RELEASE.md](docs/QUICK_RELEASE.md) | 開發者快速發布指南 |
+| [mobile/BUILD_OUTPUTS.md](mobile/BUILD_OUTPUTS.md) | 詳細建置說明 |
+| [docs/spec/](docs/spec/) | 技術規格書 |
+
 ## Understanding the Analysis
 
 | Metric | Description |

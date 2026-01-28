@@ -10,11 +10,12 @@
 1. [Project Overview](#project-overview)
 2. [Architecture](#architecture)
 3. [Component Status](#component-status)
-4. [Build Outputs](#build-outputs)
-5. [Database Status](#database-status)
-6. [Pending Tasks](#pending-tasks)
-7. [Known Issues](#known-issues)
-8. [Development Guide](#development-guide)
+4. [Specifications](#specifications)
+5. [Build Outputs](#build-outputs)
+6. [Database Status](#database-status)
+7. [Pending Tasks](#pending-tasks)
+8. [Known Issues](#known-issues)
+9. [Development Guide](#development-guide)
 
 ---
 
@@ -127,6 +128,7 @@ All components use **GTP (Go Text Protocol)** standard:
 | Flutter Analyze | ✅ Clean | 0 issues |
 | Flutter Tests | ✅ 18 tests passing | BoardPoint, MoveCandidate, BoardState, GameProvider |
 | Python Tests | ✅ 53 tests passing | board.py, cache.py |
+| UI Responsiveness | ✅ Complete | Dynamic sidebar for wide screens (700px+) |
 
 ### Platform Support
 
@@ -137,6 +139,19 @@ All components use **GTP (Go Text Protocol)** standard:
 | **macOS** | ✅ Built (46.7MB) | ✅ Can spawn process | adhoc signed, runs directly |
 | **Windows** | ✅ Built (via VM) | ✅ Can spawn process | Ready (via UTM/robocopy) |
 | **Web** | ✅ Built (36MB) | ❌ Not possible | PWA ready |
+
+---
+
+## Specifications
+
+為了確保跨平台實作的一致性，我們建立了一套完整的技術規範文件：
+
+- 📂 **[全文索引 (spec/README.md)](docs/spec/README.md)**
+- 🔌 **[API 規格 (API.md)](docs/spec/API.md)**: 定義端點、GTP 座標標準。
+- 🧠 **[核心邏輯 (LOGIC.md)](docs/spec/LOGIC.md)**: 離線優先流程、對稱雜湊 (Symmetry Hashing) 與雙滑桿邏輯。
+- 📊 **[資料生成 (DATA.md)](docs/spec/DATA.md)**: Opening Book 生成深度與壓縮格式。
+- 🎨 **[UI/UX 規範 (UI_SPEC.md)](docs/UI_SPEC.md)**: 視覺系統、顏色等級與棋渲染。
+- 🧪 **[測試規範 (TEST.md)](docs/spec/TEST.md)**: 自動化測試與 QA Checklist。
 
 ---
 
@@ -215,8 +230,15 @@ python -m src.scripts.export_opening_book --min-visits 100 --compress
 ## Completed Tasks (2026-01-27)
 
 - [x] **Windows Setup Automation Refinement**: 
-  - Updated `scripts/windows_setup.ps1` to include automatic downloading and configuration of KataGo (Eigen version) and a default neural network model.
-  - Refined zip extraction logic to handle nested directories and ensure `katago.exe` is correctly placed in `C:\Program Files\KataGo`.
+  - Updated `scripts/windows_setup.ps1` to include automatic downloading and configuration of KataGo.
+- [x] **Technical Specifications Established**:
+  - Created a complete specification suite in `docs/spec/` covering API, Logic, Data, Testing, and Branching.
+- [x] **Responsive UI Implementation**:
+  - Implemented `LayoutBuilder` in `analysis_screen.dart` to provide a side-by-side layout for tablets/desktop.
+  - Added square-aspect board centering for wide screens.
+- [x] **Database Maintenance Tools**:
+  - Created `src/scripts/verify_database.py` for health checks and statistical summaries.
+  - Improved `build_opening_book.py` with persistent file logging to `logs/`.
 
 - [x] **Android Release Automation**:
   - Created `release_android.sh` to automate the Flutter build, git tagging, and uploading of the APK to GitHub Releases.
