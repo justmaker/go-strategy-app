@@ -27,10 +27,18 @@
 
 3. **搬移專案至本地磁碟 (C 槽) - 重要!**:
    - **注意**: 若直接在 UTM 的共用資料夾 (`Z:`) 建置，會因為 `ERROR_INVALID_FUNCTION` (符號連結限制) 而失敗。
-   - 請將專案複製到 `C:` 槽：
+   - **首次複製**:
      ```powershell
      mkdir C:\src
      xcopy /E /I Z:\go-strategy-app C:\src\go-strategy-app
+     ```
+   - **後續更新 (差異同步 - 推薦!)**:
+     使用 `robocopy` 僅同步有變動的檔案（類似 rsync）：
+     ```powershell
+     robocopy Z:\go-strategy-app C:\src\go-strategy-app /E /XO /NP /R:3 /W:5
+     ```
+   - 進入本地目錄進行後續操作：
+     ```powershell
      cd C:\src\go-strategy-app\mobile
      ```
 
