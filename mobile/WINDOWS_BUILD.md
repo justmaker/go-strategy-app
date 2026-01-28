@@ -10,36 +10,38 @@
    - **重要**: 勾選 "Install drivers and SPICE tools"。
 3. **完成安裝**: 進入 Windows 桌面並確保網路連線正常。
 
-## 2. 自動化環境配置
+## 2. 自動化環境配置與專案下載
 
-進入 Windows 桌面後，請執行以下步驟：
+進入 Windows 桌面後，請依照以下順序操作：
 
 1. **以管理員身分開啟 PowerShell**:
    - 在開始選單搜尋 `PowerShell`，右鍵點擊 **「以系統管理員身分執行」**。
 
-2. **取得專案代碼**:
-   - 如果您有掛載共用的資料夾 (Shared Directory)，直接進入該目錄。
-   - 或者使用 Git 複製：
-     ```powershell
-     git clone https://github.com/justmaker/go-strategy-app.git
-     cd go-strategy-app
-     ```
-
-3. **執行環境配置腳本**:
+2. **執行環境配置腳本**:
+   - 首先進入共用資料夾（例如 `Z:\go-strategy-app\scripts`）執行配置：
    ```powershell
-   cd scripts
+   cd Z:\go-strategy-app\scripts
    PowerShell -ExecutionPolicy Bypass -File .\windows_setup.ps1
    ```
    *此腳本會自動安裝：Git, Flutter SDK, Visual Studio Build Tools, 以及 Windows 版 KataGo。*
 
+3. **搬移專案至本地磁碟 (C 槽) - 重要!**:
+   - **注意**: 若直接在 UTM 的共用資料夾 (`Z:`) 建置，會因為 `ERROR_INVALID_FUNCTION` (符號連結限制) 而失敗。
+   - 請將專案複製到 `C:` 槽：
+     ```powershell
+     mkdir C:\src
+     xcopy /E /I Z:\go-strategy-app C:\src\go-strategy-app
+     cd C:\src\go-strategy-app\mobile
+     ```
+
 4. **重啟環境**:
-   - 關閉 PowerShell 並重新開啟（或重新開機），確保環境變數生效。
+   - 建議重新開機，確保 `flutter` 指令與編譯器環境變數生效。
 
 ## 3. 編譯 Windows 版本
 
-1. **進入 Flutter 目錄**:
+1. **進入本地專案目錄**:
    ```powershell
-   cd mobile
+   cd C:\src\go-strategy-app\mobile
    ```
 
 2. **取得依賴套件**:
@@ -55,13 +57,16 @@
 ## 4. 產出位置
 
 編譯成功的執行檔將位於：
-`mobile\build\windows\x64\runner\Release`
+`C:\src\go-strategy-app\mobile\build\windows\x64\runner\Release`
 
-您可以將整個 `Release` 資料夾壓縮後發布給其他 Windows 使用者。
+您可以將整個 `Release` 資料夾複製回 `Z:` 槽，以便在 Mac 端存取。
 
 ---
 
 ## 常見問題 (Troubleshooting)
+
+### Q: 出現 `ERROR_INVALID_FUNCTION`
+A: 這通常是因為在網路驅動器 (Shared Folders) 上執行建置。請依照上述步驟將專案搬移至 `C:` 磁碟本地路徑再建置。
 
 ### Q: 出現 Permissions/Security 錯誤
 A: 請務必以 **管理員身分** 執行 PowerShell，並使用 `-ExecutionPolicy Bypass` 參數。
