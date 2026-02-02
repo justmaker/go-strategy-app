@@ -165,7 +165,7 @@ def main():
     for size in [9, 13, 19]:
         for i in range(args.count):
             print(f"--- Starting {size}x{size} game ({i+1}/{args.count}) ---")
-            run_game(args.katago, args.config, args.model, size, 100, args.output)
+            run_game(args.katago, args.config, args.model, size, 500, args.output)
 
 if __name__ == "__main__":
     main()
