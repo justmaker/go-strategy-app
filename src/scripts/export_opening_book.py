@@ -163,7 +163,7 @@ def export_opening_book(
                     transformed_candidates.append({
                         'move': new_gtp,
                         'winrate': move_cand['winrate'],
-                        'scoreLead': move_cand['scoreLead'],
+                        'scoreLead': move_cand['score_lead'],
                         'visits': move_cand['visits']
                     })
                 
