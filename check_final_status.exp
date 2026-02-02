@@ -1,0 +1,10 @@
+#!/usr/bin/expect
+
+set timeout 20
+set ip "10.20.91.201"
+set user "rtrd"
+set password "qq123456"
+
+spawn ssh $user@$ip "echo '--- LAST 20 LINES OF book_build_parallel.log ---' && tail -n 20 ~/go-strategy-app/book_build_parallel.log && echo '--- ASSETS STATUS ---' && ls -lh ~/go-strategy-app/mobile/assets/opening_book.json*"
+expect "password:" { send "$password\r" }
+expect eof

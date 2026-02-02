@@ -1,0 +1,11 @@
+KataGo v1.16.4
+Using Chinese rules initially, unless GTP/GUI overrides this
+Initializing board with boardXSize 19 boardYSize 19
+--------------
+WARNING: Config had unused keys! You may have a typo, an option you specified is being unused from katago/gtp_analysis.cfg
+WARNING: Unused key 'komi' in katago/gtp_analysis.cfg
+--------------
+Loaded config katago/gtp_analysis.cfg
+Loaded model katago/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz
+Model name: kata1-b18c384nbt-s9996604416-d4316597426
+GTP ready, beginning main protocol loop

@@ -380,13 +380,12 @@ def init_session_state():
     if 'analyzer' not in st.session_state:
         st.session_state.analyzer = None
         
-    # Initialize analyzer if needed (needed for checking opening book)
     try:
         if st.session_state.analyzer is None:
             st.session_state.analyzer = GoAnalyzer(
                 config_path=str(PROJECT_ROOT / "config.yaml")
             )
-    except Exception:
+    except Exception as e:
         pass
 
     if 'visits' not in st.session_state:
@@ -404,25 +403,8 @@ def init_session_state():
         else:
             st.session_state.visits = 50
     if 'analysis_result' not in st.session_state:
-        # Auto-analyze on initial load to show Black's first move suggestions
+        # We start with None and let the main loop handle the first analysis
         st.session_state.analysis_result = None
-        try:
-            # Re-ensure analyzer is ready
-            if st.session_state.analyzer is None:
-                st.session_state.analyzer = GoAnalyzer(
-                    config_path=str(PROJECT_ROOT / "config.yaml")
-                )
-            
-            result = st.session_state.analyzer.analyze(
-                board_size=st.session_state.get('board_size', 9),
-                moves=None,
-                handicap=st.session_state.get('handicap', 0),
-                komi=st.session_state.get('komi', 7.5),
-                visits=st.session_state.get('visits', 300),
-            )
-            st.session_state.analysis_result = result
-        except Exception:
-            pass  # Silently fail if KataGo not available
     if 'last_click' not in st.session_state:
         st.session_state.last_click = None
     if 'show_move_numbers' not in st.session_state:
@@ -626,6 +608,17 @@ def main():
             st.session_state.handicap = new_handicap
             st.session_state.moves = []
             st.session_state.analysis_result = None
+        
+        st.markdown("---")
+        # Analysis Mode
+        st.write("**Data Engine**")
+        cache_only = st.checkbox(
+            "Cache Only Mode",
+            value=False,
+            help="Show only pre-calculated moves from data/analysis.db. No background KataGo process."
+        )
+        if st.session_state.analyzer:
+            st.session_state.analyzer.cache_only = cache_only
         
         st.markdown("---")
         
@@ -946,20 +939,27 @@ def main():
         # Update session state prisoners based on full board simulation
         st.session_state.prisoners = board_obj.prisoners
         
-        # Auto-trigger analysis if result is missing (e.g. after board setup)
+        # Get suggesting moves and ownership
         if st.session_state.analysis_result is None and st.session_state.analyzer:
-            try:
-                result = st.session_state.analyzer.analyze(
-                    board_size=st.session_state.board_size,
-                    moves=st.session_state.moves if st.session_state.moves else None,
-                    handicap=st.session_state.handicap,
-                    komi=st.session_state.komi,
-                    visits=st.session_state.visits,
-                )
-                st.session_state.analysis_result = result
-                st.rerun()
-            except Exception:
-                pass
+            with st.status("Analyzing position...", expanded=False) as status:
+                try:
+                    status.update(label="Initial analysis (may take 20s for KataGo to start)...", expanded=True)
+                    result = st.session_state.analyzer.analyze(
+                        board_size=st.session_state.board_size,
+                        moves=st.session_state.moves if st.session_state.moves else None,
+                        handicap=st.session_state.handicap,
+                        komi=st.session_state.komi,
+                        visits=st.session_state.visits,
+                    )
+                    st.session_state.analysis_result = result
+                    status.update(label="Analysis complete!", state="complete", expanded=False)
+                    # Removed st.rerun() to avoid infinite loops and unnecessary processing
+                except Exception as e:
+                    st.error(f"Analysis failed (KataGo taking too long or error): {e}")
+                    status.update(label="Analysis failed", state="error")
+                    # Set a dummy result to avoid re-triggering this loop every rerun
+                    # But don't show any suggestions
+                    st.session_state.analysis_result = "FAILED"
         
         # Get last move
         last_move = None
@@ -971,7 +971,9 @@ def main():
         # Get suggested moves and ownership
         suggested = None
         ownership = None
-        if st.session_state.analysis_result:
+        has_result = st.session_state.analysis_result and st.session_state.analysis_result != "FAILED"
+        
+        if has_result:
             suggested = st.session_state.analysis_result.top_moves
             ownership = st.session_state.analysis_result.ownership
         
@@ -988,7 +990,7 @@ def main():
         # Display clickable image
         coords = streamlit_image_coordinates(
             board_img,
-            key=f"board_{len(st.session_state.moves)}_{st.session_state.analysis_result is not None}_{st.session_state.show_territory}",
+            key=f"board_{len(st.session_state.moves)}_{has_result}_{st.session_state.show_territory}",
         )
         
         # Handle click
@@ -1083,7 +1085,7 @@ def main():
         # Analysis results
         st.markdown("### Analysis")
         
-        if st.session_state.analysis_result:
+        if st.session_state.analysis_result and st.session_state.analysis_result != "FAILED":
             result = st.session_state.analysis_result
             
             source = "Cache" if result.from_cache else "KataGo"

@@ -1,0 +1,10 @@
+#!/usr/bin/expect
+
+set timeout 300
+set ip "10.20.91.201"
+set user "rtrd"
+set password "qq123456"
+
+spawn ssh $user@$ip "cd ~/go-strategy-app && git fetch origin && git reset --hard origin/main && python3 -c \"import sqlite3; conn = sqlite3.connect('data/analysis.db'); print('DB Count:', conn.execute('SELECT COUNT(*) FROM analysis_cache').fetchone()\[0\])\" && python3 -m src.scripts.export_opening_book --compress --output mobile/assets/opening_book.json"
+expect "password:" { send "$password\r" }
+expect eof

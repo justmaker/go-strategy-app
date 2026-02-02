@@ -1,0 +1,10 @@
+#!/usr/bin/expect
+
+set timeout 300
+set ip "10.20.91.201"
+set user "rtrd"
+set password "qq123456"
+
+spawn scp $user@$ip:~/go-strategy-app/data/analysis.db /Users/hsurex/go-strategy-app/data/analysis.db
+expect "password:" { send "$password\r" }
+expect eof

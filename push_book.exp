@@ -1,0 +1,10 @@
+#!/usr/bin/expect
+
+set timeout 600
+set ip "10.20.91.201"
+set user "rtrd"
+set password "qq123456"
+
+spawn ssh $user@$ip "cd ~/go-strategy-app && git add mobile/assets/opening_book.json.gz && git commit -m 'Add generated symmetry-expanded opening book (36k positions)' && git push origin main"
+expect "password:" { send "$password\r" }
+expect eof

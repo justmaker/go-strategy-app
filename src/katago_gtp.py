@@ -206,9 +206,22 @@ class KataGoGTP:
             raise KataGoProcessError("KataGo process died unexpectedly")
 
         # Read response (GTP response ends with double newline)
+        import select
+        import time
         response_lines = []
+        timeout = 60.0  # 60 seconds max for any single GTP command
+        start_time = time.time()
+        
         while True:
+            if time.time() - start_time > timeout:
+                raise KataGoProcessError(f"GTP command timeout: {cmd}")
+                
             try:
+                # Check if data is available
+                ready, _, _ = select.select([self.process.stdout], [], [], 0.5)
+                if not ready:
+                    continue
+                    
                 line = self.process.stdout.readline()
             except Exception as e:
                 raise KataGoProcessError(f"Error reading from KataGo: {e}")

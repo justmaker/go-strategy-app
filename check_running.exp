@@ -1,0 +1,10 @@
+#!/usr/bin/expect
+
+set timeout 20
+set ip "10.20.91.201"
+set user "rtrd"
+set password "qq123456"
+
+spawn ssh $user@$ip "ps aux | grep -E 'build_opening_book|katago' | grep -v grep"
+expect "password:" { send "$password\r" }
+expect eof

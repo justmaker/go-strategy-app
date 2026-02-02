@@ -5,11 +5,11 @@ katago:
   # Platform-specific KataGo paths
   # The application will automatically select the correct path based on OS
   
-  # Mac (Darwin) - Homebrew installation
+  # Mac (Darwin) - Using project local installation
   mac:
-    katago_path: "/opt/homebrew/bin/katago"
-    model_path: "/opt/homebrew/Cellar/katago/1.16.0/share/katago/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz"
-    config_path: "katago/gtp_analysis.cfg"  # Relative to project root
+    katago_path: "katago/katago"
+    model_path: "katago/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz"
+    config_path: "katago/gtp_analysis.cfg"
   
   # Linux - Project local installation
   linux:
