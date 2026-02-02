@@ -54,6 +54,7 @@ resignConsecTurns = 3
 numAnalysisThreads = 12
 numSearchThreads = 12
 nnCacheSizePowerOfTwo = 20
+nnMaxBatchSize = 64
 EOF
 fi
 
