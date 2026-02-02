@@ -171,7 +171,7 @@ def export_opening_book(
                 # For now, we skip hash re-computation as the App uses moves-key primarily.
                 # But let's do it if we want the 'h' key to be accurate.
                 variant_board = create_board(size=board_size, moves=transformed_moves, komi=komi)
-                variant_hash = variant_board.compute_zobrist_hash()
+                variant_hash = variant_board.compute_hash()
 
                 entry = {
                     'h': variant_hash,
