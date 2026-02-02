@@ -60,8 +60,19 @@ fi
 
 # 4. Run Analysis
 GAMES_COUNT=${1:-1}
+AUTO_PUSH=${2:-false}
+
 echo "Running constrained self-play (Count: $GAMES_COUNT)..."
-python3 ../constrained_selfplay.py --katago ./katago --config analysis_custom.cfg --model model.bin.gz --count $GAMES_COUNT --output ./results
+python3 constrained_selfplay.py --katago ./katago --config analysis_custom.cfg --model model.bin.gz --count $GAMES_COUNT --output ./results
 
 echo "Done! Results are in $WORK_DIR/results"
-ls -l ./results
+
+if [ "$AUTO_PUSH" = "true" ]; then
+    echo "Pushing results to Git..."
+    cd ../..
+    git add scripts/remote_runner/katago_env/results/*.json
+    git commit -m "Add self-play data from remote server (Visits: 500)"
+    git push origin main
+fi
+
+ls -l $WORK_DIR/results
