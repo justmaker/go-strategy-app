@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/katago/cpp/core/multithread.cpp
+#include "../core/multithread.h"
+
+/* This file is to ensure multithread.h compiles on its own. */

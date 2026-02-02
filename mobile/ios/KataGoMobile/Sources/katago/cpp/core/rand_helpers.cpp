@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/katago/cpp/core/rand_helpers.cpp
+#include "../core/rand_helpers.h"
+
+/* This file is to ensure rand_helpers.h compiles on its own. */

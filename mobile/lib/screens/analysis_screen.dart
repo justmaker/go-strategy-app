@@ -40,32 +40,6 @@ class AnalysisScreen extends StatelessWidget {
               ),
             ),
           ),
-          // Connection status indicator
-          Consumer<GameProvider>(
-            builder: (context, game, _) {
-              IconData icon;
-              Color color;
-              switch (game.connectionStatus) {
-                case ConnectionStatus.online:
-                  icon = Icons.cloud_done;
-                  color = Colors.green;
-                  break;
-                case ConnectionStatus.offline:
-                  icon = Icons.cloud_off;
-                  color = Colors.red;
-                  break;
-                case ConnectionStatus.checking:
-                  icon = Icons.cloud_sync;
-                  color = Colors.orange;
-                  break;
-              }
-              return IconButton(
-                icon: Icon(icon, color: color),
-                onPressed: () => game.checkConnection(),
-                tooltip: game.connectionStatus.name,
-              );
-            },
-          ),
           // Settings
           IconButton(
             icon: const Icon(Icons.settings),
@@ -73,37 +47,83 @@ class AnalysisScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Board
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Consumer<GameProvider>(
-                builder: (context, game, _) {
-                  return GoBoardWidget(
-                    board: game.board,
-                    suggestions: game.lastAnalysis?.topMoves,
-                    showMoveNumbers: game.showMoveNumbers,
-                    onTap: game.isAnalyzing
-                        ? null
-                        : (point) => game.placeStone(point),
-                  );
-                },
-              ),
-            ),
-          ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth > 700;
 
-          // Analysis panel (Fixed height to prevent board resizing)
-          SizedBox(
-            height: 240,
-            child: const _AnalysisPanel(),
-          ),
-
-          // Controls
-          const _ControlsPanel(),
-        ],
+          if (isWide) {
+            // Landscape layout for tablets/desktop
+            return Row(
+              children: [
+                // Logic: Board on the left (Square if possible)
+                Expanded(
+                  flex: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Center(
+                      child: AspectRatio(
+                        aspectRatio: 1.0,
+                        child: _buildBoard(context),
+                      ),
+                    ),
+                  ),
+                ),
+                // Sidebar on the right
+                Container(
+                  width: 350,
+                  decoration: BoxDecoration(
+                    border: Border(left: BorderSide(color: Colors.grey.shade300)),
+                    color: Colors.grey.shade50,
+                  ),
+                  child: Column(
+                    children: [
+                      const Expanded(child: _AnalysisPanel()),
+                      const Divider(height: 1),
+                      const _ControlsPanel(),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          } else {
+            // Portrait layout (Standard Mobile)
+            return Column(
+              children: [
+                // Board
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: _buildBoard(context),
+                  ),
+                ),
+                // Analysis panel
+                SizedBox(
+                  height: 240,
+                  child: const _AnalysisPanel(),
+                ),
+                // Controls
+                const _ControlsPanel(),
+              ],
+            );
+          }
+        },
       ),
+    );
+  }
+
+  Widget _buildBoard(BuildContext context) {
+    return Consumer<GameProvider>(
+      builder: (context, game, _) {
+        return GoBoardWidget(
+          board: game.board,
+          suggestions: game.lastAnalysis?.topMoves,
+          showMoveNumbers: game.showMoveNumbers,
+          onTap: game.isAnalyzing
+              ? null
+              : (point) => game.placeStone(point),
+        );
+      },
     );
   }
 
@@ -742,27 +762,6 @@ class _SettingsSheet extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // Local engine toggle
-              SwitchListTile(
-                title: const Text('Local KataGo Engine'),
-                subtitle: Text(
-                  game.localEngineRunning
-                      ? 'Running (offline analysis available)'
-                      : game.localEngineEnabled
-                          ? 'Starting...'
-                          : 'Disabled',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: game.localEngineRunning ? Colors.green : Colors.grey,
-                  ),
-                ),
-                value: game.localEngineEnabled,
-                onChanged: (value) => game.setLocalEngineEnabled(value),
-                secondary: Icon(
-                  Icons.memory,
-                  color: game.localEngineRunning ? Colors.green : Colors.grey,
-                ),
-              ),
               const Divider(),
 
               // Visual Settings

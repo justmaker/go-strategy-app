@@ -1,1 +1,11 @@
-../../../../../android/app/src/main/cpp/eigen/failtest/bdcsvd_int.cpp
+#include "../Eigen/SVD"
+
+#ifdef EIGEN_SHOULD_FAIL_TO_BUILD
+#define SCALAR int
+#else
+#define SCALAR float
+#endif
+
+using namespace Eigen;
+
+int main() { BDCSVD<Matrix<SCALAR, Dynamic, Dynamic> > qr(Matrix<SCALAR, Dynamic, Dynamic>::Random(10, 10)); }

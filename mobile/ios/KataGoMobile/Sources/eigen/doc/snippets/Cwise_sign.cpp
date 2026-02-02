@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Cwise_sign.cpp
+Array3d v(-3, 5, 0);
+cout << v.sign() << endl;

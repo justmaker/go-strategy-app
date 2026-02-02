@@ -166,9 +166,40 @@ static const String _webApiUrl = '';
 
 **Note**: The backend API must have CORS enabled for web to work from different origins.
 
-### iOS (Simulator only)
+### iOS
 
-Currently blocked by macOS Sonoma+ codesigning issues. Use web version instead.
+The iOS version is now supported and includes integrated KataGo engine.
+
+```bash
+cd mobile
+
+# Build release iOS app (skipping codesign for distribution via other means)
+flutter build ios --release --no-codesign
+```
+
+The app will be at: `build/ios/iphoneos/Runner.app`
+
+### macOS
+
+The macOS version is fully supported and can be built directly on Apple Silicon or Intel Macs.
+
+```bash
+cd mobile
+
+# Build release macOS app
+flutter build macos --release
+```
+
+The app will be at: `build/macos/Build/Products/Release/go_strategy_app.app`
+
+### Release Scripts (Automation)
+
+We provide several scripts to automate the build and upload process to GitHub Releases:
+
+- `./release_android.sh`: Builds APK and uploads to GitHub.
+- `./release_ios.sh`: Zips `Runner.app` and uploads to GitHub.
+- `./release_macos.sh`: Zips `go_strategy_app.app` and uploads to GitHub.
+- `./build_all.sh`: Builds all supported platforms at once.
 
 ## Updating the Opening Book
 

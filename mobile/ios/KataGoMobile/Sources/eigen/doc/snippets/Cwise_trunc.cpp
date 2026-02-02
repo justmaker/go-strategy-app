@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Cwise_trunc.cpp
+ArrayXd v = ArrayXd::LinSpaced(7, -2, 2);
+cout << v << endl << endl;
+cout << trunc(v) << endl;

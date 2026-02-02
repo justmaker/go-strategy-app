@@ -1,1 +1,5 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/examples/make_circulant.cpp.preamble
+#include <Eigen/Core>
+#include <iostream>
+
+template <class ArgType>
+class Circulant;

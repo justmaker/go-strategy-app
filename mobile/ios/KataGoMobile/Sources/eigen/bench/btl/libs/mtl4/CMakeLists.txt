@@ -1,1 +1,6 @@
-../../../../../../../../android/app/src/main/cpp/eigen/bench/btl/libs/mtl4/CMakeLists.txt
+
+find_package(MTL4)
+if (MTL4_FOUND)
+  include_directories(${MTL4_INCLUDE_DIR})
+  btl_add_bench(btl_mtl4 main.cpp)
+endif ()

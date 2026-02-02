@@ -167,12 +167,9 @@ class OpeningBookService {
     }
   }
 
-  /// Expand moves for empty board using symmetry
-  /// This fixes issues where the opening book data might be truncated
-  /// (e.g., containing only 3 of 4 symmetric star points).
+  /// Expand moves using symmetry for opening book entries.
+  /// This ensures all symmetric equivalents are shown (e.g., C4 -> G6, G4, C6).
   OpeningBookEntry _expandSymmetry(OpeningBookEntry entry) {
-    if (entry.movesSequence.isNotEmpty) return entry;
-
     final size = entry.boardSize;
     final expandedMoves = <MoveCandidate>[];
     final seenMoves = <String>{};
@@ -395,9 +392,8 @@ class OpeningBookService {
       }
     } else {
         debugPrint('[OpeningBook] HIT: $moveKey');
-        if (entry.movesSequence.isEmpty) {
-          entry = _expandSymmetry(entry);
-        }
+        // Always expand symmetry to show all equivalent moves
+        entry = _expandSymmetry(entry);
     }
     
     return entry?.toAnalysisResult();

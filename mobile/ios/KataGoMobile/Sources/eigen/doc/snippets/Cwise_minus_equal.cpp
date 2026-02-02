@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Cwise_minus_equal.cpp
+Array3d v(1, 2, 3);
+v -= 5;
+cout << v << endl;

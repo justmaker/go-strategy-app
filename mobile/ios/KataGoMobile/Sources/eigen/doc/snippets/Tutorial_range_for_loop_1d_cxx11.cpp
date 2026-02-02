@@ -1,1 +1,4 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Tutorial_range_for_loop_1d_cxx11.cpp
+VectorXi v = VectorXi::Random(4);
+cout << "Here is the vector v:\n";
+for (auto x : v) cout << x << " ";
+cout << "\n";

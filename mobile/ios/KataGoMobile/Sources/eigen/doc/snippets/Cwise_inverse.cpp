@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Cwise_inverse.cpp
+Array3d v(2, 3, 4);
+cout << v.inverse() << endl;

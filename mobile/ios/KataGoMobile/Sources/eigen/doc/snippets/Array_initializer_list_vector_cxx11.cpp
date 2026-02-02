@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Array_initializer_list_vector_cxx11.cpp
+Array<int, Dynamic, 1> v{{1, 2, 3, 4, 5}};
+cout << v << endl;

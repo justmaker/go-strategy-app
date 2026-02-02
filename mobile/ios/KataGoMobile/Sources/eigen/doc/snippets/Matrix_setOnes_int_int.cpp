@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Matrix_setOnes_int_int.cpp
+MatrixXf m;
+m.setOnes(3, 3);
+cout << m << endl;

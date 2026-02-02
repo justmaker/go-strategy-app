@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/MatrixBase_ones.cpp
+cout << Matrix2d::Ones() << endl;
+cout << 6 * RowVector4i::Ones() << endl;

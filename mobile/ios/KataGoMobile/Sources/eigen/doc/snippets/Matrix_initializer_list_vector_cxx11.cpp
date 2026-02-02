@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Matrix_initializer_list_vector_cxx11.cpp
+VectorXi v{{1, 2}};
+cout << v << endl;

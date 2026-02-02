@@ -57,7 +57,7 @@ protected:
     return c;
   }
   virtual std::streamsize xsputn(const char *s, std::streamsize n) override {
-    return write(fd, s, n);
+    return (std::streamsize)write(fd, s, (size_t)n);
   }
 };
 

@@ -3,33 +3,56 @@
 library;
 
 import 'dart:convert';
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Directory, File, Platform;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart'
     if (dart.library.html) 'package:sqflite/sqflite.dart'; // No-op for web
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/models.dart';
 
 /// Local cache service using SQLite
 class CacheService {
   static const String _dbName = 'analysis_cache.db';
+  static const String _bundledDbAsset = 'assets/data/analysis.db';
   static const int _dbVersion = 1;
 
   Database? _database;
+  bool _bundledDataLoaded = false;
+
+  /// Check if bundled opening book data has been loaded
+  bool get bundledDataLoaded => _bundledDataLoaded;
 
   /// Initialize the database
   Future<void> init() async {
     if (_database != null) return;
 
+    String dbPath;
+
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       // Initialize FFI for desktop platforms
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
+
+      // For desktop, getApplicationSupportDirectory is more reliable
+      final appDir = await getApplicationSupportDirectory();
+      dbPath = appDir.path;
+      
+      // Ensure the directory exists (CRITICAL for FFI)
+      final dir = Directory(dbPath);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+    } else {
+      dbPath = await getDatabasesPath();
     }
 
-    final dbPath = await getDatabasesPath();
     final path = join(dbPath, _dbName);
+    
+    // Check if we need to copy bundled opening book
+    await _copyBundledDbIfNeeded(path);
 
     _database = await openDatabase(
       path,
@@ -37,6 +60,39 @@ class CacheService {
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
+    
+    // Mark bundled data as loaded if we have entries
+    final count = await _database!.rawQuery('SELECT COUNT(*) as cnt FROM analysis_cache');
+    _bundledDataLoaded = (count.first['cnt'] as int) > 0;
+    debugPrint('[CacheService] Initialized with ${count.first['cnt']} entries');
+  }
+  
+  /// Copy bundled opening book database if local DB doesn't exist or is empty
+  Future<void> _copyBundledDbIfNeeded(String targetPath) async {
+    final targetFile = File(targetPath);
+    
+    // If file exists and is not empty, skip
+    if (await targetFile.exists()) {
+      final size = await targetFile.length();
+      if (size > 1024) {  // More than 1KB means it has data
+        debugPrint('[CacheService] Local DB exists (${(size / 1024 / 1024).toStringAsFixed(1)} MB), skipping bundled copy');
+        return;
+      }
+    }
+    
+    // Try to copy bundled database
+    try {
+      debugPrint('[CacheService] Copying bundled opening book database...');
+      final data = await rootBundle.load(_bundledDbAsset);
+      final bytes = data.buffer.asUint8List();
+      
+      // Write to target path
+      await targetFile.writeAsBytes(bytes);
+      debugPrint('[CacheService] Copied bundled DB (${(bytes.length / 1024 / 1024).toStringAsFixed(1)} MB)');
+    } catch (e) {
+      debugPrint('[CacheService] No bundled DB found or copy failed: $e');
+      // Not an error - will create empty DB
+    }
   }
 
   /// Create database tables

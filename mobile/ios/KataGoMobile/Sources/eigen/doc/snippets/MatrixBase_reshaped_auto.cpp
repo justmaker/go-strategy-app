@@ -1,1 +1,4 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/MatrixBase_reshaped_auto.cpp
+Matrix4i m = Matrix4i::Random();
+cout << "Here is the matrix m:" << endl << m << endl;
+cout << "Here is m.reshaped(2, AutoSize):" << endl << m.reshaped(2, AutoSize) << endl;
+cout << "Here is m.reshaped<RowMajor>(AutoSize, fix<8>):" << endl << m.reshaped<RowMajor>(AutoSize, fix<8>) << endl;

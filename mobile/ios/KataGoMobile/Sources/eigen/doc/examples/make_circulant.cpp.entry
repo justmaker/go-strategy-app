@@ -1,1 +1,4 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/examples/make_circulant.cpp.entry
+template <class ArgType>
+Circulant<ArgType> makeCirculant(const Eigen::MatrixBase<ArgType>& arg) {
+  return Circulant<ArgType>(arg.derived());
+}

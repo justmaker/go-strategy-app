@@ -1,1 +1,1 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/MatrixBase_asDiagonal.cpp
+cout << Matrix3i(Vector3i(2, 5, 6).asDiagonal()) << endl;

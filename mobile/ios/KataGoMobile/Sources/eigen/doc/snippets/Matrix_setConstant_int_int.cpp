@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Matrix_setConstant_int_int.cpp
+MatrixXf m;
+m.setConstant(3, 3, 5);
+cout << m << endl;

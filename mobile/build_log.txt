@@ -28,131 +28,59 @@ FAILURE: Build failed with an exception.
 * What went wrong:
 Execution failed for task ':app:buildCMakeRelease[arm64-v8a]'.
 > com.android.ide.common.process.ProcessException: ninja: Entering directory `/Users/rexhsu/Documents/go-strategy-app/mobile/build/.cxx/release/2t384a5x/arm64-v8a'
-  [1/4] Building CXX object CMakeFiles/katago_mobile.dir/native-lib.cpp.o
-  [2/4] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o
-  [3/4] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/command/writetrainingdata.cpp.o
-  [4/4] Linking CXX shared library /Users/rexhsu/Documents/go-strategy-app/mobile/build/app/intermediates/cxx/release/2t384a5x/obj/arm64-v8a/libkatago_mobile.so
-  FAILED: /Users/rexhsu/Documents/go-strategy-app/mobile/build/app/intermediates/cxx/release/2t384a5x/obj/arm64-v8a/libkatago_mobile.so 
-  : && /opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -fPIC -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O3 -DNDEBUG  -static-libstdc++ -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments  -Wl,--gc-sections -shared -Wl,-soname,libkatago_mobile.so -o /Users/rexhsu/Documents/go-strategy-app/mobile/build/app/intermediates/cxx/release/2t384a5x/obj/arm64-v8a/libkatago_mobile.so CMakeFiles/katago_mobile.dir/native-lib.cpp.o CMakeFiles/katago_mobile.dir/stubs.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/book/book.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/book/bookcssjs.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/command/analysis.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/command/commandline.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/command/genbook.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/command/gtp.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/command/misc.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/command/tune.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/command/writetrainingdata.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/base64.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/bsearch.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/commandloop.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/config_parser.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/datetime.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/elo.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/fancymath.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/fileutils.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/global.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/hash.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/logger.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/mainargs.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/makedir.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/md5.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/multithread.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/parallel.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/rand.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/rand_helpers.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/sha2.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/test.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/threadsafecounter.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/threadsafequeue.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/threadtest.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/core/timer.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/dataio/files.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/dataio/homedata.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/dataio/loadmodel.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/dataio/poswriter.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/dataio/sgf.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/game/board.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/game/boardhistory.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/game/graphhash.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/game/rules.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/neuralnet/desc.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/neuralnet/dummybackend.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/neuralnet/eigenbackend.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/neuralnet/metalbackend.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/neuralnet/modelversion.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/neuralnet/nneval.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/neuralnet/nninputs.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/neuralnet/sgfmetadata.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/neuralnet/trtbackend.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/program/gtpconfig.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/program/play.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/program/playsettings.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/program/playutils.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/program/selfplaymanager.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/program/setup.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/analysisdata.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/asyncbot.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/distributiontable.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/evalcache.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/localpattern.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/mutexpool.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/patternbonustable.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/reportedsearchvalues.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/search.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/searchexplorehelpers.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/searchhelpers.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/searchmirror.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/searchmultithreadhelpers.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/searchnnhelpers.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/searchnode.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/searchnodetable.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/searchparams.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/searchprint.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/searchpuct.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/searchresults.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/searchtimehelpers.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/searchupdatehelpers.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/subtreevaluebiastable.cpp.o CMakeFiles/katago_mobile.dir/katago/cpp/search/timecontrols.cpp.o  /opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib/aarch64-linux-android/24/liblog.so  -latomic -lm && :
-  ld.lld: error: undefined symbol: inflateInit2_
-  >>> referenced by fileutils.cpp:162 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/fileutils.cpp:162)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/core/fileutils.cpp.o:(FileUtils::uncompressAndLoadFileIntoString(std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>*))
-
-  ld.lld: error: undefined symbol: inflate
-  >>> referenced by fileutils.cpp:188 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/fileutils.cpp:188)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/core/fileutils.cpp.o:(FileUtils::uncompressAndLoadFileIntoString(std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>*))
-
-  ld.lld: error: undefined symbol: inflateEnd
-  >>> referenced by fileutils.cpp:243 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/fileutils.cpp:243)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/core/fileutils.cpp.o:(FileUtils::uncompressAndLoadFileIntoString(std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>*))
-  >>> referenced by fileutils.cpp:193 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/fileutils.cpp:193)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/core/fileutils.cpp.o:(FileUtils::uncompressAndLoadFileIntoString(std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>*))
-  >>> referenced by fileutils.cpp:199 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/core/fileutils.cpp:199)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/core/fileutils.cpp.o:(FileUtils::uncompressAndLoadFileIntoString(std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>&, std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>*))
-  >>> referenced 3 more times
-
-  ld.lld: error: undefined symbol: TestCommon::getMultiGameSize19Data()
-  >>> referenced by misc.cpp:308 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/misc.cpp:308)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/command/misc.cpp.o:(MainCmds::searchentropyanalysis(std::__ndk1::vector<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>, std::__ndk1::allocator<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>>> const&))
-
-  ld.lld: error: undefined symbol: TestCommon::getMultiGameRectangleData()
-  >>> referenced by misc.cpp:312 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/misc.cpp:312)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/command/misc.cpp.o:(MainCmds::searchentropyanalysis(std::__ndk1::vector<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>, std::__ndk1::allocator<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>>> const&))
-
-  ld.lld: error: undefined symbol: TestCommon::getMultiGameSize9Data()
-  >>> referenced by misc.cpp:304 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/misc.cpp:304)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/command/misc.cpp.o:(MainCmds::searchentropyanalysis(std::__ndk1::vector<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>, std::__ndk1::allocator<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>>> const&))
-
-  ld.lld: error: undefined symbol: TestCommon::getMultiGameSize10x14Data()
-  >>> referenced by misc.cpp:310 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/misc.cpp:310)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/command/misc.cpp.o:(MainCmds::searchentropyanalysis(std::__ndk1::vector<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>, std::__ndk1::allocator<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>>> const&))
-
-  ld.lld: error: undefined symbol: TestCommon::getMultiGameSize13Data()
-  >>> referenced by misc.cpp:306 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/misc.cpp:306)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/command/misc.cpp.o:(MainCmds::searchentropyanalysis(std::__ndk1::vector<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>, std::__ndk1::allocator<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>>> const&))
-
-  ld.lld: error: undefined symbol: TestCommon::getBenchmarkSGFData(int)
-  >>> referenced by gtp.cpp:3598 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/command/gtp.cpp:3598)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/command/gtp.cpp.o:(MainCmds::gtp(std::__ndk1::vector<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>, std::__ndk1::allocator<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>>>> const&))
-
-  ld.lld: error: undefined symbol: NumpyBuffer<unsigned char>::NumpyBuffer(std::__ndk1::vector<long, std::__ndk1::allocator<long>> const&)
-  >>> referenced by trainingwrite.cpp:279 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:279)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-
-  ld.lld: error: undefined symbol: NumpyBuffer<float>::NumpyBuffer(std::__ndk1::vector<long, std::__ndk1::allocator<long>> const&)
-  >>> referenced by trainingwrite.cpp:280 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:280)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-  >>> referenced by trainingwrite.cpp:282 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:282)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-  >>> referenced by trainingwrite.cpp:286 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:286)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-
-  ld.lld: error: undefined symbol: NumpyBuffer<short>::NumpyBuffer(std::__ndk1::vector<long, std::__ndk1::allocator<long>> const&)
-  >>> referenced by trainingwrite.cpp:281 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:281)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-  >>> referenced by trainingwrite.cpp:285 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:285)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-
-  ld.lld: error: undefined symbol: NumpyBuffer<signed char>::NumpyBuffer(std::__ndk1::vector<long, std::__ndk1::allocator<long>> const&)
-  >>> referenced by trainingwrite.cpp:283 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:283)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-  >>> referenced by trainingwrite.cpp:284 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:284)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-
-  ld.lld: error: undefined symbol: NumpyBuffer<float>::~NumpyBuffer()
-  >>> referenced by trainingwrite.cpp:289 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:289)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-  >>> referenced by trainingwrite.cpp:289 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:289)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-  >>> referenced by trainingwrite.cpp:289 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:289)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-  >>> referenced 3 more times
-
-  ld.lld: error: undefined symbol: NumpyBuffer<short>::~NumpyBuffer()
-  >>> referenced by trainingwrite.cpp:289 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:289)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-  >>> referenced by trainingwrite.cpp:289 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:289)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-  >>> referenced by trainingwrite.cpp:294 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:294)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::~TrainingWriteBuffers())
-  >>> referenced 1 more times
-
-  ld.lld: error: undefined symbol: NumpyBuffer<signed char>::~NumpyBuffer()
-  >>> referenced by trainingwrite.cpp:289 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:289)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-  >>> referenced by trainingwrite.cpp:289 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:289)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-  >>> referenced by trainingwrite.cpp:294 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:294)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::~TrainingWriteBuffers())
-  >>> referenced 1 more times
-
-  ld.lld: error: undefined symbol: NumpyBuffer<unsigned char>::~NumpyBuffer()
-  >>> referenced by trainingwrite.cpp:289 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:289)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::TrainingWriteBuffers(int, int, int, int, int, int, bool))
-  >>> referenced by trainingwrite.cpp:294 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:294)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::~TrainingWriteBuffers())
-
-  ld.lld: error: undefined symbol: ZipFile::ZipFile(std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&)
-  >>> referenced by trainingwrite.cpp:825 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:825)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::writeToZipFile(std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&))
-
-  ld.lld: error: undefined symbol: NumpyBuffer<unsigned char>::prepareHeaderWithNumRows(long)
-  >>> referenced by trainingwrite.cpp:829 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:829)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::writeToZipFile(std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&))
-  >>> referenced by trainingwrite.cpp:871 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:871)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::writeToTextOstream(std::__ndk1::basic_ostream<char, std::__ndk1::char_traits<char>>&))
-
-  ld.lld: error: undefined symbol: ZipFile::writeBuffer(char const*, void*, unsigned long)
-  >>> referenced by trainingwrite.cpp:830 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:830)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::writeToZipFile(std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&))
-  >>> referenced by trainingwrite.cpp:833 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:833)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::writeToZipFile(std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&))
-  >>> referenced by trainingwrite.cpp:836 (/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/trainingwrite.cpp:836)
-  >>>               CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o:(TrainingWriteBuffers::writeToZipFile(std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char>> const&))
-  >>> referenced 5 more times
-
-  ld.lld: error: too many errors emitted, stopping now (use --error-limit=0 to see all errors)
-  clang++: error: linker command failed with exit code 1 (use -v to see invocation)
+  [1/45] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/neuralnet/metalbackend.cpp.o
+  [2/45] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/dataio/numpywrite.cpp.o
+  FAILED: CMakeFiles/katago_mobile.dir/katago/cpp/dataio/numpywrite.cpp.o 
+  /opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android24 --sysroot=/opt/homebrew/share/android-commandlinetools/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -DBIG_ENDIAN=4321 -DBYTE_ORDER=1234 -DLITTLE_ENDIAN=1234 -DNO_GIT_REVISION -DUSE_BACKEND_EIGEN -D_REENTRANT -Dkatago_mobile_EXPORTS -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/eigen -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external/tclap-1.2.5/include -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external/nlohmann_json -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/external/filesystem-1.5.8/include -I/Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/fake_zip -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -O3 -DNDEBUG  -fPIC   -O3 -std=gnu++17 -MD -MT CMakeFiles/katago_mobile.dir/katago/cpp/dataio/numpywrite.cpp.o -MF CMakeFiles/katago_mobile.dir/katago/cpp/dataio/numpywrite.cpp.o.d -o CMakeFiles/katago_mobile.dir/katago/cpp/dataio/numpywrite.cpp.o -c /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/numpywrite.cpp
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/numpywrite.cpp:270:16: error: use of undeclared identifier 'zip_error_init'; did you mean 'zip_error_t'?
+    270 |   ZipError() { zip_error_init(&value); }
+        |                ^
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/fake_zip/zip.h:10:3: note: 'zip_error_t' declared here
+     10 | } zip_error_t;
+        |   ^
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/numpywrite.cpp:271:17: error: use of undeclared identifier 'zip_error_fini'; did you mean 'zip_error_t'?
+    271 |   ~ZipError() { zip_error_fini(&value); }
+        |                 ^
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/fake_zip/zip.h:10:3: note: 'zip_error_t' declared here
+     10 | } zip_error_t;
+        |   ^
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/numpywrite.cpp:280:33: error: use of undeclared identifier 'zip_source_file_create'
+    280 |   zip_source_t* zipFileSource = zip_source_file_create(fileName.c_str(),0,-1,&(zipError.value));
+        |                                 ^
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/numpywrite.cpp:282:82: error: use of undeclared identifier 'zip_error_strerror'; did you mean 'zip_strerror'?
+    282 |     throw StringError("Could not open zip file " + fileName + " due to error " + zip_error_strerror(&(zipError.value)));
+        |                                                                                  ^~~~~~~~~~~~~~~~~~
+        |                                                                                  zip_strerror
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/fake_zip/zip.h:30:20: note: 'zip_strerror' declared here
+     30 | inline const char *zip_strerror(zip_t *) { return "stub"; }
+        |                    ^
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/numpywrite.cpp:283:23: error: use of undeclared identifier 'zip_open_from_source'
+    283 |   zip_t* fileHandle = zip_open_from_source(zipFileSource, ZIP_CREATE | ZIP_TRUNCATE, &(zipError.value));
+        |                       ^
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/numpywrite.cpp:287:82: error: use of undeclared identifier 'zip_error_strerror'; did you mean 'zip_strerror'?
+    287 |     throw StringError("Could not open zip file " + fileName + " due to error " + zip_error_strerror(&(zipError.value)));
+        |                                                                                  ^~~~~~~~~~~~~~~~~~
+        |                                                                                  zip_strerror
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/fake_zip/zip.h:30:20: note: 'zip_strerror' declared here
+     30 | inline const char *zip_strerror(zip_t *) { return "stub"; }
+        |                    ^
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/katago/cpp/dataio/numpywrite.cpp:302:50: error: use of undeclared identifier 'zip_error_strerror'; did you mean 'zip_strerror'?
+    302 |       " within " + fileName + " due to error " + zip_error_strerror(&(zipError.value))
+        |                                                  ^~~~~~~~~~~~~~~~~~
+        |                                                  zip_strerror
+  /Users/rexhsu/Documents/go-strategy-app/mobile/android/app/src/main/cpp/fake_zip/zip.h:30:20: note: 'zip_strerror' declared here
+     30 | inline const char *zip_strerror(zip_t *) { return "stub"; }
+        |                    ^
+  7 errors generated.
+  [3/45] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/game/graphhash.cpp.o
+  [4/45] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/neuralnet/modelversion.cpp.o
+  [5/45] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/neuralnet/dummybackend.cpp.o
+  [6/45] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/dataio/trainingwrite.cpp.o
+  [7/45] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/game/boardhistory.cpp.o
+  [8/45] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/game/board.cpp.o
+  [9/45] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/neuralnet/desc.cpp.o
+  [10/45] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/game/rules.cpp.o
+  [11/45] Building CXX object CMakeFiles/katago_mobile.dir/katago/cpp/dataio/sgf.cpp.o
   ninja: build stopped: subcommand failed.
 
   C++ build system [build] failed while executing:
@@ -169,5 +97,5 @@ Execution failed for task ':app:buildCMakeRelease[arm64-v8a]'.
 > Get more help at https://help.gradle.org.
 
 BUILD FAILED in 6s
-Running Gradle task 'assembleRelease'...                            6.1s
+Running Gradle task 'assembleRelease'...                            6.6s
 Gradle task assembleRelease failed with exit code 1

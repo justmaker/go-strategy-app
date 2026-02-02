@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/.krazy
+EXCLUDE copyright
+EXCLUDE license

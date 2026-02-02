@@ -1,1 +1,3 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/Matrix_setRandom_int_int.cpp
+MatrixXf m;
+m.setRandom(3, 3);
+cout << m << endl;

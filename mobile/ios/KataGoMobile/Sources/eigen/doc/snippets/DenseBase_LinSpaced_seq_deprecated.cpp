@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/DenseBase_LinSpaced_seq_deprecated.cpp
+cout << VectorXi::LinSpaced(Sequential, 4, 7, 10).transpose() << endl;
+cout << VectorXd::LinSpaced(Sequential, 5, 0.0, 1.0).transpose() << endl;

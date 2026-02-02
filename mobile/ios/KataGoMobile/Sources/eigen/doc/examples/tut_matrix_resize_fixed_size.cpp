@@ -1,1 +1,8 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/examples/tut_matrix_resize_fixed_size.cpp
+#include <iostream>
+#include <Eigen/Dense>
+
+int main() {
+  Eigen::Matrix4d m;
+  m.resize(4, 4);  // no operation
+  std::cout << "The matrix m is of size " << m.rows() << "x" << m.cols() << std::endl;
+}

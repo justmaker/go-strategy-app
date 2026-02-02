@@ -1,1 +1,1 @@
-../../../../../../android/app/src/main/cpp/eigen/doc/snippets/MatrixBase_random.cpp
+cout << 100 * Matrix2i::Random() << endl;

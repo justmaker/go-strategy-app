@@ -1,1 +1,9 @@
-../../../../../android/app/src/main/cpp/eigen/doc/TopicVectorization.dox
+namespace Eigen {
+
+/** \page TopicVectorization Vectorization
+
+
+TODO: write this dox page!
+
+*/
+}

@@ -51,7 +51,7 @@ list(FILTER KATAGO_SRCS EXCLUDE REGEX "neuralnet/(opencl|cuda|tensorrt)")
 list(FILTER KATAGO_SRCS EXCLUDE REGEX "distributed/")
 
 # Exclude unneeded main command entry points
-list(FILTER KATAGO_SRCS EXCLUDE REGEX "command/(benchmark|contribute|evalsgf|gatekeeper|genconfig|tuner|match|selfplay|demoplay|gputest|sampleinits|sandbox|startposes|viewstartposes|checksgf|genposes|comparebooks|findbookbottlenecks|runtests|runnnlayertests|runsearchtests|runsearchtestsv3|runsearchtestsv8|runsearchtestsv9|runnnontinyboardtest|runnnsymmetriestest|runoutputtests|runselfplayinittests|runselfplayinitstattests|runsekitrainwritetests|runnnonmanyposestest|runnnbatchingtest|runownershiptests|runtinynntests|runnnevalcanarytests|runbeginsearchspeedtest|runownershipspeedtest|runsleeptest|runconfigtests)")
+list(FILTER KATAGO_SRCS EXCLUDE REGEX "command/(benchmark|contribute|evalsgf|gatekeeper|genconfig|tuner|match|selfplay|demoplay|gputest|sampleinits|sandbox|startposes|viewstartposes|checksgf|genposes|comparebooks|findbookbottlenecks|runtests|runnnlayertests|runsearchtests|runsearchtestsv3|runsearchtestsv8|runsearchtestsv9|runnnontinyboardtest|runnnsymmetriestest|runoutputtests|runselfplayinittests|runselfplayinitstattests|runsekitrainwritetests|runnnonmanyposestest|runnnbatchingtest|runownershiptests|runtinynntests|runnnevalcanarytests|runbeginsearchspeedtest|runownershipspeedtest|runsleeptest|runconfigtests|misc|writetrainingdata|genbook)")
 
 # --- Target ---
 add_library(katago_mobile SHARED native-lib.cpp stubs.cpp ${KATAGO_SRCS})
@@ -60,4 +60,4 @@ add_library(katago_mobile SHARED native-lib.cpp stubs.cpp ${KATAGO_SRCS})
 find_library(log-lib log)
 
 # Link
-target_link_libraries(katago_mobile ${log-lib})
+target_link_libraries(katago_mobile ${log-lib} z)

@@ -4,8 +4,10 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as path;
@@ -336,7 +338,18 @@ class GameProvider extends ChangeNotifier {
         }
       }
 
-      // Step 3: Try API if online
+      // Step 3: Try local KataGo engine (Offline-first key principle)
+      if (_localEngineEnabled) {
+        if (_isDesktop && _kataGoDesktop.isRunning) {
+          await _analyzeWithDesktopEngine();
+          return;
+        } else if (!_isDesktop && _kataGo.isRunning) {
+          await _analyzeWithMobileEngine();
+          return;
+        }
+      }
+
+      // Step 4: Try API only as a last resort (or disabled in pure offline mode)
       if (_connectionStatus == ConnectionStatus.online) {
         try {
           final result = await _api.analyze(
@@ -354,25 +367,12 @@ class GameProvider extends ChangeNotifier {
           notifyListeners();
           return;
         } on ApiException catch (e) {
-          debugPrint('API error: ${e.message}, falling back to local engine');
-        }
-      }
-
-      // Step 4: Try local KataGo engine
-      if (_localEngineEnabled) {
-        if (_isDesktop && _kataGoDesktop.isRunning) {
-          await _analyzeWithDesktopEngine();
-          return;
-        } else if (!_isDesktop && _kataGo.isRunning) {
-          await _analyzeWithMobileEngine();
-          return;
+          debugPrint('API error: ${e.message}');
         }
       }
 
       // Step 5: No analysis available
-      _error = _connectionStatus == ConnectionStatus.offline
-          ? 'Offline: Position not in opening book or cache'
-          : 'Failed to analyze position';
+      _error = 'Position not in opening book/cache and local engine unavailable';
       _lastAnalysisSource = AnalysisSource.none;
     } catch (e) {
       _error = 'Error: $e';
@@ -401,7 +401,10 @@ class GameProvider extends ChangeNotifier {
         _lastAnalysisSource = AnalysisSource.localEngine;
         _analysisProgress = null;
         _isAnalyzing = false;
+        
+        // AUTO-SAVE to local cache for future offline use
         _cache.put(result);
+        
         notifyListeners();
         if (!completer.isCompleted) completer.complete();
       },
@@ -489,12 +492,11 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Compute a simple hash for the current board position
+  /// Compute a stable MD5 hash for the current board position
   String _computeSimpleHash() {
-    final buffer = StringBuffer();
-    buffer.write('${_board.size}:${_board.komi}:');
-    buffer.write(_board.movesGtp.join(';'));
-    return buffer.toString().hashCode.toRadixString(16).padLeft(16, '0');
+    final movesStr = _board.movesGtp.join(';');
+    final data = '${_board.size}:${_board.komi}:$movesStr';
+    return md5.convert(utf8.encode(data)).toString();
   }
 
   /// Undo last move

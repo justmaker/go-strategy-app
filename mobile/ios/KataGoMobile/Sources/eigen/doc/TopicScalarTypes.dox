@@ -1,1 +1,12 @@
-../../../../../android/app/src/main/cpp/eigen/doc/TopicScalarTypes.dox
+namespace Eigen {
+
+/** \page TopicScalarTypes Scalar types
+
+
+TODO: write this dox page!
+
+Is linked from the tutorial on the Matrix class.
+
+*/
+
+}

@@ -1,1 +1,2 @@
-../../../../../../android/app/src/main/cpp/eigen/unsupported/test/mklfft.cpp
+#define EIGEN_MKL_DEFAULT 1
+#include "fft_test_shared.h"
