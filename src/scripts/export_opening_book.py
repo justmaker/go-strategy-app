@@ -118,13 +118,13 @@ def export_opening_book(
             # Note: We use all 8 regardless of board symmetry for simple app lookup
             all_transforms = [
                 SymmetryTransform.IDENTITY,
-                SymmetryTransform.ROT_90,
-                SymmetryTransform.ROT_180,
-                SymmetryTransform.ROT_270,
-                SymmetryTransform.MIRROR_X,
-                SymmetryTransform.MIRROR_Y,
-                SymmetryTransform.MIRROR_DIAG,
-                SymmetryTransform.MIRROR_ANTI_DIAG
+                SymmetryTransform.ROTATE_90,
+                SymmetryTransform.ROTATE_180,
+                SymmetryTransform.ROTATE_270,
+                SymmetryTransform.FLIP_HORIZONTAL,
+                SymmetryTransform.FLIP_VERTICAL,
+                SymmetryTransform.FLIP_DIAGONAL,
+                SymmetryTransform.FLIP_ANTIDIAGONAL
             ]
             
             for transform in all_transforms:
