@@ -1,0 +1,17 @@
+#!/usr/bin/expect
+
+set timeout 30
+set ip "10.20.91.201"
+set user "rtrd"
+set password "qq123456"
+
+set cfg "logDir = gtp_logs\\nlogAllGTPCommunication = true\\nlogSearchInfo = true\\nrules = chinese\\nallowResignation = true\\nresignThreshold = -0.90\\nresignConsecTurns = 3\\nnumAnalysisThreads = 16\\nnumSearchThreads = 16\\nnnCacheSizePowerOfTwo = 20\\nnnMaxBatchSize = 64\\n"
+
+spawn ssh $user@$ip "echo -e '$cfg' > ~/go-strategy-app/katago/gtp_analysis.cfg"
+expect "password:" { send "$password\r" }
+expect eof
+
+# Restart
+spawn ssh $user@$ip "pkill -f build_opening_book || true && pkill -f katago || true && cd ~/go-strategy-app && nohup ./scripts/remote_runner/start_book_builder.sh > book_build_parallel.log 2>&1 &"
+expect "password:" { send "$password\r" }
+expect eof

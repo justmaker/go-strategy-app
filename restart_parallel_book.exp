@@ -1,0 +1,28 @@
+#!/usr/bin/expect
+
+set timeout 30
+set ip "10.20.91.201"
+set user "rtrd"
+set password "qq123456"
+
+# 1. Kill current single-threaded process
+spawn ssh $user@$ip "pkill -f start_book_builder.sh || true && pkill -f build_opening_book || true && pkill -f katago || true"
+expect "password:" { send "$password\r" }
+expect eof
+
+# 2. Update config and script on remote
+# We use scp to be sure
+spawn scp scripts/remote_runner/start_book_builder.sh scripts/remote_runner/run_remote.sh $user@$ip:~/go-strategy-app/scripts/remote_runner/
+expect "password:" { send "$password\r" }
+expect eof
+
+# 3. Update gtp_analysis.cfg from the new run_remote.sh logic (re-run run_remote just for setup)
+# Actually, simpler: just rewrite gtp_analysis.cfg directly
+spawn ssh $user@$ip "sed -i 's/numSearchThreads = 32/numSearchThreads = 64/g' ~/go-strategy-app/katago/gtp_analysis.cfg && sed -i 's/nnMaxBatchSize = 128/nnMaxBatchSize = 256/g' ~/go-strategy-app/katago/gtp_analysis.cfg"
+expect "password:" { send "$password\r" }
+expect eof
+
+# 4. Start parallel build
+spawn ssh $user@$ip "cd ~/go-strategy-app && chmod +x scripts/remote_runner/start_book_builder.sh && nohup ./scripts/remote_runner/start_book_builder.sh > book_build_parallel.log 2>&1 &"
+expect "password:" { send "$password\r" }
+expect eof
