@@ -99,14 +99,20 @@ def export_opening_book(
     for row in cursor:
         try:
             top_moves_json = json.loads(row['analysis_result'])
-            original_moves = row['moves_sequence'].split(';') if row['moves_sequence'] else []
+            raw_moves = row['moves_sequence'].split(';') if row['moves_sequence'] else []
             board_size = row['board_size']
             komi = row['komi']
             
+            # Clean moves: B[Q16] -> B Q16
+            cleaned_moves = []
+            for m in raw_moves:
+                if '[' in m and ']' in m:
+                    cleaned_moves.append(m.replace('[', ' ').replace(']', ''))
+                else:
+                    cleaned_moves.append(m)
+
             # Create board state to compute symmetries
-            # Note: We assume the cached result is already in canonical form (normalized)
-            # or at least we want to generate all 8 variants.
-            board = create_board(size=board_size, moves=original_moves, komi=komi)
+            board = create_board(size=board_size, moves=cleaned_moves, komi=komi)
             
             # Generate all 8 symmetries
             # Note: We use all 8 regardless of board symmetry for simple app lookup
@@ -124,7 +130,7 @@ def export_opening_book(
             for transform in all_transforms:
                 # 1. Transform moves sequence
                 transformed_moves = []
-                for m_str in original_moves:
+                for m_str in cleaned_moves:
                     if not m_str: continue
                     parts = m_str.split(' ')
                     if len(parts) == 2:
