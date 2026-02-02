@@ -41,7 +41,7 @@ fi
 if [ ! -f "analysis.cfg" ]; then
     echo "Creating Config..."
     # Generate a default analysis config
-    ./katago genconfig -model model.bin.gz -output analysis.cfg --noprompt
+    # ./katago genconfig -model model.bin.gz -output analysis.cfg --noprompt
     # Or write a specific one
     cat > analysis_custom.cfg <<EOF
 logDir = gtp_logs
