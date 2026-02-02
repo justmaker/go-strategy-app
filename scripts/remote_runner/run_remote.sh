@@ -51,6 +51,8 @@ rules = chinese
 allowResignation = true
 resignThreshold = -0.90
 resignConsecTurns = 3
+numAnalysisThreads = 12
+nnCacheSizePowerOfTwo = 20
 EOF
 fi
 
