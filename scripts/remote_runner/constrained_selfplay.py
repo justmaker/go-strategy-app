@@ -13,8 +13,8 @@ def run_game(katago_path, config_path, model_path, board_size, visits, output_di
         katago_path,
         "analysis",
         "-config", config_path,
-        "-model", model_path,
-        "-quit-without-input" # Ensure it exits if pipe closes
+        "-model", model_path
+        # "-quit-without-input" # apparently invalid for analysis mode
     ]
 
     print(f"Starting KataGo: {' '.join(cmd)}")
