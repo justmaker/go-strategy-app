@@ -156,14 +156,16 @@ def main():
     parser.add_argument("--config", required=True, help="Path to analysis config")
     parser.add_argument("--model", required=True, help="Path to model file")
     parser.add_argument("--output", default="./games", help="Output directory")
+    parser.add_argument("--count", type=int, default=1, help="Number of games to run per board size")
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
 
     # 9x9, 13x13, 19x19
     for size in [9, 13, 19]:
-        print(f"--- Starting {size}x{size} game ---")
-        run_game(args.katago, args.config, args.model, size, 100, args.output)
+        for i in range(args.count):
+            print(f"--- Starting {size}x{size} game ({i+1}/{args.count}) ---")
+            run_game(args.katago, args.config, args.model, size, 100, args.output)
 
 if __name__ == "__main__":
     main()
