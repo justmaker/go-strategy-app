@@ -22,7 +22,7 @@ def run_game(katago_path, config_path, model_path, board_size, visits, output_di
         cmd,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=sys.stderr, # Forward logs to stderr
+        stderr=subprocess.STDOUT, # Merge stderr into stdout to capture errors
         encoding='utf-8',
         bufsize=1 # Line buffered
     )
@@ -56,11 +56,29 @@ def run_game(katago_path, config_path, model_path, board_size, visits, output_di
         process.stdin.write(json.dumps(query) + "\n")
         process.stdin.flush()
 
-        response_line = process.stdout.readline()
-        if not response_line:
-            break
+        while True:
+            response_line = process.stdout.readline()
+            if not response_line:
+                break
             
-        response = json.loads(response_line)
+            response_line = response_line.strip()
+            if not response_line:
+                continue
+
+            # Check if it's a JSON response (starts with {)
+            if response_line.startswith('{'):
+                try:
+                    response = json.loads(response_line)
+                    break # Found the response!
+                except json.JSONDecodeError:
+                    print(f"KataGo Output (Invalid JSON): {response_line}")
+            else:
+                 # Log other output (init info, tuning, etc)
+                 print(f"KataGo Log: {response_line}")
+
+        if not response_line:
+            print("KataGo process ended unexpectedly.")
+            break
         if "error" in response:
             print(f"KataGo Error: {response['error']}")
             break
