@@ -22,7 +22,14 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
+
+# Add src to path
+import os
+sys.path.insert(0, os.getcwd())
+
+from src.board import create_board, get_valid_symmetries, transform_gtp_coord, SymmetryTransform
+from src.cache import MoveCandidate
 
 
 def get_db_path() -> Path:
@@ -87,29 +94,98 @@ def export_opening_book(
         'by_visits': {},
     }
     
+    seen_keys: Set[str] = set()
+    
     for row in cursor:
         try:
-            top_moves = json.loads(row['analysis_result'])
+            top_moves_json = json.loads(row['analysis_result'])
+            original_moves = row['moves_sequence'].split(';') if row['moves_sequence'] else []
+            board_size = row['board_size']
+            komi = row['komi']
             
-            entry = {
-                'h': row['board_hash'],  # hash (shortened key)
-                's': row['board_size'],  # size
-                'k': row['komi'],        # komi
-                'm': row['moves_sequence'] or '',  # moves
-                't': top_moves,          # top_moves
-                'v': row['engine_visits'],  # visits
-            }
-            entries.append(entry)
+            # Create board state to compute symmetries
+            # Note: We assume the cached result is already in canonical form (normalized)
+            # or at least we want to generate all 8 variants.
+            board = create_board(size=board_size, moves=original_moves, komi=komi)
             
-            # Update stats
+            # Generate all 8 symmetries
+            # Note: We use all 8 regardless of board symmetry for simple app lookup
+            all_transforms = [
+                SymmetryTransform.IDENTITY,
+                SymmetryTransform.ROT_90,
+                SymmetryTransform.ROT_180,
+                SymmetryTransform.ROT_270,
+                SymmetryTransform.MIRROR_X,
+                SymmetryTransform.MIRROR_Y,
+                SymmetryTransform.MIRROR_DIAG,
+                SymmetryTransform.MIRROR_ANTI_DIAG
+            ]
+            
+            for transform in all_transforms:
+                # 1. Transform moves sequence
+                transformed_moves = []
+                for m_str in original_moves:
+                    if not m_str: continue
+                    parts = m_str.split(' ')
+                    if len(parts) == 2:
+                        color, coord = parts[0], parts[1]
+                        new_coord = transform_gtp_coord(coord, board_size, transform)
+                        transformed_moves.append(f"{color} {new_coord}")
+                    else:
+                        transformed_moves.append(m_str) # e.g. "B PASS"
+                
+                # 2. Build move key for uniqueness
+                move_seq_str = ";".join(transformed_moves).replace(" ", "[")
+                # Add brackets for app format compatibility: B E5 -> B[E5]
+                # Wait, OpeningBookService._buildMoveKey uses internal format
+                # Let's check OpeningBookService.buildMoveKeyFromGtp: 
+                # converts ["B E5"] to "B[E5]" via join(';')
+                
+                app_moves_string = ";".join([m.replace(" ", "[") + "]" if " " in m else m for m in transformed_moves])
+                
+                unique_key = f"{board_size}:{komi}:{app_moves_string}"
+                if unique_key in seen_keys:
+                    continue
+                seen_keys.add(unique_key)
+                
+                # 3. Transform top candidates
+                transformed_candidates = []
+                for move_cand in top_moves_json:
+                    m_gtp = move_cand['move']
+                    new_gtp = transform_gtp_coord(m_gtp, board_size, transform)
+                    
+                    transformed_candidates.append({
+                        'move': new_gtp,
+                        'winrate': move_cand['winrate'],
+                        'scoreLead': move_cand['scoreLead'],
+                        'visits': move_cand['visits']
+                    })
+                
+                # 4. Generate hash for this variant (optional but good for consistency)
+                # For now, we skip hash re-computation as the App uses moves-key primarily.
+                # But let's do it if we want the 'h' key to be accurate.
+                variant_board = create_board(size=board_size, moves=transformed_moves, komi=komi)
+                variant_hash = variant_board.compute_zobrist_hash()
+
+                entry = {
+                    'h': variant_hash,
+                    's': board_size,
+                    'k': komi,
+                    'm': app_moves_string,
+                    't': transformed_candidates,
+                    'v': row['engine_visits'],
+                }
+                entries.append(entry)
+                
+            # Update stats (unique canonical positions)
             stats['total'] += 1
             bs = row['board_size']
             stats['by_board_size'][bs] = stats['by_board_size'].get(bs, 0) + 1
             v = row['engine_visits']
             stats['by_visits'][v] = stats['by_visits'].get(v, 0) + 1
             
-        except json.JSONDecodeError:
-            print(f"Warning: Invalid JSON for hash {row['board_hash']}")
+        except Exception as e:
+            print(f"Warning: Failed to process entry: {e}")
             continue
     
     conn.close()
