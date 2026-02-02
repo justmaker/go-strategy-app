@@ -22,7 +22,15 @@ fi
 # 2. Download Model
 if [ ! -f "model.bin.gz" ]; then
     echo "Downloading Model..."
-    wget -q $MODEL_URL -O model.bin.gz
+    wget -q --show-progress $MODEL_URL -O model.bin.gz
+fi
+
+# Check KataGo dependencies
+echo "Checking KataGo dependencies..."
+if ldd ./katago | grep -q "not found"; then
+    echo "ERROR: Missing dependencies for KataGo:"
+    ldd ./katago | grep "not found"
+    echo "Attempting to continue, but might fail..."
 fi
 
 # 3. Create Config
