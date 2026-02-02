@@ -10,13 +10,17 @@ echo "Setting up environment in $WORK_DIR..."
 mkdir -p $WORK_DIR
 cd $WORK_DIR
 
-# 1. Download KataGo
+# 1. Setup KataGo
 if [ ! -f "katago" ]; then
-    echo "Downloading KataGo..."
-    wget -q $KATAGO_RELEASE -O katago.zip
+    if [ ! -f "katago.zip" ]; then
+        echo "Downloading KataGo..."
+        wget -q --show-progress $KATAGO_RELEASE -O katago.zip
+    else
+        echo "Found existing katago.zip, skipping download."
+    fi
+    echo "Unzipping KataGo..."
     unzip -q -o katago.zip
     chmod +x katago
-    rm katago.zip
 fi
 
 # 2. Download Model
