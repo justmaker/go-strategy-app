@@ -10,6 +10,7 @@ Usage:
 import argparse
 import collections
 import logging
+import random
 import sys
 import time
 from datetime import datetime, timedelta
@@ -196,22 +197,32 @@ def main():
                     continue
                 visited_hashes.add(canonical_hash)
                 
-                # Perform Analysis with specified visits
-                try:
-                    result = analyzer.analyze(
-                        board_size=args.board_size,
-                        moves=moves,
-                        visits=args.visits,
-                    )
-                    
-                    if result.from_cache:
-                        cache_hits += 1
-                    else:
-                        cache_misses += 1
-                        
-                except Exception as e:
-                    logger.error(f"Error analyzing position: {e}")
+                # Perform Analysis with specified visits (with retry for DB locks)
+                max_retries = 5
+                result = None
+                for attempt in range(max_retries):
+                    try:
+                        result = analyzer.analyze(
+                            board_size=args.board_size,
+                            moves=moves,
+                            visits=args.visits,
+                        )
+                        break
+                    except Exception as e:
+                        if "database is locked" in str(e).lower() and attempt < max_retries - 1:
+                            wait_time = random.uniform(0.5, 2.0) * (attempt + 1)
+                            time.sleep(wait_time)
+                            continue
+                        logger.error(f"Error analyzing position (attempt {attempt+1}/{max_retries}): {e}")
+                        break
+                
+                if result is None:
                     continue
+                    
+                if result.from_cache:
+                    cache_hits += 1
+                else:
+                    cache_misses += 1
                 
                 nodes_count += 1
                 pbar.update(1)
