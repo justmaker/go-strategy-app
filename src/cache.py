@@ -340,9 +340,14 @@ class AnalysisCache:
             conn.commit()
     
     def _get_connection(self) -> sqlite3.Connection:
-        """Get a database connection."""
-        conn = sqlite3.connect(str(self.db_path))
+        """Get a database connection with WAL mode enabled for better concurrency."""
+        conn = sqlite3.connect(str(self.db_path), timeout=60)
         conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+        except sqlite3.Error:
+            pass # Tables might not exist yet during first init
         return conn
     
     def get(self, board_hash: str, komi: float, required_visits: Optional[int] = None) -> Optional[AnalysisResult]:
