@@ -190,25 +190,29 @@ def draw_board_pil(
         # Create a semi-transparent overlay
         overlay = Image.new('RGBA', (img_size, img_size), (0, 0, 0, 0))
         o_draw = ImageDraw.Draw(overlay)
-        
+
         for y in range(board_size):
             for x in range(board_size):
                 # ownership index is usually y*size + x
                 val = ownership[y * board_size + x]
-                if abs(val) < 0.15: continue
-                
+                # Lower threshold to 0.05 to show more subtle territory
+                if abs(val) < 0.05: continue
+
                 px, py = board_to_pixel_coords(x, y, board_size)
                 r = CELL_SIZE // 2 - 2
-                
-                # Positive val favors Black (Blue-ish), Negative favors White (Red-ish)
-                # Actually let's use standard Black/White translucent squares
+
+                # Enhanced alpha calculation for better visibility
+                # Scale from 0.05-1.0 to alpha 30-150
+                alpha = int(min(abs(val) * 200 + 30, 150))
+
+                # Positive val favors Black, Negative favors White
                 if val > 0:
-                    color = (0, 0, 0, int(abs(val) * 100)) # Black territory
+                    color = (0, 0, 0, alpha) # Black territory
                 else:
-                    color = (255, 255, 255, int(abs(val) * 100)) # White territory
-                
+                    color = (255, 255, 255, alpha) # White territory
+
                 o_draw.rectangle([px-r, py-r, px+r, py+r], fill=color)
-        
+
         img.paste(overlay, (0, 0), overlay)
     
     # Try to load a font, fallback to default
@@ -389,19 +393,8 @@ def init_session_state():
         pass
 
     if 'visits' not in st.session_state:
-        # Check if opening book exists for current settings
-        book_visits = 0
-        if st.session_state.analyzer:
-            book_visits = st.session_state.analyzer.cache.get_opening_book_visits(
-                board_size=st.session_state.get('board_size', 9),
-                komi=st.session_state.get('komi', 7.5),
-                handicap=st.session_state.get('handicap', 0)
-            )
-            
-        if book_visits > 0:
-            st.session_state.visits = book_visits
-        else:
-            st.session_state.visits = 50
+        # Default to 500 visits (middle ground, matches common opening book value)
+        st.session_state.visits = 500
     if 'analysis_result' not in st.session_state:
         # We start with None and let the main loop handle the first analysis
         st.session_state.analysis_result = None
@@ -413,6 +406,12 @@ def init_session_state():
         st.session_state.prisoners = {'B': 0, 'W': 0}
     if 'show_territory' not in st.session_state:
         st.session_state.show_territory = False
+    if 'is_analyzing' not in st.session_state:
+        st.session_state.is_analyzing = False
+    if 'target_visits' not in st.session_state:
+        st.session_state.target_visits = 500
+    if 'pending_analysis' not in st.session_state:
+        st.session_state.pending_analysis = False
 
 
 
@@ -672,15 +671,21 @@ def main():
         st.session_state.show_territory = st.checkbox(
             "Show Territory (AI Estate)",
             value=st.session_state.show_territory,
-            help="Show AI predicted territory ownership"
+            help="Show AI predicted territory ownership (requires analysis data)"
         )
+
+        # Show hint if territory is enabled but no ownership data
+        if st.session_state.show_territory:
+            has_ownership = (st.session_state.analysis_result and
+                           st.session_state.analysis_result != "FAILED" and
+                           st.session_state.analysis_result.ownership)
+            if not has_ownership:
+                st.caption("⚠️ Territory data not available for this position")
         
         # Visits Control
-        # Define discrete visit levels (non-linear for better UX)
-        all_visit_levels = [100, 200, 300, 1000, 2000, 5000]
-        
-        # Check if we have an opening book for this configuration
-        has_book = False
+        st.markdown("---")
+        st.write("**Analysis Depth**")
+
         # Check if we have an opening book for this configuration
         book_visits = 0
         if st.session_state.analyzer:
@@ -690,32 +695,53 @@ def main():
                 handicap=st.session_state.handicap,
             )
 
-        # If opening book exists, enforce minimum visits to ensure quality
         has_book = book_visits > 0
-        min_visits = book_visits if has_book else 10  # Default min_visits
+
         if has_book:
-            visit_levels = [v for v in all_visit_levels if v >= min_visits]
+            # Opening book available - show info and option for deeper analysis
+            st.info(f"📚 Opening Book: {book_visits} visits (10K+ positions)")
+
+            use_deeper = st.checkbox(
+                "Enable deeper analysis",
+                value=False,
+                help="Use more visits for positions beyond opening book"
+            )
+
+            if use_deeper:
+                # Allow selection for deeper analysis
+                all_visit_levels = [1000, 2000, 5000]
+                visit_levels = all_visit_levels
+            else:
+                # Use fixed opening book visits
+                visit_levels = [book_visits]
+                st.session_state.visits = book_visits
         else:
+            # No opening book - show full range
+            all_visit_levels = [100, 200, 300, 500, 1000, 2000, 5000]
             visit_levels = all_visit_levels
         
-        # Ensure current visits is valid
-        current_visits = st.session_state.visits
-        if current_visits not in visit_levels:
-            # Snap to nearest valid value (at least the minimum)
-            if visit_levels:
-                current_visits = min(visit_levels, key=lambda x: abs(x - current_visits))
-                if current_visits < visit_levels[0]:
-                    current_visits = visit_levels[0]
-            else:
-                current_visits = 50 # Fallback
-            st.session_state.visits = current_visits
-            
-        st.session_state.visits = st.select_slider(
-            "Analysis Strength (Visits)",
-            options=visit_levels,
-            value=current_visits,
-            help=f"{min_visits}+=Opening Book" if has_book else "10=Debug, 50=Fast, 500+=Strong"
-        )
+        # Only show slider if there are options to choose from
+        if len(visit_levels) > 1:
+            # Ensure current visits is valid
+            current_visits = st.session_state.visits
+            if current_visits not in visit_levels:
+                current_visits = visit_levels[0]
+
+            # Use select_slider to manage visits
+            new_visits = st.select_slider(
+                "Visits",
+                options=visit_levels,
+                value=current_visits,
+                help="Higher = stronger but slower analysis"
+            )
+
+            # Only update if changed
+            if new_visits != st.session_state.visits:
+                st.session_state.visits = new_visits
+                st.session_state.analysis_result = None
+        else:
+            # Fixed visits (opening book) - just show the value
+            st.caption(f"Using: {visit_levels[0]} visits (from opening book)")
         
         # Show cached data availability
         if st.session_state.analyzer:
@@ -939,28 +965,59 @@ def main():
         # Update session state prisoners based on full board simulation
         st.session_state.prisoners = board_obj.prisoners
         
-        # Get suggesting moves and ownership
+        # Two-phase approach: First render shows board, second render starts analysis
+        if st.session_state.pending_analysis:
+            # Just placed stone - skip analysis this render, show board first
+            st.session_state.pending_analysis = False
+            # Trigger next render to start analysis
+            st.rerun()
+
+        # Automatic progressive analysis (runs on second render after placing stone)
         if st.session_state.analysis_result is None and st.session_state.analyzer:
-            with st.status("Analyzing position...", expanded=False) as status:
-                try:
-                    status.update(label="Initial analysis (may take 20s for KataGo to start)...", expanded=True)
-                    result = st.session_state.analyzer.analyze(
-                        board_size=st.session_state.board_size,
-                        moves=st.session_state.moves if st.session_state.moves else None,
-                        handicap=st.session_state.handicap,
-                        komi=st.session_state.komi,
-                        visits=st.session_state.visits,
-                    )
-                    st.session_state.analysis_result = result
-                    status.update(label="Analysis complete!", state="complete", expanded=False)
-                    # Removed st.rerun() to avoid infinite loops and unnecessary processing
-                except Exception as e:
-                    st.error(f"Analysis failed (KataGo taking too long or error): {e}")
-                    status.update(label="Analysis failed", state="error")
-                    # Set a dummy result to avoid re-triggering this loop every rerun
-                    # But don't show any suggestions
-                    st.session_state.analysis_result = "FAILED"
-        
+            # Step 1: Check opening book (instant if in cache)
+            try:
+                book_result = st.session_state.analyzer.analyze(
+                    board_size=st.session_state.board_size,
+                    moves=st.session_state.moves if st.session_state.moves else None,
+                    handicap=st.session_state.handicap,
+                    komi=st.session_state.komi,
+                    visits=500,
+                )
+                if book_result.from_cache and book_result.engine_visits >= 500:
+                    # Found in opening book!
+                    st.session_state.analysis_result = book_result
+                    st.session_state.visits = 500
+                    st.session_state.is_analyzing = False
+                else:
+                    # Not in book - start quick analysis
+                    with st.spinner("Analyzing..."):
+                        quick_result = st.session_state.analyzer.analyze(
+                            board_size=st.session_state.board_size,
+                            moves=st.session_state.moves if st.session_state.moves else None,
+                            handicap=st.session_state.handicap,
+                            komi=st.session_state.komi,
+                            visits=50,
+                        )
+                        st.session_state.analysis_result = quick_result
+                        st.session_state.visits = 50
+                        st.session_state.is_analyzing = True
+            except Exception as e:
+                # If book check fails, start from scratch
+                with st.spinner("Analyzing..."):
+                    try:
+                        quick_result = st.session_state.analyzer.analyze(
+                            board_size=st.session_state.board_size,
+                            moves=st.session_state.moves if st.session_state.moves else None,
+                            handicap=st.session_state.handicap,
+                            komi=st.session_state.komi,
+                            visits=50,
+                        )
+                        st.session_state.analysis_result = quick_result
+                        st.session_state.visits = 50
+                        st.session_state.is_analyzing = True
+                    except Exception as e2:
+                        st.error(f"Analysis failed: {e2}")
+
         # Get last move
         last_move = None
         if st.session_state.moves:
@@ -987,6 +1044,49 @@ def main():
             ownership=ownership
         )
         
+        # Auto-progressive analysis with Stop button
+        if st.session_state.is_analyzing and has_result:
+            current = st.session_state.visits
+            # Auto-progress: 50 -> 100 -> 200 -> 500 -> 1000 -> 2000 -> 5000
+            if current < 5000:
+                progress_steps = [50, 100, 200, 500, 1000, 2000, 5000]
+                next_visits = None
+                for step in progress_steps:
+                    if step > current:
+                        next_visits = step
+                        break
+
+                if next_visits:
+                    analysis_col1, analysis_col2 = st.columns([3, 1])
+                    with analysis_col1:
+                        st.info(f"🔄 Analyzing: {current} visits → {next_visits} visits")
+                    with analysis_col2:
+                        if st.button("⏸ Stop", type="secondary", use_container_width=True):
+                            st.session_state.is_analyzing = False
+                            st.rerun()
+
+                    # Auto-continue to next depth (no button needed!)
+                    try:
+                        result = st.session_state.analyzer.analyze(
+                            board_size=st.session_state.board_size,
+                            moves=st.session_state.moves if st.session_state.moves else None,
+                            handicap=st.session_state.handicap,
+                            komi=st.session_state.komi,
+                            visits=next_visits,
+                        )
+                        st.session_state.analysis_result = result
+                        st.session_state.visits = next_visits
+                        if next_visits >= 5000:
+                            st.session_state.is_analyzing = False
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Analysis failed: {e}")
+                        st.session_state.is_analyzing = False
+            else:
+                # Reached maximum depth
+                st.success(f"✓ Analysis complete: {current} visits")
+                st.session_state.is_analyzing = False
+
         # Display clickable image
         coords = streamlit_image_coordinates(
             board_img,
@@ -998,12 +1098,13 @@ def main():
             click_x = coords["x"]
             click_y = coords["y"]
             col, row = pixel_to_board_coords(click_x, click_y, st.session_state.board_size)
-            
+
             if col >= 0 and row >= 0 and (col, row) not in board_obj.stones:
                 next_player = get_next_player(st.session_state.moves, st.session_state.handicap)
                 gtp_coord = coords_to_gtp(col, row, st.session_state.board_size)
                 st.session_state.moves.append(f"{next_player} {gtp_coord}")
                 st.session_state.analysis_result = None
+                st.session_state.pending_analysis = True  # Trigger analysis on next render
                 st.session_state.last_click = (col, row)
                 save_session_to_disk()
                 st.rerun()
