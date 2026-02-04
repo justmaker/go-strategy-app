@@ -1,14 +1,23 @@
 # Opening Book Enhancement Tasks
 
 ## Status Overview
-- **9x9**: ✅ **COMPLETE** (1,091,000 entries from KataGo official book, exported 63MB .gz)
-- **13x13**: 8,543 entries (needs depth 12 expansion)
-- **19x19**: 13,270+ entries (🔄 Running depth 12 generation)
+
+| Board Size | Database Entries | Avg Visits | Status | Export Ready |
+|------------|------------------|------------|--------|--------------|
+| **9x9** | 1,091,000 | 282M | ✅ **COMPLETE** | ✅ 63MB .gz |
+| **13x13** | 2,760 | 141 | ⏳ Needs expansion | ❌ Too low quality |
+| **19x19** | 4,421 | 21 | ⏳ Needs expansion | ❌ Too low quality |
+
+### Quality Metrics
+- **9x9**: min=90K, max=54.9T, avg=282M visits (KataGo official book)
+- **13x13**: min=100, max=200, avg=141 visits (needs 500+ for export)
+- **19x19**: min=20, max=100, avg=21 visits (needs 500+ for export)
 
 ## Recent Progress (2026-02-05)
 - ✅ Downloaded KataGo 9x9 Opening Book (book9x9tt-20241105.tar.gz, 772MB)
 - ✅ Imported 1,091,000 positions (min-visits=5000, max-depth=20)
-- ✅ Exported to mobile/assets/opening_book.json.gz (63MB, 240,252 entries with 8-way symmetry)
+- ✅ Exported to mobile/assets/opening_book.json.gz (63MB, 240,252 entries)
+- ✅ Committed and pushed to GitHub (commit 8cac654)
 - 📂 Source: https://katagobooks.org/
 
 ---
