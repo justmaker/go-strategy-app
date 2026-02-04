@@ -445,14 +445,23 @@ class OpeningBookService {
       return null;
     }
 
+    // Debug: Show what we're looking for
+    final originalKey = buildMoveKeyFromGtp(boardSize, komi, moves);
+    debugPrint('[OpeningBook] Looking up: $originalKey (${moves.length} moves)');
+
     // Try all 8 symmetries
     for (int type = 0; type < 8; type++) {
        // Transform the input sequence
        final tMoves = moves.map((m) => _transformGtp(m, boardSize, type)).toList();
        final moveKey = buildMoveKeyFromGtp(boardSize, komi, tMoves);
        
+       if (type == 0 || moveKey != originalKey) {
+         debugPrint('[OpeningBook]   Sym$type: $moveKey');
+       }
+       
        var entry = _moveIndex[moveKey];
        if (entry != null) {
+         debugPrint('[OpeningBook] ✓ HIT on symmetry $type');
          // Found a match in this symmetry orientation!
          // We need to transform the result moves BACK to the original orientation
          final inverseType = _getInverseSymmetry(type);
@@ -474,18 +483,13 @@ class OpeningBookService {
             movesSequence: moves.join(';'), // Use original sequence
             topMoves: originalOrientationMoves,
             engineVisits: entry.visits,
-            modelName: 'bundled_opening_book (sym)',
+            modelName: 'bundled_opening_book (sym$type)',
             fromCache: true, 
          );
        }
     }
 
-    // Fallback: If empty board for 13 or 19 and no entry exists...
-    // (Existing synthesized moves logic - simplified to just original identity check fail)
-    // Actually, if we are empty (moves.isEmpty), Identity lookup (type=0) covers it.
-    // So we just need to handle the "MISS" case after the loop.
-
-    debugPrint('[OpeningBook] MISS after checking all symmetries');
+    debugPrint('[OpeningBook] ✗ MISS after checking all symmetries');
       
     // Synthesize for empty board if still missed (e.g. key mismatch or other issue)
     if (moves.isEmpty && (boardSize == 13 || boardSize == 19)) {
