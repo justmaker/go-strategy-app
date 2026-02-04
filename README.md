@@ -193,9 +193,19 @@ go-strategy-app/
 
 ## 📚 Documentation
 
+### 使用者文件
+
 | 文件 | 用途 |
 |------|------|
-| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | 使用者操作說明書 |
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | 使用者操作說明書（精簡版） |
+| [docs/USER_MANUAL_完整版.md](docs/USER_MANUAL_完整版.md) | 完整版使用者手冊（含詳細圖文說明） |
+| [docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md) | 快速參考卡（一頁速查） |
+| [docs/SCREENSHOT_GUIDE.md](docs/SCREENSHOT_GUIDE.md) | 截圖指引（貢獻操作圖示說明） |
+
+### 開發者文件
+
+| 文件 | 用途 |
+|------|------|
 | [docs/QUICK_RELEASE.md](docs/QUICK_RELEASE.md) | 開發者快速發布指南 |
 | [mobile/BUILD_OUTPUTS.md](mobile/BUILD_OUTPUTS.md) | 詳細建置說明 |
 | [docs/spec/](docs/spec/) | 技術規格書 |
