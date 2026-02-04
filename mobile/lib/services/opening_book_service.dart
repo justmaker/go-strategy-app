@@ -6,6 +6,7 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../models/models.dart';
@@ -150,11 +151,19 @@ class OpeningBookService {
           // Also index by moves sequence for alternative lookup
           final moveKey =
               _buildMoveKey(entry.boardSize, entry.komi, entry.movesSequence);
+          
+          if (entry.movesSequence == 'B[G7]') {
+             debugPrint('[OpeningBook] Indexing B[G7]. Key: "$moveKey" Visits: ${entry.visits}');
+          }
+
           final existingByMove = _moveIndex[moveKey];
           if (existingByMove == null || existingByMove.visits < entry.visits) {
             _moveIndex[moveKey] = entry;
           }
         } catch (e) {
+          if (entryJson is Map && entryJson['m'] == 'B[G7]') {
+             debugPrint('[OpeningBook] Failed to load B[G7]: $e');
+          }
           // Skip invalid entries
         }
       }
@@ -354,6 +363,81 @@ class OpeningBookService {
   ///   moves: List of moves in GTP format ["B E5", "W C3"]
   ///
   /// Returns null if not found.
+  /// Transform a GTP move string based on symmetry type (0-7)
+  String _transformGtp(String move, int boardSize, int type) {
+    if (move == 'pass' || move.isEmpty) return move;
+    
+    // Check if move is "Color[Coord]" format as used in keys
+    // or just "Color Coord" or "Coord"
+    // Our buildKey uses "B[E5]", so we need to handle that.
+    
+    String? color;
+    String coordStr;
+    
+    if (move.contains('[')) {
+      final parts = move.split('[');
+      color = parts[0];
+      coordStr = parts[1].replaceAll(']', '');
+    } else {
+      // Assuming naive GTP like "B E5" or just "E5"
+      final parts = move.split(' ');
+      if (parts.length == 2) {
+        color = parts[0];
+        coordStr = parts[1];
+      } else {
+        coordStr = move;
+      }
+    }
+
+    final point = BoardPoint.fromGtp(coordStr, boardSize);
+    if (point == null) return move; // Should not happen for valid moves
+
+    final tPoint = _transformPoint(point.x, point.y, boardSize, type);
+    final tCoord = BoardPoint(tPoint.x.toInt(), tPoint.y.toInt()).toGtp(boardSize);
+    
+    if (color != null) {
+      if (move.contains('[')) {
+        return '$color[$tCoord]';
+      } else {
+        return '$color $tCoord';
+      }
+    }
+    return tCoord;
+  }
+
+  /// Transform coordinates (0-indexed)
+  Point<int> _transformPoint(int x, int y, int size, int type) {
+    // 0: Identity
+    // 1: Rotate 90 (cw? let's stick to a convention)
+    // 2: Rotate 180
+    // 3: Rotate 270
+    // 4: Mirror X (Horizontal)
+    // 5: Mirror Y (Vertical)
+    // 6: Transpose (Swap X/Y)
+    // 7: Anti-Transpose
+    
+    switch (type) {
+      case 0: return Point(x, y);
+      case 1: return Point(y, size - 1 - x); // Rot90
+      case 2: return Point(size - 1 - x, size - 1 - y); // Rot180
+      case 3: return Point(size - 1 - y, x); // Rot270
+      case 4: return Point(size - 1 - x, y); // Mirror X
+      case 5: return Point(x, size - 1 - y); // Mirror Y
+      case 6: return Point(y, x); // Transpose
+      case 7: return Point(size - 1 - y, size - 1 - x); // Anti-Transpose
+      default: return Point(x, y);
+    }
+  }
+
+  /// Get the inverse symmetry type
+  int _getInverseSymmetry(int type) {
+    switch (type) {
+      case 1: return 3; // Rot90 -> Rot270
+      case 3: return 1; // Rot270 -> Rot90
+      default: return type; // All others are self-inverse
+    }
+  }
+
   AnalysisResult? lookupByMoves(
       int boardSize, double komi, List<String> moves) {
     if (!_isLoaded) {
@@ -361,24 +445,59 @@ class OpeningBookService {
       return null;
     }
 
-    final moveKey = buildMoveKeyFromGtp(boardSize, komi, moves);
-    var entry = _moveIndex[moveKey];
-    
-    if (entry == null) {
-      debugPrint('[OpeningBook] MISS: $moveKey (Entries: ${_moveIndex.length})');
+    // Try all 8 symmetries
+    for (int type = 0; type < 8; type++) {
+       // Transform the input sequence
+       final tMoves = moves.map((m) => _transformGtp(m, boardSize, type)).toList();
+       final moveKey = buildMoveKeyFromGtp(boardSize, komi, tMoves);
+       
+       var entry = _moveIndex[moveKey];
+       if (entry != null) {
+         // Found a match in this symmetry orientation!
+         // We need to transform the result moves BACK to the original orientation
+         final inverseType = _getInverseSymmetry(type);
+         
+         final originalOrientationMoves = entry.topMoves.map((m) {
+           final tMoveStr = _transformGtp(m.move, boardSize, inverseType);
+           return MoveCandidate(
+             move: tMoveStr,
+             winrate: m.winrate,
+             scoreLead: m.scoreLead,
+             visits: m.visits,
+           );
+         }).toList();
+         
+         return AnalysisResult(
+            boardHash: entry.hash,
+            boardSize: boardSize,
+            komi: komi,
+            movesSequence: moves.join(';'), // Use original sequence
+            topMoves: originalOrientationMoves,
+            engineVisits: entry.visits,
+            modelName: 'bundled_opening_book (sym)',
+            fromCache: true, 
+         );
+       }
+    }
+
+    // Fallback: If empty board for 13 or 19 and no entry exists...
+    // (Existing synthesized moves logic - simplified to just original identity check fail)
+    // Actually, if we are empty (moves.isEmpty), Identity lookup (type=0) covers it.
+    // So we just need to handle the "MISS" case after the loop.
+
+    debugPrint('[OpeningBook] MISS after checking all symmetries');
       
-      // Fallback: If empty board for 13 or 19 and no entry exists,
-      // synthesize standard opening moves.
-      if (moves.isEmpty && (boardSize == 13 || boardSize == 19)) {
+    // Synthesize for empty board if still missed (e.g. key mismatch or other issue)
+    if (moves.isEmpty && (boardSize == 13 || boardSize == 19)) {
         debugPrint('[OpeningBook] Synthesizing moves for empty $boardSize board');
-        entry = OpeningBookEntry(
+        final entry = OpeningBookEntry(
           hash: 'synthetic_empty',
           boardSize: boardSize,
           komi: komi,
           movesSequence: '',
           topMoves: [
             MoveCandidate(
-              move: boardSize == 19 ? 'K10' : 'G7', // Central/main star point
+              move: boardSize == 19 ? 'K10' : 'G7', 
               winrate: 0.5,
               scoreLead: 0.0,
               visits: 1000,
@@ -386,17 +505,10 @@ class OpeningBookService {
           ],
           visits: 1000,
         );
-        entry = _expandSymmetry(entry);
-      } else if (_moveIndex.isNotEmpty && _moveIndex.length < 5) {
-        debugPrint('Sample Keys: ${_moveIndex.keys.take(5).join(", ")}');
-      }
-    } else {
-        debugPrint('[OpeningBook] HIT: $moveKey');
-        // Always expand symmetry to show all equivalent moves
-        entry = _expandSymmetry(entry);
+        return _expandSymmetry(entry).toAnalysisResult();
     }
     
-    return entry?.toAnalysisResult();
+    return null;
   }
 
   /// Check if a position exists in the opening book

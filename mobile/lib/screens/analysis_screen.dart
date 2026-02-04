@@ -75,12 +75,12 @@ class AnalysisScreen extends StatelessWidget {
                     border: Border(left: BorderSide(color: Colors.grey.shade300)),
                     color: Colors.grey.shade50,
                   ),
-                  child: Column(
+                  child: const Column(
                     children: [
-                      const Expanded(child: _AnalysisPanel()),
-                      const Divider(height: 1),
-                      const _ControlsPanel(),
-                      const SizedBox(height: 16),
+                      Expanded(child: _AnalysisPanel()),
+                      Divider(height: 1),
+                      _ControlsPanel(),
+                      // Removed SizedBox to prevent overflow on smaller screens
                     ],
                   ),
                 ),
@@ -98,9 +98,8 @@ class AnalysisScreen extends StatelessWidget {
                   ),
                 ),
                 // Analysis panel
-                SizedBox(
-                  height: 240,
-                  child: const _AnalysisPanel(),
+                const Expanded(
+                  child: _AnalysisPanel(),
                 ),
                 // Controls
                 const _ControlsPanel(),

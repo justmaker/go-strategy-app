@@ -46,6 +46,9 @@ class GameRecordService extends ChangeNotifier {
   }
 
   Future<void> _initDatabase() async {
+    // Web support: Disable local SQLite cache
+    if (kIsWeb) return;
+
     final dbPath = await getDatabasesPath();
     final path = p.join(dbPath, 'game_records.db');
 

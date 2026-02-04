@@ -7,11 +7,13 @@ import 'dart:io' show Directory, File, Platform;
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:sqflite/sqflite.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart'
-    if (dart.library.html) 'package:sqflite/sqflite.dart'; // No-op for web
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/models.dart';
+
+// Conditional import for FFI (desktop only, not web)
+import 'cache_service_ffi_stub.dart'
+    if (dart.library.io) 'cache_service_ffi.dart';
 
 /// Local cache service using SQLite
 class CacheService {
@@ -29,12 +31,17 @@ class CacheService {
   Future<void> init() async {
     if (_database != null) return;
 
+    // Web support: Disable generic SQFlite for now as it requires special setup
+    if (kIsWeb) {
+      debugPrint('[CacheService] Web platform: Disabling local SQFlite cache');
+      return;
+    }
+
     String dbPath;
 
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       // Initialize FFI for desktop platforms
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
+      initFfiDatabase();
 
       // For desktop, getApplicationSupportDirectory is more reliable
       final appDir = await getApplicationSupportDirectory();
@@ -130,13 +137,9 @@ class CacheService {
     // Add migration logic here for future versions
   }
 
-  /// Get database instance
-  Database get db {
-    if (_database == null) {
-      throw StateError('Database not initialized. Call init() first.');
-    }
-    return _database!;
-  }
+  /// Get database instance (safe)
+  Database? get db => _database; // Changed to nullable getter
+
 
   /// Get cached analysis result
   Future<AnalysisResult?> get({
@@ -144,6 +147,8 @@ class CacheService {
     required double komi,
     int? requiredVisits,
   }) async {
+    if (_database == null) return null; // Safe check
+
     String query;
     List<dynamic> params;
 
@@ -170,7 +175,7 @@ class CacheService {
       params = [boardHash, komi];
     }
 
-    final results = await db.rawQuery(query, params);
+    final results = await _database!.rawQuery(query, params);
     if (results.isEmpty) return null;
 
     return _rowToAnalysisResult(results.first);
@@ -178,8 +183,10 @@ class CacheService {
 
   /// Store analysis result with intelligent merge logic
   Future<void> put(AnalysisResult result) async {
+    if (_database == null) return; // Safe check
+
     // Check for existing entry
-    final existing = await db.rawQuery('''
+    final existing = await _database!.rawQuery('''
       SELECT calculation_duration, stopped_by_limit, limit_setting, created_at
       FROM analysis_cache
       WHERE board_hash = ? AND engine_visits = ? AND komi = ?
@@ -219,7 +226,7 @@ class CacheService {
         result.topMoves.map((m) => m.toJson()).toList(),
       );
 
-      await db.rawInsert('''
+      await _database!.rawInsert('''
         INSERT OR REPLACE INTO analysis_cache 
         (board_hash, moves_sequence, board_size, komi, 
          analysis_result, engine_visits, model_name, created_at,
@@ -243,12 +250,19 @@ class CacheService {
 
   /// Get cache statistics
   Future<Map<String, dynamic>> getStats() async {
-    final countResult = await db.rawQuery(
+    if (_database == null) {
+      return {
+        'total_entries': 0,
+        'by_board_size': <int, int>{},
+      };
+    }
+    
+    final countResult = await _database!.rawQuery(
       'SELECT COUNT(*) as count FROM analysis_cache',
     );
     final totalEntries = countResult.first['count'] as int;
 
-    final sizeResult = await db.rawQuery('''
+    final sizeResult = await _database!.rawQuery('''
       SELECT board_size, COUNT(*) as cnt 
       FROM analysis_cache 
       GROUP BY board_size
@@ -265,7 +279,8 @@ class CacheService {
 
   /// Count total cached entries
   Future<int> count() async {
-    final result = await db.rawQuery(
+    if (_database == null) return 0;
+    final result = await _database!.rawQuery(
       'SELECT COUNT(*) as count FROM analysis_cache',
     );
     return result.first['count'] as int;
@@ -273,7 +288,8 @@ class CacheService {
 
   /// Clear all cached entries
   Future<int> clear() async {
-    return await db.delete('analysis_cache');
+    if (_database == null) return 0;
+    return await _database!.delete('analysis_cache');
   }
 
   /// Import data from JSON (for syncing from server)
@@ -293,7 +309,8 @@ class CacheService {
 
   /// Export all data to JSON (for backup)
   Future<List<Map<String, dynamic>>> exportToJson() async {
-    final results = await db.rawQuery('''
+    if (_database == null) return [];
+    final results = await _database!.rawQuery('''
       SELECT board_hash, moves_sequence, board_size, komi,
              analysis_result, engine_visits, model_name, created_at,
              calculation_duration, stopped_by_limit, limit_setting
