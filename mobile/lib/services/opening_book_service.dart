@@ -465,7 +465,7 @@ class OpeningBookService {
          // Found a match in this symmetry orientation!
          // We need to transform the result moves BACK to the original orientation
          final inverseType = _getInverseSymmetry(type);
-         
+
          final originalOrientationMoves = entry.topMoves.map((m) {
            final tMoveStr = _transformGtp(m.move, boardSize, inverseType);
            return MoveCandidate(
@@ -475,16 +475,29 @@ class OpeningBookService {
              visits: m.visits,
            );
          }).toList();
-         
+
+         // Create a temporary entry with transformed moves
+         final transformedEntry = OpeningBookEntry(
+           hash: entry.hash,
+           boardSize: boardSize,
+           komi: komi,
+           movesSequence: moves.join(';'),
+           topMoves: originalOrientationMoves,
+           visits: entry.visits,
+         );
+
+         // Apply symmetry expansion to get all equivalent moves
+         final expandedEntry = _expandSymmetry(transformedEntry);
+
          return AnalysisResult(
-            boardHash: entry.hash,
+            boardHash: expandedEntry.hash,
             boardSize: boardSize,
             komi: komi,
             movesSequence: moves.join(';'), // Use original sequence
-            topMoves: originalOrientationMoves,
-            engineVisits: entry.visits,
+            topMoves: expandedEntry.topMoves,
+            engineVisits: expandedEntry.visits,
             modelName: 'bundled_opening_book (sym$type)',
-            fromCache: true, 
+            fromCache: true,
          );
        }
     }
