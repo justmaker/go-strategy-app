@@ -3,22 +3,25 @@
 ## Status Overview
 - **9x9**: Completed (1,519,000 entries from KataGo official book)
 - **13x13**: 8,543 entries (needs depth 12 expansion)
-- **19x19**: 13,270 entries (needs depth 12 expansion)
+- **19x19**: 13,270+ entries (🔄 Running depth 12 generation)
 
 ---
 
 ## This Machine (GPU) - go-strategy-app server
 
-### Task 1: Generate 19x19 Depth 12 Opening Book
+### Task 1: Generate 19x19 Depth 12 Opening Book [🔄 RUNNING]
 ```bash
 # Run KataGo analysis to expand 19x19 opening book to depth 12
-python3 -m src.scripts.generate_opening_book --board-size 19 --max-depth 12 --min-visits 500
+python3 -m src.scripts.build_opening_book --board-size 19 --depth 12 --visits 500
+
+# Monitor progress
+watch -n 30 'python3 -c "import sqlite3; c=sqlite3.connect(\"data/analysis.db\").execute(\"SELECT COUNT(*) FROM analysis_cache WHERE board_size=19\"); print(f\"19x19: {c.fetchone()[0]:,}\")"'
 ```
 
 ### Task 2: Generate 13x13 Depth 12 Opening Book
 ```bash
 # Run KataGo analysis to expand 13x13 opening book to depth 12
-python3 -m src.scripts.generate_opening_book --board-size 13 --max-depth 12 --min-visits 500
+python3 -m src.scripts.build_opening_book --board-size 13 --depth 12 --visits 500
 ```
 
 ---
@@ -32,7 +35,7 @@ python3 -c "
 import sqlite3
 conn = sqlite3.connect('data/analysis.db')
 cur = conn.cursor()
-cur.execute('DELETE FROM analysis_cache WHERE board_size IN (13, 19) AND visits < 500')
+cur.execute('DELETE FROM analysis_cache WHERE board_size IN (13, 19) AND engine_visits < 500')
 print(f'Deleted {cur.rowcount} rows')
 conn.commit()
 conn.close()
