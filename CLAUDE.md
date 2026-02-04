@@ -66,6 +66,9 @@ analysis:
 # 啟動 macOS 原生 app (推薦測試方式)
 cd mobile && flutter run -d macos
 
+# 啟動 API server
+uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+
 # 啟動 Web GUI (Python/Streamlit)
 streamlit run src/gui.py --server.port 8501
 
@@ -75,12 +78,67 @@ pytest tests/ -v
 # 執行 Flutter 測試
 cd mobile && flutter test
 
+# 驗證 OpenAPI 規範與實作一致性
+python scripts/validate_openapi.py
+
 # 建置所有平台
 cd mobile && ./build_all.sh
 ```
 
+## API 開發規範
+
+### OpenAPI 規範優先（Spec-First Workflow）
+
+本專案採用 **OpenAPI 規範文件** 作為 API 的正式定義。修改 API 時必須同步更新規範。
+
+```
+docs/spec/openapi.yaml  ← 正式規範（必須手動維護）
+src/api.py              ← FastAPI 實作（必須與規範一致）
+```
+
+### API 修改流程
+
+1. **先修改 `docs/spec/openapi.yaml`**
+   - 新增/修改端點定義
+   - 更新 request/response schema
+   - 維護範例值（example）
+
+2. **再修改 `src/api.py`**
+   - 更新 Pydantic 模型，與 openapi.yaml 一致
+   - 實作端點邏輯
+
+3. **驗證一致性**
+   ```bash
+   # 啟動 API server
+   uvicorn src.api:app --port 8000
+
+   # 驗證規範與實作一致
+   python scripts/validate_openapi.py
+   ```
+
+### 重要注意事項
+
+| 項目 | 說明 |
+|-----|------|
+| **座標格式** | 統一使用 GTP 格式（`Q16`, `D4`），'I' 字元跳過 |
+| **棋盤大小** | 僅支援 9, 13, 19，使用 enum 限制 |
+| **Pydantic Field** | 必須有 `description`，與 openapi.yaml 描述一致 |
+| **範例值** | `json_schema_extra` 的 example 必須與 openapi.yaml 同步 |
+| **錯誤回應** | 統一使用 `ErrorResponse` schema，包含 `detail` 欄位 |
+
+### 新增 API 端點檢查清單
+
+- [ ] 在 `openapi.yaml` 新增路徑定義
+- [ ] 定義 request/response schema（若需要新 schema）
+- [ ] 在 `src/api.py` 新增 Pydantic 模型
+- [ ] 實作端點函數，包含適當的 docstring
+- [ ] 執行 `python scripts/validate_openapi.py` 驗證
+- [ ] 更新 `docs/spec/API.md`（若為重大變更）
+
 ## 相關文件
 
+- [docs/spec/openapi.yaml](docs/spec/openapi.yaml) - **OpenAPI 規範（正式 API 定義）**
+- [docs/spec/API.md](docs/spec/API.md) - API 快速參考
 - [docs/spec/TEST.md](docs/spec/TEST.md) - 測試規範
 - [docs/spec/LOGIC.md](docs/spec/LOGIC.md) - 核心邏輯
 - [docs/UI_SPEC.md](docs/UI_SPEC.md) - UI 設計規範

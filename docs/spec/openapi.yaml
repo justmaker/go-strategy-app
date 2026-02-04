@@ -1,0 +1,413 @@
+# Go Strategy Analysis API - OpenAPI Specification
+#
+# 此文件為 API 的正式規範，與 src/api.py 中的實作應保持同步。
+#
+# 驗證規範與實作一致性：
+#   python scripts/validate_openapi.py
+#
+# FastAPI 自動生成的規範：
+#   http://localhost:8000/openapi.json
+#
+openapi: 3.1.0
+info:
+  title: Go Strategy Analysis API
+  description: |
+    REST API for Go (Weiqi/Baduk) position analysis powered by KataGo.
+
+    ## Features
+    - Analyze board positions with AI recommendations
+    - Cache-backed for fast repeated queries
+    - Symmetry-aware canonical hashing (8x cache efficiency)
+    - Support for 9x9, 13x13, and 19x19 boards
+
+    ## Usage
+    1. Use `/analyze` to get AI move recommendations (may invoke KataGo)
+    2. Use `/query` to check cache only (fast, no KataGo)
+    3. Use `/health` to check service status
+  version: 1.0.0
+  contact:
+    name: Go Strategy App
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+
+tags:
+  - name: System
+    description: System health and status endpoints
+  - name: Analysis
+    description: Board position analysis endpoints
+
+paths:
+  /health:
+    get:
+      operationId: health_check
+      summary: Health check
+      description: Check if the API service is running and get basic status.
+      tags:
+        - System
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /analyze:
+    post:
+      operationId: analyze_position
+      summary: Analyze a board position
+      description: |
+        Analyze a Go board position and return top candidate moves.
+
+        This endpoint will:
+        1. Check cache for existing analysis
+        2. If not found (or force_refresh=True), run KataGo analysis
+        3. Cache and return the result
+
+        **Note:** If KataGo analysis is needed, this may take several seconds.
+      tags:
+        - Analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyzeRequest'
+      responses:
+        '200':
+          description: Analysis successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Position not in cache (cache-only mode)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /query:
+    post:
+      operationId: query_cache
+      summary: Query cache for a position
+      description: |
+        Check if a board position exists in the cache.
+
+        This is a fast lookup that does NOT invoke KataGo.
+        Use this when you only want cached results.
+      tags:
+        - Analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: Query successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /stats:
+    get:
+      operationId: get_stats
+      summary: Get cache statistics
+      description: Get detailed statistics about the analysis cache.
+      tags:
+        - System
+      responses:
+        '200':
+          description: Statistics retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    # ========================================================================
+    # Request Schemas
+    # ========================================================================
+
+    AnalyzeRequest:
+      type: object
+      description: Request body for /analyze endpoint.
+      properties:
+        board_size:
+          type: integer
+          description: Board size (9, 13, or 19)
+          default: 19
+          enum: [9, 13, 19]
+          example: 19
+        moves:
+          type: array
+          description: List of moves in GTP format (e.g., ['B Q16', 'W D4'])
+          items:
+            type: string
+            pattern: '^[BW] [A-HJ-T][1-9][0-9]?$'
+          default: []
+          example: ["B Q16", "W D4", "B Q3"]
+        handicap:
+          type: integer
+          description: Number of handicap stones (0-9)
+          minimum: 0
+          maximum: 9
+          default: 0
+          example: 0
+        komi:
+          type: number
+          description: Komi value (default 7.5, or 0.5 for handicap)
+          nullable: true
+          example: 7.5
+        visits:
+          type: integer
+          description: Override default visit count
+          minimum: 1
+          nullable: true
+          example: 150
+        force_refresh:
+          type: boolean
+          description: Bypass cache and force new analysis
+          default: false
+          example: false
+
+    QueryRequest:
+      type: object
+      description: Request body for /query endpoint (cache lookup only).
+      properties:
+        board_size:
+          type: integer
+          description: Board size (9, 13, or 19)
+          default: 19
+          enum: [9, 13, 19]
+          example: 9
+        moves:
+          type: array
+          description: List of moves in GTP format
+          items:
+            type: string
+            pattern: '^[BW] [A-HJ-T][1-9][0-9]?$'
+          default: []
+          example: ["B E5"]
+        handicap:
+          type: integer
+          description: Number of handicap stones
+          minimum: 0
+          maximum: 9
+          default: 0
+          example: 0
+        komi:
+          type: number
+          description: Komi value
+          nullable: true
+          example: 7.5
+
+    # ========================================================================
+    # Response Schemas
+    # ========================================================================
+
+    HealthResponse:
+      type: object
+      description: Health check response.
+      required:
+        - status
+        - cache_entries
+        - katago_running
+      properties:
+        status:
+          type: string
+          description: Service status
+          example: ok
+        cache_entries:
+          type: integer
+          description: Number of cached positions
+          example: 58734
+        katago_running:
+          type: boolean
+          description: Whether KataGo engine is running
+          example: true
+        cache_only_mode:
+          type: boolean
+          description: Whether running in cache-only mode (no GPU)
+          default: false
+          example: false
+
+    AnalysisResponse:
+      type: object
+      description: Complete analysis result for a board position.
+      required:
+        - board_hash
+        - board_size
+        - komi
+        - moves_sequence
+        - top_moves
+        - engine_visits
+        - model_name
+        - from_cache
+      properties:
+        board_hash:
+          type: string
+          description: Zobrist hash of the position (canonical, symmetry-aware)
+          example: a1b2c3d4e5f6g7h8
+        board_size:
+          type: integer
+          description: Board size (9, 13, or 19)
+          enum: [9, 13, 19]
+          example: 19
+        komi:
+          type: number
+          description: Komi value
+          example: 7.5
+        moves_sequence:
+          type: string
+          description: Move sequence string in SGF format (e.g., 'B[Q16];W[D4]')
+          example: "B[Q16];W[D4]"
+        top_moves:
+          type: array
+          description: Top candidate moves, sorted by visits descending
+          items:
+            $ref: '#/components/schemas/MoveCandidateResponse'
+        engine_visits:
+          type: integer
+          description: Total visits used for analysis
+          minimum: 0
+          example: 150
+        model_name:
+          type: string
+          description: KataGo model name used for analysis
+          example: kata1-b18c384
+        from_cache:
+          type: boolean
+          description: Whether result was retrieved from cache
+          example: false
+        timestamp:
+          type: string
+          format: date-time
+          description: Analysis timestamp (ISO 8601 format)
+          nullable: true
+          example: "2024-01-21T20:00:00"
+
+    MoveCandidateResponse:
+      type: object
+      description: A candidate move with analysis statistics.
+      required:
+        - move
+        - winrate
+        - score_lead
+        - visits
+      properties:
+        move:
+          type: string
+          description: GTP coordinate (e.g., 'Q16', 'D4'). Note that 'I' is skipped.
+          pattern: '^[A-HJ-T][1-9][0-9]?$'
+          example: Q16
+        winrate:
+          type: number
+          description: Win rate as decimal (0.0-1.0)
+          minimum: 0
+          maximum: 1
+          example: 0.523
+        score_lead:
+          type: number
+          description: Score lead in points (positive = ahead)
+          example: 0.8
+        visits:
+          type: integer
+          description: Number of MCTS visits for this move
+          minimum: 0
+          example: 150
+
+    QueryResponse:
+      type: object
+      description: Response for /query endpoint.
+      required:
+        - found
+      properties:
+        found:
+          type: boolean
+          description: Whether position was found in cache
+          example: true
+        result:
+          description: Analysis result if found, null otherwise
+          nullable: true
+          oneOf:
+            - $ref: '#/components/schemas/AnalysisResponse'
+            - type: 'null'
+
+    StatsResponse:
+      type: object
+      description: Cache statistics response.
+      properties:
+        total_entries:
+          type: integer
+          description: Total number of cached entries
+          example: 31590
+        by_board_size:
+          type: object
+          description: Entry count by board size
+          additionalProperties:
+            type: integer
+          example:
+            "9": 10230
+            "13": 8543
+            "19": 12817
+        by_visits:
+          type: object
+          description: Entry count by visit count
+          additionalProperties:
+            type: integer
+
+    ErrorResponse:
+      type: object
+      description: Error response.
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Error message describing what went wrong
+          example: Board size must be 9, 13, or 19
