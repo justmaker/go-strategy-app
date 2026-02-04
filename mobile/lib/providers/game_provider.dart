@@ -45,6 +45,10 @@ class GameProvider extends ChangeNotifier {
   // Visual preferences
   bool _showMoveNumbers = true;
 
+  // Move confirmation feature
+  bool _moveConfirmationEnabled = false;
+  BoardPoint? _pendingMove;
+
   // Settings - Dual slider system
   int _lookupVisits;
   int _computeVisits;
@@ -100,6 +104,10 @@ class GameProvider extends ChangeNotifier {
   KataGoService get kataGoService => _kataGo;
   KataGoDesktopService get kataGoDesktopService => _kataGoDesktop;
   bool get showMoveNumbers => _showMoveNumbers;
+
+  // Move confirmation getters
+  bool get moveConfirmationEnabled => _moveConfirmationEnabled;
+  BoardPoint? get pendingMove => _pendingMove;
 
   // Platform detection
   bool get _isDesktop =>
@@ -234,6 +242,59 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Toggle move confirmation mode
+  void setMoveConfirmationEnabled(bool enabled) {
+    _moveConfirmationEnabled = enabled;
+    // Clear pending move when disabling
+    if (!enabled) {
+      _pendingMove = null;
+    }
+    notifyListeners();
+  }
+
+  /// Set pending move (preview before confirmation)
+  void setPendingMove(BoardPoint? point) {
+    // Only allow pending move if the position is empty
+    if (point != null && !_board.isEmpty(point.x, point.y)) {
+      return;
+    }
+    _pendingMove = point;
+    notifyListeners();
+  }
+
+  /// Move pending move in a direction (for adjustment)
+  void movePendingMove(int dx, int dy) {
+    if (_pendingMove == null) return;
+
+    final newX = (_pendingMove!.x + dx).clamp(0, _board.size - 1);
+    final newY = (_pendingMove!.y + dy).clamp(0, _board.size - 1);
+    final newPoint = BoardPoint(newX, newY);
+
+    // Only move if the new position is empty
+    if (_board.isEmpty(newX, newY)) {
+      _pendingMove = newPoint;
+      notifyListeners();
+    }
+  }
+
+  /// Confirm and place the pending move
+  Future<void> confirmPendingMove() async {
+    if (_pendingMove == null) return;
+
+    final point = _pendingMove!;
+    _pendingMove = null;
+    notifyListeners();
+
+    // Place the stone
+    await placeStone(point);
+  }
+
+  /// Cancel pending move
+  void cancelPendingMove() {
+    _pendingMove = null;
+    notifyListeners();
+  }
+
   /// Set board size
   void setBoardSize(int size) {
     if (size != _board.size) {
@@ -315,6 +376,10 @@ class GameProvider extends ChangeNotifier {
           _board.movesGtp,
         );
         if (bookResult != null) {
+          debugPrint('[GameProvider] Opening book returned ${bookResult.topMoves.length} moves:');
+          for (final move in bookResult.topMoves) {
+            debugPrint('  ${move.move}: Win=${move.winratePercent} Lead=${move.scoreLeadFormatted}');
+          }
           _lastAnalysis = bookResult;
           _lastAnalysisSource = AnalysisSource.openingBook;
           _isAnalyzing = false;

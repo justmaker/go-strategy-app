@@ -118,9 +118,18 @@ class AnalysisScreen extends StatelessWidget {
           board: game.board,
           suggestions: game.lastAnalysis?.topMoves,
           showMoveNumbers: game.showMoveNumbers,
+          pendingMove: game.pendingMove,
           onTap: game.isAnalyzing
               ? null
-              : (point) => game.placeStone(point),
+              : (point) {
+                  // If move confirmation is enabled, set pending move
+                  // Otherwise, place stone directly
+                  if (game.moveConfirmationEnabled) {
+                    game.setPendingMove(point);
+                  } else {
+                    game.placeStone(point);
+                  }
+                },
         );
       },
     );
@@ -385,30 +394,54 @@ class _AnalysisView extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                ...() {
-                  // Deduplicate moves with similar winrate/lead for the list
-                  final uniqueMoves = <MoveCandidate>[];
-                  final seenMetrics = <String>{};
+                // Make the moves list scrollable
+                SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ...() {
+                        // Show all moves without limitation
+                        // Go players understand symmetry, so seeing all equivalent moves is informative
+                        final uniqueMoves = <MoveCandidate>[];
+                        final seenMoves = <String>{};
 
-                  for (final move in analysis.topMoves) {
-                    // Create a signature based on winrate (1 decimal) and lead (1 decimal)
-                    final signature = '${move.winratePercent}_${move.scoreLeadFormatted}';
-                    if (!seenMetrics.contains(signature)) {
-                      seenMetrics.add(signature);
-                      uniqueMoves.add(move);
-                    }
-                  }
+                        for (final move in analysis.topMoves) {
+                          // Only deduplicate exact same move coordinates
+                          if (!seenMoves.contains(move.move)) {
+                            seenMoves.add(move.move);
+                            uniqueMoves.add(move);
+                          }
+                        }
 
-                  // Only show top 3 tiers
-                  final topTiers = uniqueMoves.take(3).toList();
+                        // Calculate display ranks based on winrate grouping
+                        // This matches the logic in go_board_widget.dart
+                        final moveRanks = <int, int>{}; // index -> displayRank
+                        int currentRank = 0;
+                        String? lastSignature;
 
-                  return topTiers.asMap().entries.map((entry) {
-                    final i = entry.key;
-                    final move = entry.value;
-                    // Use the tier index for dense ranking (1, 2, 3)
-                    return _MoveRow(rank: i + 1, move: move);
-                  });
-                }(),
+                        for (int i = 0; i < uniqueMoves.length; i++) {
+                          final move = uniqueMoves[i];
+                          // Group by winrate and scoreLead signature
+                          final signature = '${move.winratePercent}_${move.scoreLeadFormatted}';
+
+                          if (signature != lastSignature) {
+                            currentRank++;
+                            lastSignature = signature;
+                          }
+                          moveRanks[i] = currentRank;
+                        }
+
+                        // Display all moves with grouped ranks
+                        return uniqueMoves.asMap().entries.map((entry) {
+                          final i = entry.key;
+                          final move = entry.value;
+                          final displayRank = moveRanks[i]!;
+                          return _MoveRow(rank: displayRank, move: move);
+                        });
+                      }(),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -476,17 +509,21 @@ class _MoveRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color rankColor;
-    switch (rank) {
-      case 1:
-        rankColor = Colors.blue;
-        break;
-      case 2:
-        rankColor = Colors.green;
-        break;
-      default:
-        rankColor = Colors.orange;
-    }
+    // Extended color palette matching the board widget
+    final rankColors = [
+      Colors.blue,        // Rank 1
+      Colors.green,       // Rank 2
+      Colors.orange,      // Rank 3
+      Colors.yellow,      // Rank 4
+      Colors.purple,      // Rank 5
+      Colors.pink,        // Rank 6
+      Colors.cyan,        // Rank 7
+      Colors.lime,        // Rank 8
+      Colors.grey,        // Rank 9+
+    ];
+
+    final colorIndex = (rank - 1).clamp(0, rankColors.length - 1);
+    final rankColor = rankColors[colorIndex];
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -535,6 +572,98 @@ class _ControlsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<GameProvider>(
       builder: (context, game, _) {
+        // If there's a pending move, show confirmation controls
+        if (game.pendingMove != null) {
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              border: Border(top: BorderSide(color: Colors.blue.shade200)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Adjust position with arrow keys',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Up arrow
+                    Column(
+                      children: [
+                        IconButton(
+                          onPressed: () => game.movePendingMove(0, -1),
+                          icon: const Icon(Icons.arrow_upward),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.blue.shade100,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Left arrow
+                    IconButton(
+                      onPressed: () => game.movePendingMove(-1, 0),
+                      icon: const Icon(Icons.arrow_back),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.blue.shade100,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    // Confirm button
+                    ElevatedButton.icon(
+                      onPressed: () => game.confirmPendingMove(),
+                      icon: const Icon(Icons.check),
+                      label: const Text('Confirm'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    // Right arrow
+                    IconButton(
+                      onPressed: () => game.movePendingMove(1, 0),
+                      icon: const Icon(Icons.arrow_forward),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.blue.shade100,
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Down arrow
+                    IconButton(
+                      onPressed: () => game.movePendingMove(0, 1),
+                      icon: const Icon(Icons.arrow_downward),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.blue.shade100,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                TextButton.icon(
+                  onPressed: () => game.cancelPendingMove(),
+                  icon: const Icon(Icons.close, size: 16),
+                  label: const Text('Cancel'),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Normal controls
         return Container(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -770,6 +899,13 @@ class _SettingsSheet extends StatelessWidget {
                 value: game.showMoveNumbers,
                 onChanged: (value) => game.setShowMoveNumbers(value),
                 secondary: const Icon(Icons.numbers),
+              ),
+              SwitchListTile(
+                title: const Text('Move Confirmation'),
+                subtitle: const Text('Confirm moves with arrow keys to avoid mis-taps'),
+                value: game.moveConfirmationEnabled,
+                onChanged: (value) => game.setMoveConfirmationEnabled(value),
+                secondary: const Icon(Icons.touch_app),
               ),
               const Divider(),
 

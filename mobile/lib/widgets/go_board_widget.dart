@@ -34,7 +34,8 @@ class GoBoardWidget extends StatelessWidget {
   final void Function(BoardPoint)? onTap;
   final BoardTheme theme;
   final bool showCoordinates;
-  final bool showMoveNumbers; // New field
+  final bool showMoveNumbers;
+  final BoardPoint? pendingMove; // For move confirmation preview
 
   const GoBoardWidget({
     super.key,
@@ -43,7 +44,8 @@ class GoBoardWidget extends StatelessWidget {
     this.onTap,
     this.theme = const BoardTheme(),
     this.showCoordinates = true,
-    this.showMoveNumbers = false, // Default false
+    this.showMoveNumbers = false,
+    this.pendingMove,
   });
 
   @override
@@ -71,7 +73,8 @@ class GoBoardWidget extends StatelessWidget {
                   suggestions: suggestions,
                   theme: theme,
                   showCoordinates: showCoordinates,
-                  showMoveNumbers: showMoveNumbers, // Pass to painter
+                  showMoveNumbers: showMoveNumbers,
+                  pendingMove: pendingMove,
                 ),
               ),
             ),
@@ -82,7 +85,21 @@ class GoBoardWidget extends StatelessWidget {
   }
 
   void _handleTap(TapDownDetails details, double widgetSize) {
-    final padding = showCoordinates ? widgetSize * 0.10 : widgetSize * 0.02;
+    // Use same padding logic as paint method
+    double paddingRatio;
+    if (showCoordinates) {
+      if (board.size >= 19) {
+        paddingRatio = 0.06;
+      } else if (board.size >= 13) {
+        paddingRatio = 0.07;
+      } else {
+        paddingRatio = 0.08;
+      }
+    } else {
+      paddingRatio = 0.02;
+    }
+
+    final padding = widgetSize * paddingRatio;
     final boardSizePixels = widgetSize - padding * 2;
     final cellSize = boardSizePixels / (board.size - 1);
 
@@ -108,6 +125,7 @@ class _BoardPainter extends CustomPainter {
   final BoardTheme theme;
   final bool showCoordinates;
   final bool showMoveNumbers;
+  final BoardPoint? pendingMove;
 
   _BoardPainter({
     required this.board,
@@ -115,12 +133,27 @@ class _BoardPainter extends CustomPainter {
     required this.theme,
     required this.showCoordinates,
     required this.showMoveNumbers,
+    this.pendingMove,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Sufficient padding to prevent clipping on all platforms (especially Web)
-    final padding = showCoordinates ? size.width * 0.10 : size.width * 0.02;
+    // Dynamic padding based on board size for better space utilization
+    // Smaller boards (9x9) can afford more padding, larger boards (19x19) need less
+    double paddingRatio;
+    if (showCoordinates) {
+      if (board.size >= 19) {
+        paddingRatio = 0.06; // 6% for 19x19 (tighter for small screens)
+      } else if (board.size >= 13) {
+        paddingRatio = 0.07; // 7% for 13x13
+      } else {
+        paddingRatio = 0.08; // 8% for 9x9
+      }
+    } else {
+      paddingRatio = 0.02; // No coordinates
+    }
+
+    final padding = size.width * paddingRatio;
     final boardSize = size.width - padding * 2;
     final cellSize = boardSize / (board.size - 1);
 
@@ -145,6 +178,11 @@ class _BoardPainter extends CustomPainter {
 
     // Draw stones with optional move numbers
     _drawStones(canvas, padding, cellSize);
+
+    // Draw pending move preview (dashed circle)
+    if (pendingMove != null) {
+      _drawPendingMove(canvas, padding, cellSize);
+    }
   }
 
   // ... (keep _drawGrid, _drawStarPoints, _drawCoordinates, _drawSuggestions as they are) ...
@@ -302,27 +340,29 @@ class _BoardPainter extends CustomPainter {
 
       final displayRank = moveRanks[i]!;
 
-      // Determine color based on rank (grouped)
-      // Rank 1: Blue (Best), Rank 2: Green (Good), Rank 3+: Orange (OK)
-      Color color;
-      
       // Filter out moves that are too bad (10% drop)
       final winrateDrop = bestWinrate - suggestion.winrate;
       if (winrateDrop > 0.10) {
         continue;
       }
 
-      if (displayRank > 3) {
-        continue;
-      }
+      // Determine color based on rank with extended color palette
+      // Rank 1: Blue (Best), Rank 2: Green (Good), Rank 3: Orange,
+      // Rank 4: Yellow, Rank 5: Purple, Rank 6+: Grey
+      final rankColors = [
+        Colors.blue,        // Rank 1
+        Colors.green,       // Rank 2
+        Colors.orange,      // Rank 3
+        Colors.yellow,      // Rank 4
+        Colors.purple,      // Rank 5
+        Colors.pink,        // Rank 6
+        Colors.cyan,        // Rank 7
+        Colors.lime,        // Rank 8
+        Colors.grey,        // Rank 9+
+      ];
 
-      if (displayRank == 1) {
-        color = theme.bestMoveColor;
-      } else if (displayRank == 2) {
-        color = theme.goodMoveColor;
-      } else {
-        color = theme.okMoveColor;
-      }
+      final colorIndex = (displayRank - 1).clamp(0, rankColors.length - 1);
+      final color = rankColors[colorIndex];
 
       final x = padding + point.x * cellSize;
       final y = padding + point.y * cellSize;
@@ -469,12 +509,55 @@ class _BoardPainter extends CustomPainter {
     }
   }
 
+  void _drawPendingMove(Canvas canvas, double padding, double cellSize) {
+    if (pendingMove == null) return;
+
+    // Convert GTP coordinates to display coordinates
+    final displayPoint = pendingMove!.toDisplayCoords(board.size);
+    final centerX = padding + displayPoint.x * cellSize;
+    final centerY = padding + displayPoint.y * cellSize;
+    final radius = cellSize * 0.45;
+
+    // Determine stone color (next player's color)
+    final isBlackNext = board.nextPlayer == StoneColor.black;
+    final stoneColor = isBlackNext ? Colors.black : Colors.white;
+
+    // Draw dashed circle
+    final paint = Paint()
+      ..color = stoneColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+
+    // Create dashed circle effect
+    const dashCount = 16;
+    const dashAngle = (2 * 3.14159) / dashCount;
+    for (int i = 0; i < dashCount; i += 2) {
+      final startAngle = i * dashAngle;
+      final endAngle = startAngle + dashAngle;
+
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset(centerX, centerY), radius: radius),
+        startAngle,
+        dashAngle,
+        false,
+        paint,
+      );
+    }
+
+    // Draw semi-transparent fill for visibility
+    final fillPaint = Paint()
+      ..color = stoneColor.withValues(alpha: 0.2)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(centerX, centerY), radius, fillPaint);
+  }
+
   @override
   bool shouldRepaint(covariant _BoardPainter oldDelegate) {
     return oldDelegate.board != board ||
         oldDelegate.suggestions != suggestions ||
         oldDelegate.theme != theme ||
         oldDelegate.showCoordinates != showCoordinates ||
-        oldDelegate.showMoveNumbers != showMoveNumbers;
+        oldDelegate.showMoveNumbers != showMoveNumbers ||
+        oldDelegate.pendingMove != pendingMove;
   }
 }
