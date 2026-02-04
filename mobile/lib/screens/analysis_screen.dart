@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../config.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../services/services.dart';
 import '../widgets/widgets.dart';
 import 'settings_screen.dart';
 
@@ -142,9 +143,12 @@ class AnalysisScreen extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => ChangeNotifierProvider.value(
+      builder: (bottomSheetContext) => ChangeNotifierProvider.value(
         value: gameProvider,
-        child: const _SettingsSheet(),
+        child: _SettingsSheet(
+          // Pass the parent context so we can navigate with full Provider access
+          parentContext: context,
+        ),
       ),
     );
   }
@@ -771,7 +775,9 @@ class _DataStatsWidget extends StatelessWidget {
 }
 
 class _SettingsSheet extends StatelessWidget {
-  const _SettingsSheet();
+  final BuildContext parentContext;
+
+  const _SettingsSheet({required this.parentContext});
 
   @override
   Widget build(BuildContext context) {
@@ -793,9 +799,22 @@ class _SettingsSheet extends StatelessWidget {
                   TextButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
-                      Navigator.of(context).push(
+                      // Capture all required providers from parentContext
+                      final authService = Provider.of<AuthService>(parentContext, listen: false);
+                      final cloudStorage = Provider.of<CloudStorageManager>(parentContext, listen: false);
+                      final gameRecordService = Provider.of<GameRecordService>(parentContext, listen: false);
+
+                      // Navigate with providers
+                      Navigator.of(parentContext).push(
                         MaterialPageRoute(
-                          builder: (context) => const SettingsScreen(),
+                          builder: (context) => MultiProvider(
+                            providers: [
+                              ChangeNotifierProvider.value(value: authService),
+                              ChangeNotifierProvider.value(value: cloudStorage),
+                              ChangeNotifierProvider.value(value: gameRecordService),
+                            ],
+                            child: const SettingsScreen(),
+                          ),
                         ),
                       );
                     },
