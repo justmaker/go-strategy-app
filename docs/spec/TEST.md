@@ -2,6 +2,27 @@
 
 本文件定義 Go Strategy App 的測試標準與驗收流程，確保在不同平台上的一致性與穩定性。
 
+## 0. 測試平台優先順序
+
+### macOS 開發環境
+
+**在 macOS 上進行 Flutter 測試時，優先使用 macOS 原生版本：**
+
+```bash
+# 推薦 (效能佳)
+cd mobile && flutter run -d macos
+
+# 不建議 (Canvas 重繪效能差)
+cd mobile && flutter run -d chrome
+```
+
+**原因**：
+1. Flutter Web 的 Canvas 每步重繪，使用體驗差
+2. macOS 原生使用 Metal 渲染，效能流暢
+3. 程式碼共用率 95%+，測試結果等價於其他平台
+
+**測試等價性**：在 macOS 原生版測試通過後，iOS/Android/Web 只需重新 build，核心功能即可正常運作。
+
 ## 1. 自動化測試 (Automated Testing)
 
 ### 1.1 Python Backend 測試
