@@ -8,7 +8,8 @@ A Go (Weiqi/Baduk) strategy analysis application powered by KataGo AI. Features 
 - **REST API**: Cross-platform access for mobile/desktop clients (Flutter-ready)
 - **KataGo Integration**: World-class AI move suggestions with winrate and score estimates
 - **Smart Caching**: SQLite-based cache with D4 symmetry optimization (8x efficiency)
-- **Opening Book Generator**: Automated BFS exploration with configurable scheduling
+- **Official Opening Book**: Pre-loaded with KataGo's official 9x9 book (1M+ positions, 282M avg visits)
+- **Opening Book Generator**: Automated BFS exploration for expanding 13x13 and 19x19 coverage
 - **Multi-Board Support**: 9x9, 13x13, and 19x19 boards
 - **Visual Move Quality**: Color-coded suggestions (Blue=Best, Green=Good, Yellow=OK)
 
@@ -126,6 +127,8 @@ python -m src.cli --stats
 
 ### Opening Book Generator
 
+**Note:** The Flutter app comes pre-loaded with KataGo's official 9x9 opening book (1M+ positions). The generator is primarily used for expanding 13x13 and 19x19 coverage.
+
 Pre-calculate opening positions for fast cache hits:
 
 ```bash
@@ -143,8 +146,12 @@ python -m src.scripts.build_opening_book --visits 50 --start-at 20:00
 # Start immediately with explicit flag
 python -m src.scripts.build_opening_book --visits 50 --start-at now
 
-# Different board size
-python -m src.scripts.build_opening_book --board-size 13 --visits 100
+# Different board size (13x13 or 19x19)
+python -m src.scripts.build_opening_book --board-size 13 --visits 500
+python -m src.scripts.build_opening_book --board-size 19 --visits 500
+
+# Import KataGo official books (from https://katagobooks.org/)
+python -m src.scripts.import_katago_book --board-size 9 --min-visits 5000
 ```
 
 The generator uses BFS with pruning:
@@ -176,16 +183,24 @@ go-strategy-app/
 │   ├── database.py         # Database seeding utilities
 │   ├── katago_gtp.py       # KataGo GTP communication
 │   ├── scripts/
-│   │   ├── build_opening_book.py  # Opening book generator
-│   │   └── export_db.py           # DB export utility
+│   │   ├── build_opening_book.py   # Opening book generator
+│   │   ├── export_opening_book.py  # Export to mobile format
+│   │   ├── import_katago_book.py   # Import KataGo official books
+│   │   └── export_db.py            # DB export utility
 │   └── assets/
 │       └── seed_data.sql   # Initial database seed
+├── scripts/
+│   └── remote/             # Remote server management scripts
+├── mobile/
+│   ├── lib/                # Flutter application code
+│   └── assets/
+│       └── opening_book.json.gz  # 63MB, 240K entries (9x9 official book)
 ├── katago/
 │   ├── katago              # KataGo binary (not in git)
 │   ├── *.bin.gz            # Neural network model (not in git)
 │   └── *.cfg               # KataGo config files
 ├── data/
-│   └── analysis.db         # SQLite cache database
+│   └── analysis.db         # SQLite cache database (1M+ entries)
 ├── config.yaml             # Application configuration
 ├── requirements.txt        # Python dependencies
 └── README.md
