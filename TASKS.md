@@ -1,23 +1,23 @@
 # Opening Book Enhancement Tasks
 
-## Status Overview
+## Status Overview (GPU Server - Updated 2026-02-05 09:30)
 
 | Board Size | Database Entries | Avg Visits | Status | Export Ready |
 |------------|------------------|------------|--------|--------------|
-| **9x9** | 1,091,000 | 282M | ✅ **COMPLETE** | ✅ 63MB .gz |
-| **13x13** | 2,760 | 141 | ⏳ Needs expansion | ❌ Too low quality |
-| **19x19** | 4,421 | 21 | ⏳ Needs expansion | ❌ Too low quality |
+| **9x9** | 1,519,000 | 205M | ✅ **COMPLETE** | ✅ 63MB .gz |
+| **13x13** | 8,543 | 500 | ⏳ Waiting for 19x19 | ✅ Ready |
+| **19x19** | 15,317 | 500 | 🔄 **RUNNING** depth 12 | ⏳ In progress |
 
 ### Quality Metrics
-- **9x9**: min=90K, max=54.9T, avg=282M visits (KataGo official book)
-- **13x13**: min=100, max=200, avg=141 visits (needs 500+ for export)
-- **19x19**: min=20, max=100, avg=21 visits (needs 500+ for export)
+- **9x9**: min=90K, max=54.9T, avg=205M visits (KataGo official book)
+- **13x13**: min=500, max=500, avg=500 visits (ready for export)
+- **19x19**: min=500, max=500, avg=500 visits (generation in progress)
 
 ## Recent Progress (2026-02-05)
 - ✅ Downloaded KataGo 9x9 Opening Book (book9x9tt-20241105.tar.gz, 772MB)
-- ✅ Imported 1,091,000 positions (min-visits=5000, max-depth=20)
+- ✅ Imported 1,519,000 positions to GPU server database
 - ✅ Exported to mobile/assets/opening_book.json.gz (63MB, 240,252 entries)
-- ✅ Committed and pushed to GitHub (commit 8cac654)
+- 🔄 19x19 depth 12 generation running (started 23:02, PID 204966)
 - 📂 Source: https://katagobooks.org/
 
 ---
