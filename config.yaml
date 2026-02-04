@@ -23,7 +23,7 @@ analysis:
   
   # Number of visits for 19x19 board
   # Higher = more accurate but slower
-  visits_19x19: 150
+  visits_19x19: 500
   
   # Number of visits for 9x9 and 13x13 boards
   # Smaller boards can use more visits while staying fast
