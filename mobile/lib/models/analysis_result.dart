@@ -19,7 +19,8 @@ class MoveCandidate {
     return MoveCandidate(
       move: json['move'] as String,
       winrate: (json['winrate'] as num).toDouble(),
-      scoreLead: (json['score_lead'] as num).toDouble(),
+      // Support both snake_case (API) and camelCase (opening book)
+      scoreLead: (json['scoreLead'] ?? json['score_lead'] as num).toDouble(),
       visits: json['visits'] as int,
     );
   }
