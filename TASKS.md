@@ -1,9 +1,14 @@
 # Opening Book Enhancement Tasks
 
 ## Status Overview
-- **9x9**: Completed (1,519,000 entries from KataGo official book)
+- **9x9**: ⏳ Importing KataGo official book (downloaded 772MB, importing in progress)
 - **13x13**: 8,543 entries (needs depth 12 expansion)
 - **19x19**: 13,270+ entries (🔄 Running depth 12 generation)
+
+## Recent Progress (2026-02-04)
+- ✅ Downloaded KataGo 9x9 Opening Book (book9x9tt-20241105.tar.gz, 772MB)
+- ⏳ Importing with min-visits=5000, max-depth=20
+- 📂 Source: https://katagobooks.org/
 
 ---
 
