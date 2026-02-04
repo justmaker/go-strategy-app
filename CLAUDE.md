@@ -60,6 +60,35 @@ analysis:
 - 13x13: 8,543 筆 (500v)
 - 19x19: 12,817 筆 (500v)
 
+## 資料匯入注意事項
+
+**匯入新的 KataGo book 或分析資料時，必須同時更新兩個來源：**
+
+| 資料來源 | 位置 | 用途 |
+|---------|------|------|
+| **SQLite 資料庫** | `data/analysis.db` | 伺服器 API、完整資料 |
+| **Opening Book JSON** | `mobile/assets/opening_book.json.gz` | App 打包資產、離線使用 |
+
+### 匯入流程
+
+```bash
+# 1. 匯入到 SQLite
+python -m src.scripts.import_katago_book --book-path katago/books/xxx.tar.gz
+
+# 2. 導出到 Opening Book JSON（需要有導出腳本）
+python -m src.scripts.export_opening_book
+
+# 3. 驗證兩邊資料一致
+```
+
+### KataGo Book winrate 轉換
+
+KataGo book 的 `wl` (winLoss) 欄位是**對手勝率**（即己方輸棋率），匯入時需轉換：
+
+```python
+winrate = 1.0 - wl  # 轉換為己方勝率
+```
+
 ## 常用指令
 
 ```bash
