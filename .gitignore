@@ -17,6 +17,7 @@ env/
 # KataGo binary and model (too large for git)
 katago/katago
 katago/*.bin.gz
+katago/books/
 
 # Android native libraries (built locally)
 mobile/android/app/src/main/jniLibs/
