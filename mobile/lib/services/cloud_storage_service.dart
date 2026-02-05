@@ -471,10 +471,6 @@ class CloudStorageManager extends ChangeNotifier {
     GameRecord record, {
     String format = 'sgf',
   }) async {
-    if (!_authService.syncPrefs.userConsented) {
-      return const CloudResult.failure('需要用戶同意才能上傳至雲端');
-    }
-
     final provider = currentProvider;
     if (provider == null) {
       return const CloudResult.failure('尚未登入雲端服務');

@@ -346,54 +346,45 @@ class GameRecord {
 }
 
 /// User's cloud sync preferences
+/// Cloud sync preferences
+/// Login automatically enables sync - no separate enable/disable needed
 class CloudSyncPreferences {
-  final bool enabled;
   final CloudProvider provider;
   final bool autoSync;
   final bool syncOnWifiOnly;
   final DateTime? lastSyncTime;
-  final bool userConsented; // User explicitly agreed to sync
 
   const CloudSyncPreferences({
-    this.enabled = false,
     this.provider = CloudProvider.none,
     this.autoSync = true,
     this.syncOnWifiOnly = false,
     this.lastSyncTime,
-    this.userConsented = false,
   });
 
   CloudSyncPreferences copyWith({
-    bool? enabled,
     CloudProvider? provider,
     bool? autoSync,
     bool? syncOnWifiOnly,
     DateTime? lastSyncTime,
-    bool? userConsented,
   }) {
     return CloudSyncPreferences(
-      enabled: enabled ?? this.enabled,
       provider: provider ?? this.provider,
       autoSync: autoSync ?? this.autoSync,
       syncOnWifiOnly: syncOnWifiOnly ?? this.syncOnWifiOnly,
       lastSyncTime: lastSyncTime ?? this.lastSyncTime,
-      userConsented: userConsented ?? this.userConsented,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'enabled': enabled,
         'provider': provider.name,
         'autoSync': autoSync,
         'syncOnWifiOnly': syncOnWifiOnly,
         if (lastSyncTime != null)
           'lastSyncTime': lastSyncTime!.toIso8601String(),
-        'userConsented': userConsented,
       };
 
   factory CloudSyncPreferences.fromJson(Map<String, dynamic> json) {
     return CloudSyncPreferences(
-      enabled: json['enabled'] as bool? ?? false,
       provider: CloudProvider.values
           .byName(json['provider'] as String? ?? CloudProvider.none.name),
       autoSync: json['autoSync'] as bool? ?? true,
@@ -401,7 +392,6 @@ class CloudSyncPreferences {
       lastSyncTime: json['lastSyncTime'] != null
           ? DateTime.parse(json['lastSyncTime'] as String)
           : null,
-      userConsented: json['userConsented'] as bool? ?? false,
     );
   }
 }

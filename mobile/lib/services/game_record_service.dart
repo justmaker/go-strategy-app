@@ -36,8 +36,7 @@ class GameRecordService extends ChangeNotifier {
   List<GameRecord> get records => List.unmodifiable(_records);
   bool get isLoading => _isLoading;
   String? get error => _error;
-  bool get canSync =>
-      _authService.canUseCloudFeatures && _authService.syncPrefs.userConsented;
+  bool get canSync => _authService.canUseCloudFeatures;
 
   /// Initialize the service
   Future<void> init() async {

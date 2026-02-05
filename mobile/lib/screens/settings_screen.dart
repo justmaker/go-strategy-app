@@ -27,30 +27,14 @@ class SettingsScreen extends StatelessWidget {
         builder: (context, auth, cloud, records, _) {
           return ListView(
             children: [
-              // Account Section
-              _SectionHeader(title: '帳號'),
-              if (auth.isSignedIn && !auth.isAnonymous)
-                _AccountTile(auth: auth)
-              else
+              // Account & Sync Section (unified)
+              _SectionHeader(title: '帳號與同步'),
+              if (auth.isSignedIn && !auth.isAnonymous) ...[
+                _AccountTile(auth: auth),
+                _SyncSettingsTile(auth: auth),
+                _SyncNowTile(cloud: cloud, records: records),
+              ] else
                 _SignInTile(auth: auth),
-
-              const Divider(height: 32),
-
-              // Cloud Sync Section
-              _SectionHeader(title: '雲端同步'),
-              if (auth.canUseCloudFeatures) ...[
-                _CloudSyncTile(auth: auth, cloud: cloud, records: records),
-                if (auth.syncPrefs.enabled) ...[
-                  _SyncSettingsTile(auth: auth),
-                  _SyncNowTile(cloud: cloud, records: records),
-                ],
-              ] else ...[
-                const ListTile(
-                  leading: Icon(Icons.cloud_off),
-                  title: Text('需要登入才能使用雲端同步'),
-                  subtitle: Text('請先在上方「帳號」區塊登入'),
-                ),
-              ],
 
               const Divider(height: 32),
 
@@ -184,7 +168,7 @@ class _SignInTile extends StatelessWidget {
         child: Icon(Icons.person_outline),
       ),
       title: const Text('尚未登入'),
-      subtitle: const Text('登入以啟用雲端同步'),
+      subtitle: const Text('登入後自動同步棋譜到雲端'),
       trailing: ElevatedButton(
         onPressed: () => _showSignInSheet(context),
         child: const Text('登入'),
@@ -224,7 +208,7 @@ class _SignInSheet extends StatelessWidget {
               context,
               icon: Icons.g_mobiledata,
               label: 'Google',
-              subtitle: '同步到 Google Drive',
+              subtitle: '登入後自動同步到 Google Drive',
               onPressed: () async {
                 Navigator.of(context).pop();
                 await auth.signInWithGoogle();
@@ -236,7 +220,7 @@ class _SignInSheet extends StatelessWidget {
                 context,
                 icon: Icons.apple,
                 label: 'Apple',
-                subtitle: '同步到 iCloud',
+                subtitle: '登入後自動同步到 iCloud',
                 onPressed: () async {
                   Navigator.of(context).pop();
                   await auth.signInWithApple();
@@ -282,102 +266,6 @@ class _SignInSheet extends StatelessWidget {
                 Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CloudSyncTile extends StatelessWidget {
-  final AuthService auth;
-  final CloudStorageManager cloud;
-  final GameRecordService records;
-
-  const _CloudSyncTile({
-    required this.auth,
-    required this.cloud,
-    required this.records,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final providerName = switch (auth.user?.cloudProvider) {
-      CloudProvider.googleDrive => 'Google Drive',
-      CloudProvider.iCloud => 'iCloud',
-      CloudProvider.oneDrive => 'OneDrive',
-      _ => '雲端',
-    };
-
-    return SwitchListTile(
-      secondary: const Icon(Icons.cloud),
-      title: const Text('雲端同步'),
-      subtitle: Text(
-        auth.syncPrefs.enabled
-            ? '棋譜將自動同步到 $providerName'
-            : '啟用後，棋譜將存放在您的 $providerName',
-      ),
-      value: auth.syncPrefs.enabled,
-      onChanged: (value) async {
-        if (value) {
-          // Show consent dialog
-          final consent = await _showConsentDialog(context, providerName);
-          if (consent == true) {
-            await auth.enableCloudSync(userConsented: true);
-            // Trigger initial sync
-            await records.syncAllToCloud();
-          }
-        } else {
-          await auth.disableCloudSync();
-        }
-      },
-    );
-  }
-
-  Future<bool?> _showConsentDialog(BuildContext context, String provider) {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('啟用雲端同步'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('您的棋譜將儲存在您的 $provider 帳號中：'),
-            const SizedBox(height: 16),
-            const Row(
-              children: [
-                Icon(Icons.folder, size: 20),
-                SizedBox(width: 8),
-                Text('Go Strategy 資料夾'),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Row(
-              children: [
-                Icon(Icons.lock, size: 20),
-                SizedBox(width: 8),
-                Expanded(child: Text('只有您可以存取這些檔案')),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Row(
-              children: [
-                Icon(Icons.delete_outline, size: 20),
-                SizedBox(width: 8),
-                Expanded(child: Text('您可以隨時刪除或匯出')),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('同意並啟用'),
           ),
         ],
       ),

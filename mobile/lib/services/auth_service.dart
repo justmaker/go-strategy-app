@@ -246,7 +246,16 @@ class AuthService extends ChangeNotifier {
       _state = AuthState.signedIn;
       await _saveUserToPrefs();
 
+      // Auto-enable cloud sync on login
+      _syncPrefs = CloudSyncPreferences(
+        provider: CloudProvider.googleDrive,
+        autoSync: true,
+        syncOnWifiOnly: false,
+      );
+      await _saveSyncPrefs();
+
       debugPrint('Signed in with Google: ${_user?.email}');
+      debugPrint('Cloud sync auto-enabled with Google Drive');
       notifyListeners();
       return true;
     } catch (e) {
@@ -325,7 +334,16 @@ class AuthService extends ChangeNotifier {
       _state = AuthState.signedIn;
       await _saveUserToPrefs();
 
+      // Auto-enable cloud sync on login
+      _syncPrefs = CloudSyncPreferences(
+        provider: CloudProvider.iCloud,
+        autoSync: true,
+        syncOnWifiOnly: false,
+      );
+      await _saveSyncPrefs();
+
       debugPrint('Signed in with Apple: ${_user?.email ?? _user?.id}');
+      debugPrint('Cloud sync auto-enabled with iCloud');
       notifyListeners();
       return true;
     } catch (e) {
@@ -423,28 +441,6 @@ class AuthService extends ChangeNotifier {
   // ============================================================
 
   /// Enable cloud sync (requires user consent)
-  Future<void> enableCloudSync({required bool userConsented}) async {
-    if (!canUseCloudFeatures) return;
-
-    _syncPrefs = _syncPrefs.copyWith(
-      enabled: true,
-      provider: _user!.cloudProvider,
-      userConsented: userConsented,
-      lastSyncTime: DateTime.now(),
-    );
-    await _saveSyncPrefs();
-    notifyListeners();
-  }
-
-  /// Disable cloud sync
-  Future<void> disableCloudSync() async {
-    _syncPrefs = _syncPrefs.copyWith(
-      enabled: false,
-    );
-    await _saveSyncPrefs();
-    notifyListeners();
-  }
-
   /// Update sync preferences
   Future<void> updateSyncPrefs(CloudSyncPreferences prefs) async {
     _syncPrefs = prefs;

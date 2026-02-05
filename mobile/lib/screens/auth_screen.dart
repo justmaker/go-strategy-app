@@ -93,7 +93,7 @@ class AuthScreen extends StatelessWidget {
                     icon: 'G',
                     iconColor: Colors.red,
                     label: '使用 Google 登入',
-                    sublabel: '棋譜將存放在您的 Google Drive',
+                    sublabel: '登入後自動同步到 Google Drive',
                     onPressed: () async {
                       if (await auth.signInWithGoogle()) {
                         onComplete();
@@ -108,7 +108,7 @@ class AuthScreen extends StatelessWidget {
                       icon: '',
                       iconWidget: const Icon(Icons.apple, size: 24),
                       label: '使用 Apple 登入',
-                      sublabel: '棋譜將存放在您的 iCloud',
+                      sublabel: '登入後自動同步到 iCloud',
                       onPressed: () async {
                         if (await auth.signInWithApple()) {
                           onComplete();
@@ -123,7 +123,7 @@ class AuthScreen extends StatelessWidget {
                     icon: 'M',
                     iconColor: Colors.blue,
                     label: '使用 Microsoft 登入',
-                    sublabel: '棋譜將存放在您的 OneDrive',
+                    sublabel: '登入後自動同步到 OneDrive',
                     onPressed: () async {
                       if (await auth.signInWithMicrosoft()) {
                         onComplete();
