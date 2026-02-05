@@ -176,36 +176,62 @@ class OpeningBookService {
     }
   }
 
+  /// Compute which symmetry transforms preserve the given stone positions.
+  /// Returns a list of valid symmetry type indices (0-7).
+  List<int> _computeValidSymmetries(int size, List<String> moves) {
+    if (moves.isEmpty) {
+      // Empty board: all 8 symmetries are valid
+      return [0, 1, 2, 3, 4, 5, 6, 7];
+    }
+
+    // Parse existing stones
+    final stones = <Point<int>>[];
+    for (final move in moves) {
+      // Format: "B E5" or "W D4"
+      final parts = move.split(' ');
+      if (parts.length != 2) continue;
+      final point = BoardPoint.fromGtp(parts[1], size);
+      if (point != null) {
+        stones.add(Point(point.x, point.y));
+      }
+    }
+
+    // Check each symmetry
+    final validSymmetries = <int>[];
+    for (int type = 0; type < 8; type++) {
+      bool isValid = true;
+      for (final stone in stones) {
+        final transformed = _transformPoint(stone.x, stone.y, size, type);
+        // Check if transformed position equals original
+        if (transformed.x != stone.x || transformed.y != stone.y) {
+          isValid = false;
+          break;
+        }
+      }
+      if (isValid) {
+        validSymmetries.add(type);
+      }
+    }
+
+    return validSymmetries.isEmpty ? [0] : validSymmetries; // At least identity
+  }
+
   /// Expand moves using symmetry for opening book entries.
-  /// This ensures all symmetric equivalents are shown (e.g., C4 -> G6, G4, C6).
-  OpeningBookEntry _expandSymmetry(OpeningBookEntry entry) {
+  /// Only expands using symmetries that preserve existing stone positions.
+  OpeningBookEntry _expandSymmetryWithMoves(OpeningBookEntry entry, List<String> existingMoves) {
     final size = entry.boardSize;
     final expandedMoves = <MoveCandidate>[];
     final seenMoves = <String>{};
 
+    // Compute which symmetries are valid for current board state
+    final validSymmetries = _computeValidSymmetries(size, existingMoves);
+
     // Helper to add move if new
     void addCandidate(int x, int y, MoveCandidate original) {
       if (x < 0 || x >= size || y < 0 || y >= size) return;
-      
-      // Use BoardPoint from models if available, or manual GTP conversion
-      // Since we don't have easy access to BoardPoint.toGtp here without instance,
-      // we'll implement a simple GTP generator.
-      // Or better, assume BoardPoint is available (it is imported).
-      
-      // Note: BoardPoint isn't fully visible here unless we check imports. 
-      // models.dart exports it.
-      // Let's rely on manual conversion to be safe and dependency-free within this logic 
-      // if BoardPoint is not static-friendly.
-      // Actually, let's use the same coordinates logic as the app.
-      // 0,0 is Top-Left? GTP is A1 at Bottom-Left?
-      // Katago/GTP: A1 is bottom-left. x=0(A), y=0(1).
-      // BoardPoint usage in this app: usually 0,0 is top-left for rendering?
-      // Let's use the provided move strings to deduce.
-      // But simplest is to just perform string-based mapping if possible? No, need math.
-      // Let's use BoardPoint.
       final point = BoardPoint(x, y);
       final moveStr = point.toGtp(size);
-      
+
       if (!seenMoves.contains(moveStr)) {
         seenMoves.add(moveStr);
         expandedMoves.add(MoveCandidate(
@@ -218,30 +244,17 @@ class OpeningBookService {
     }
 
     for (final move in entry.topMoves) {
-      // Parse original move
       final point = BoardPoint.fromGtp(move.move, size);
       if (point == null) continue;
 
-      // 8 Symmetries
       final x = point.x;
       final y = point.y;
-      
-      // 1. Identity
-      addCandidate(x, y, move);
-      // 2. Mirror X
-      addCandidate(size - 1 - x, y, move);
-      // 3. Mirror Y
-      addCandidate(x, size - 1 - y, move);
-      // 4. Rotate 180 (Mirror X + Y)
-      addCandidate(size - 1 - x, size - 1 - y, move);
-      // 5. Transpose (Swap X/Y) - for square boards
-      addCandidate(y, x, move);
-      // 6. Rotate 90 (Transpose + Mirror X) -> (y, size-1-x)
-      addCandidate(y, size - 1 - x, move);
-      // 7. Rotate 270 (Transpose + Mirror Y) -> (size-1-y, x)
-      addCandidate(size - 1 - y, x, move);
-      // 8. Mirror Transpose
-      addCandidate(size - 1 - y, size - 1 - x, move);
+
+      // Only apply valid symmetries
+      for (final symType in validSymmetries) {
+        final transformed = _transformPoint(x, y, size, symType);
+        addCandidate(transformed.x, transformed.y, move);
+      }
     }
 
     // Inject standard opening moves for 13x13 and 19x19 if missing
@@ -319,6 +332,11 @@ class OpeningBookService {
       topMoves: expandedMoves,
       visits: entry.visits,
     );
+  }
+
+  /// Convenience wrapper for empty board (all symmetries valid)
+  OpeningBookEntry _expandSymmetry(OpeningBookEntry entry) {
+    return _expandSymmetryWithMoves(entry, []);
   }
 
   /// Look up analysis for a board position by hash
@@ -486,12 +504,9 @@ class OpeningBookService {
            visits: entry.visits,
          );
 
-         // Only expand symmetry for empty board (no existing stones)
-         // For non-empty boards, the candidate moves are already specific
-         // to the current board configuration and shouldn't be expanded
-         final finalEntry = moves.isEmpty
-             ? _expandSymmetry(transformedEntry)
-             : transformedEntry;
+         // Expand symmetry based on existing stones
+         // Only symmetries that preserve existing stone positions are used
+         final finalEntry = _expandSymmetryWithMoves(transformedEntry, moves);
 
          return AnalysisResult(
             boardHash: finalEntry.hash,
