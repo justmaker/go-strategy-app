@@ -43,17 +43,19 @@ def export_opening_book(
     board_size: Optional[int] = None,
     min_visits: int = 50,
     compress: bool = False,
+    filter_dead_moves: bool = True,
 ) -> Dict[str, Any]:
     """
     Export opening book data to JSON.
-    
+
     Args:
         db_path: Path to SQLite database
         output_path: Output JSON file path
         board_size: Filter by board size (None = all)
         min_visits: Minimum visits threshold
         compress: Whether to gzip the output
-        
+        filter_dead_moves: Remove top moves that have no follow-up data
+
     Returns:
         Export statistics
     """
@@ -62,10 +64,10 @@ def export_opening_book(
     
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
-    
+
     # Build query
     query = """
-        SELECT 
+        SELECT
             board_hash,
             board_size,
             komi,
@@ -77,23 +79,85 @@ def export_opening_book(
         WHERE engine_visits >= ?
     """
     params: List[Any] = [min_visits]
-    
+
     if board_size:
         query += " AND board_size = ?"
         params.append(board_size)
-    
+
     query += " ORDER BY board_size, engine_visits DESC"
-    
+
+    # If filter_dead_moves is enabled, first collect all existing sequences
+    # INCLUDING all 8 symmetry transforms of each sequence
+    existing_sequences: Set[str] = set()
+    if filter_dead_moves:
+        print("Collecting existing sequences for dead move filtering...")
+        print("  (including all symmetry transforms)")
+        seq_cursor = conn.execute(
+            "SELECT board_size, komi, moves_sequence FROM analysis_cache WHERE engine_visits >= ?",
+            [min_visits]
+        )
+
+        all_transforms = [
+            SymmetryTransform.IDENTITY,
+            SymmetryTransform.ROTATE_90,
+            SymmetryTransform.ROTATE_180,
+            SymmetryTransform.ROTATE_270,
+            SymmetryTransform.FLIP_HORIZONTAL,
+            SymmetryTransform.FLIP_VERTICAL,
+            SymmetryTransform.FLIP_DIAGONAL,
+            SymmetryTransform.FLIP_ANTIDIAGONAL
+        ]
+
+        for row in seq_cursor:
+            bs = row['board_size']
+            k = row['komi']
+            seq = row['moves_sequence'] or ''
+
+            # Parse moves
+            if seq:
+                raw_parts = seq.split(';')
+                cleaned_moves = []
+                for p in raw_parts:
+                    if not p:
+                        continue
+                    if '[' in p and ']' in p:
+                        cleaned_moves.append(p.replace('[', ' ').replace(']', ''))
+                    else:
+                        cleaned_moves.append(p)
+            else:
+                cleaned_moves = []
+
+            # Generate all 8 symmetry transforms
+            for transform in all_transforms:
+                try:
+                    transformed = []
+                    for m in cleaned_moves:
+                        parts = m.split(' ')
+                        if len(parts) == 2:
+                            color, coord = parts[0], parts[1]
+                            new_coord = transform_gtp_coord(coord, bs, transform)
+                            transformed.append(f"{color}[{new_coord}]")
+                        else:
+                            transformed.append(m)
+                    app_seq = ";".join(transformed)
+                    existing_sequences.add(f"{bs}:{k}:{app_seq}")
+                except Exception:
+                    # Skip invalid sequences (e.g., out of bounds coordinates)
+                    pass
+
+        print(f"  Found {len(existing_sequences)} unique sequences (with symmetries)")
+
     cursor = conn.execute(query, params)
-    
+
     # Build export data
     entries = []
     stats = {
         'total': 0,
         'by_board_size': {},
         'by_visits': {},
+        'filtered_moves': 0,
     }
-    
+
     seen_keys: Set[str] = set()
     
     for row in cursor:
@@ -154,19 +218,39 @@ def export_opening_book(
                     continue
                 seen_keys.add(unique_key)
                 
-                # 3. Transform top candidates
+                # 3. Transform top candidates and optionally filter dead moves
+                # Determine next player
+                num_black = app_moves_string.count('B[')
+                num_white = app_moves_string.count('W[')
+                next_player = 'B' if num_black == num_white else 'W'
+
                 transformed_candidates = []
                 for move_cand in top_moves_json:
                     m_gtp = move_cand['move']
                     new_gtp = transform_gtp_coord(m_gtp, board_size, transform)
-                    
+
+                    # Check if this move has follow-up data
+                    if filter_dead_moves and existing_sequences:
+                        if app_moves_string:
+                            next_seq = f"{app_moves_string};{next_player}[{new_gtp}]"
+                        else:
+                            next_seq = f"{next_player}[{new_gtp}]"
+                        next_key = f"{board_size}:{komi}:{next_seq}"
+                        if next_key not in existing_sequences:
+                            stats['filtered_moves'] += 1
+                            continue  # Skip this move - no follow-up data
+
                     transformed_candidates.append({
                         'move': new_gtp,
                         'winrate': move_cand['winrate'],
                         'scoreLead': move_cand['score_lead'],
                         'visits': move_cand['visits']
                     })
-                
+
+                # Skip entry if no valid moves remain
+                if filter_dead_moves and not transformed_candidates:
+                    continue
+
                 # 4. Generate hash for this variant (optional but good for consistency)
                 # For now, we skip hash re-computation as the App uses moves-key primarily.
                 # But let's do it if we want the 'h' key to be accurate.
@@ -198,12 +282,13 @@ def export_opening_book(
     
     # Build output structure
     output = {
-        'version': 1,
+        'version': 2,  # Bumped version for filtered moves
         'generated_at': __import__('datetime').datetime.now().isoformat(),
         'stats': {
             'total_entries': stats['total'],
             'by_board_size': stats['by_board_size'],
             'min_visits': min_visits,
+            'filtered_dead_moves': stats.get('filtered_moves', 0),
         },
         'entries': entries,
     }
@@ -305,18 +390,25 @@ def main():
         action="store_true",
         help="Show statistics only"
     )
-    
+    parser.add_argument(
+        "--no-filter-dead-moves",
+        action="store_true",
+        help="Don't filter out moves that have no follow-up data"
+    )
+
     args = parser.parse_args()
     db_path = get_db_path()
-    
+
     if args.stats:
         show_stats(db_path)
         return
-    
+
+    filter_dead = not args.no_filter_dead_moves
     print(f"Exporting opening book from {db_path}...")
     print(f"  Board size: {args.board_size or 'all'}")
     print(f"  Min visits: {args.min_visits}")
     print(f"  Compress: {args.compress}")
+    print(f"  Filter dead moves: {filter_dead}")
     
     try:
         stats = export_opening_book(
@@ -325,11 +417,14 @@ def main():
             board_size=args.board_size,
             min_visits=args.min_visits,
             compress=args.compress,
+            filter_dead_moves=filter_dead,
         )
-        
+
         print(f"\nExport complete!")
         print(f"  Total entries: {stats['total']}")
         print(f"  By board size: {stats['by_board_size']}")
+        if stats.get('filtered_moves'):
+            print(f"  Filtered dead moves: {stats['filtered_moves']}")
         print(f"  Output: {stats['output_path']}")
         print(f"  Size: {stats['output_size'] / 1024:.1f} KB")
         

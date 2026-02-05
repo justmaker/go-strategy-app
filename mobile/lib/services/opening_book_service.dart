@@ -226,11 +226,24 @@ class OpeningBookService {
     // Compute which symmetries are valid for current board state
     final validSymmetries = _computeValidSymmetries(size, existingMoves);
 
-    // Helper to add move if new
+    // Build set of occupied positions from existing moves
+    final occupiedPositions = <String>{};
+    for (final move in existingMoves) {
+      // Format: "B E5" or "W D4"
+      final parts = move.split(' ');
+      if (parts.length == 2) {
+        occupiedPositions.add(parts[1]); // Add coordinate (e.g., "E5")
+      }
+    }
+
+    // Helper to add move if new and not occupied
     void addCandidate(int x, int y, MoveCandidate original) {
       if (x < 0 || x >= size || y < 0 || y >= size) return;
       final point = BoardPoint(x, y);
       final moveStr = point.toGtp(size);
+
+      // Skip if position is already occupied
+      if (occupiedPositions.contains(moveStr)) return;
 
       if (!seenMoves.contains(moveStr)) {
         seenMoves.add(moveStr);
