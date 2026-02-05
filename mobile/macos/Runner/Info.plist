@@ -36,13 +36,12 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<!-- Replace with your reversed client ID from Google Cloud Console -->
-				<string>com.googleusercontent.apps.YOUR_CLIENT_ID</string>
+				<string>com.googleusercontent.apps.1046387828217-hvuepmtgsh5fnbb08pidlcglmejpmfi0</string>
 			</array>
 		</dict>
 	</array>
 	<!-- Google Sign-In Client ID -->
 	<key>GIDClientID</key>
-	<string>YOUR_CLIENT_ID.apps.googleusercontent.com</string>
+	<string>1046387828217-hvuepmtgsh5fnbb08pidlcglmejpmfi0.apps.googleusercontent.com</string>
 </dict>
 </plist>

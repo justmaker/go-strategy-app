@@ -45,14 +45,10 @@ class SettingsScreen extends StatelessWidget {
                   _SyncNowTile(cloud: cloud, records: records),
                 ],
               ] else ...[
-                ListTile(
-                  leading: const Icon(Icons.cloud_off),
-                  title: const Text('需要登入才能使用雲端同步'),
-                  subtitle: const Text('您的棋譜目前只儲存在本機'),
-                  trailing: TextButton(
-                    onPressed: () => _showSignInSheet(context, auth),
-                    child: const Text('登入'),
-                  ),
+                const ListTile(
+                  leading: Icon(Icons.cloud_off),
+                  title: Text('需要登入才能使用雲端同步'),
+                  subtitle: Text('請先在上方「帳號」區塊登入'),
                 ),
               ],
 

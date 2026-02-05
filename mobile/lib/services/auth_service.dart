@@ -229,8 +229,10 @@ class AuthService extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
+    debugPrint('[AuthService] Starting Google Sign-In...');
     try {
       final googleUser = await _googleSignIn.signIn();
+      debugPrint('[AuthService] signIn returned: $googleUser');
       if (googleUser == null) {
         _state = _user?.isAnonymous ?? true
             ? AuthState.signedOut
