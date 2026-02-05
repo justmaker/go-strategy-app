@@ -60,6 +60,19 @@
 <string>ACTUAL_CLIENT_ID.apps.googleusercontent.com</string>
 ```
 
+#### macOS (`macos/Runner/Info.plist`):
+與 iOS 相同，將 `YOUR_CLIENT_ID` 替換為實際的 Client ID:
+```xml
+<key>CFBundleURLSchemes</key>
+<array>
+    <string>com.googleusercontent.apps.ACTUAL_CLIENT_ID</string>
+</array>
+<key>GIDClientID</key>
+<string>ACTUAL_CLIENT_ID.apps.googleusercontent.com</string>
+```
+
+**注意**: macOS 需要在 Google Cloud Console 建立獨立的 OAuth client ID (Desktop 類型)。
+
 #### Android (`android/app/build.gradle`):
 確認已新增:
 ```gradle
