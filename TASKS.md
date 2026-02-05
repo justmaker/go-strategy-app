@@ -1,3 +1,45 @@
+# Tasks
+
+## macOS Google Sign-In (branch: `fix/macos-google-signin`)
+
+### 狀態: 部分完成，需要繼續 debug
+
+### ✅ 已完成
+
+1. **修復 macOS Google Sign-In 崩潰問題**
+   - 加入 `GIDClientID` 到 `macos/Runner/Info.plist`
+   - 加入 `CFBundleURLTypes` URL scheme
+   - 加入 `com.apple.security.network.client` entitlement
+
+2. **設定 Google Cloud OAuth**
+   - 建立 Desktop 類型 OAuth Client ID
+   - Client ID: `1046387828217-hvuepmtgsh5fnbb08pidlcglmejpmfi0`
+   - 加入測試使用者
+
+3. **OAuth 流程測試結果**
+   - App 不再崩潰 ✓
+   - 瀏覽器正確開啟 Google 登入頁面 ✓
+   - 使用者可完成 Google 認證 ✓
+
+### ❌ 待解決
+
+**問題**: OAuth 回調後 UI 沒有更新（仍顯示未登入）
+
+- `_googleSignIn.signIn()` 在瀏覽器完成認證後沒有正確返回
+- 需要檢查 OAuth callback 處理機制
+
+### Debug 線索
+
+- 已在 `auth_service.dart` 加入 `[AuthService]` debug print
+- 需要觀察 console 是否有 `signIn returned:` 訊息
+- 可能需要檢查 AppDelegate 或 URL scheme 配置
+
+### 相關 PR
+
+- PR #1: https://github.com/justmaker/go-strategy-app/pull/1
+
+---
+
 # Opening Book Enhancement Tasks
 
 ## Status Overview (GPU Server - Updated 2026-02-05 09:30)
