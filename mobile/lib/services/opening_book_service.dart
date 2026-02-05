@@ -486,16 +486,20 @@ class OpeningBookService {
            visits: entry.visits,
          );
 
-         // Apply symmetry expansion to get all equivalent moves
-         final expandedEntry = _expandSymmetry(transformedEntry);
+         // Only expand symmetry for empty board (no existing stones)
+         // For non-empty boards, the candidate moves are already specific
+         // to the current board configuration and shouldn't be expanded
+         final finalEntry = moves.isEmpty
+             ? _expandSymmetry(transformedEntry)
+             : transformedEntry;
 
          return AnalysisResult(
-            boardHash: expandedEntry.hash,
+            boardHash: finalEntry.hash,
             boardSize: boardSize,
             komi: komi,
             movesSequence: moves.join(';'), // Use original sequence
-            topMoves: expandedEntry.topMoves,
-            engineVisits: expandedEntry.visits,
+            topMoves: finalEntry.topMoves,
+            engineVisits: finalEntry.visits,
             modelName: 'bundled_opening_book (sym$type)',
             fromCache: true,
          );
