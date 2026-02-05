@@ -164,6 +164,22 @@ src/api.py              ← FastAPI 實作（必須與規範一致）
 - [ ] 執行 `python scripts/validate_openapi.py` 驗證
 - [ ] 更新 `docs/spec/API.md`（若為重大變更）
 
+## 協作開發規則
+
+### 工作記錄必須寫入 Repo
+
+這是多人協作專案，所有工作進度和待辦事項必須記錄在 repo 中，而非 Claude 的本地 memory 目錄。
+
+| 記錄類型 | 檔案位置 |
+|---------|---------|
+| 待辦事項、進行中任務 | `TASKS.md` |
+| 已知問題、Debug 線索 | `TASKS.md` 或相關 PR |
+| 專案規則、開發指引 | `CLAUDE.md` |
+
+這樣其他開發者或其他電腦上的 Claude 都能看到目前的進度狀態。
+
+---
+
 ## 相關文件
 
 - [docs/spec/openapi.yaml](docs/spec/openapi.yaml) - **OpenAPI 規範（正式 API 定義）**
