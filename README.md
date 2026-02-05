@@ -2,6 +2,24 @@
 
 A Go (Weiqi/Baduk) strategy analysis application powered by KataGo AI. Features a web GUI, REST API, CLI, and automated opening book generation with intelligent caching.
 
+## 🚀 Try It Now - GitHub Pages
+
+**立即使用線上版本（無需安裝）：**
+
+👉 **https://justmaker.github.io/go-strategy-app/**
+
+線上版本支援：
+- ✅ 完整的棋盤 UI 和 Opening Book 查詢
+- ✅ Google 帳號登入與雲端同步（自動同步到 Google Drive）
+- ✅ 本機棋譜儲存
+- ⚠️ 注意：線上版使用 Canvas 渲染，效能較原生版本稍差
+
+**推薦：**
+- 快速體驗 → 使用 GitHub Pages 版本
+- 完整功能 + 最佳效能 → 下載安裝原生版本（iOS/Android/macOS/Windows）
+
+---
+
 ## Features
 
 - **Interactive Web GUI**: Click-to-play interface with real-time AI analysis
