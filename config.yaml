@@ -15,7 +15,7 @@ katago:
   linux:
     katago_path: "katago/katago"  # Relative to project root
     model_path: "katago/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz"
-    config_path: "katago/gtp_analysis.cfg"
+    config_path: "katago/gtp_gpu_lowmem.cfg"
 
 analysis:
   # Default komi value
