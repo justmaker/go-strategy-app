@@ -24,7 +24,7 @@ mobile/android/app/src/main/jniLibs/
 
 # Build artifacts
 build/
-external/
+/external/
 
 # Database
 *.db
