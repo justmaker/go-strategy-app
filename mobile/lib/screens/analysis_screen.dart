@@ -1,14 +1,20 @@
 /// Main analysis screen with Go board and move suggestions.
 library;
 
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../config.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/services.dart';
 import '../widgets/widgets.dart';
 import 'settings_screen.dart';
+import '../models/game_record.dart' as record;
 
 class AnalysisScreen extends StatelessWidget {
   const AnalysisScreen({super.key});
@@ -40,6 +46,45 @@ class AnalysisScreen extends StatelessWidget {
                 showSelectedIcon: false,
               ),
             ),
+          ),
+          // SGF Import/Export menu
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            tooltip: '匯入/匯出',
+            onSelected: (value) {
+              switch (value) {
+                case 'import_sgf':
+                  _importSgf(context);
+                  break;
+                case 'export_sgf':
+                  _exportSgf(context);
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'import_sgf',
+                child: ListTile(
+                  leading: Icon(Icons.file_open),
+                  title: Text('匯入 SGF'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'export_sgf',
+                enabled: Provider.of<GameProvider>(context, listen: false)
+                        .board
+                        .moveCount >
+                    0,
+                child: const ListTile(
+                  leading: Icon(Icons.file_download),
+                  title: Text('匯出 SGF'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
           ),
           // Settings
           IconButton(
@@ -134,6 +179,150 @@ class AnalysisScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// Import an SGF file and load it onto the board
+  Future<void> _importSgf(BuildContext context) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      String sgfContent;
+      if (kIsWeb) {
+        // On web, read from bytes
+        final bytes = result.files.first.bytes;
+        if (bytes == null) return;
+        sgfContent = String.fromCharCodes(bytes);
+      } else {
+        // On desktop/mobile, read from path
+        final filePath = result.files.first.path;
+        if (filePath == null) return;
+        sgfContent = await File(filePath).readAsString();
+      }
+
+      if (!context.mounted) return;
+
+      final gameRecord = record.GameRecord.fromSgf(
+        sgfContent,
+        name: result.files.first.name.replaceAll('.sgf', ''),
+      );
+
+      if (gameRecord == null) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('無法解析 SGF 檔案')),
+          );
+        }
+        return;
+      }
+
+      // Load the game onto the board
+      final game = Provider.of<GameProvider>(context, listen: false);
+      game.setBoardSize(gameRecord.boardSize);
+      game.setKomi(gameRecord.komi);
+      game.clear();
+
+      // Replay all moves
+      for (final move in gameRecord.moves) {
+        if (move.coordinate.toLowerCase() != 'pass') {
+          final coord = move.coordinate;
+          // Parse GTP coordinate to BoardPoint
+          final col = coord[0].toUpperCase();
+          final row = int.tryParse(coord.substring(1));
+          if (row == null) continue;
+
+          int colIndex = col.codeUnitAt(0) - 'A'.codeUnitAt(0);
+          if (col.codeUnitAt(0) > 'I'.codeUnitAt(0)) colIndex--;
+
+          final y = gameRecord.boardSize - row;
+          final point = BoardPoint(colIndex, y);
+          game.board.placeStone(point);
+        }
+      }
+      game.analyze();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已匯入：${gameRecord.name} (${gameRecord.moves.length} 手)'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('匯入失敗：$e')),
+        );
+      }
+    }
+  }
+
+  /// Export the current game as SGF
+  Future<void> _exportSgf(BuildContext context) async {
+    final game = Provider.of<GameProvider>(context, listen: false);
+    if (game.board.moveCount == 0) return;
+
+    // Build a temporary GameRecord from current board state
+    final moves = <record.GameMove>[];
+    for (int i = 0; i < game.board.movesGtp.length; i++) {
+      final moveGtp = game.board.movesGtp[i];
+      final parts = moveGtp.split(' ');
+      if (parts.length >= 2) {
+        moves.add(record.GameMove(
+          player: parts[0],
+          coordinate: parts[1],
+          moveNumber: i + 1,
+        ));
+      }
+    }
+
+    final now = DateTime.now();
+    final gameRecord = record.GameRecord(
+      name: 'GoStrategy_${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}',
+      boardSize: game.board.size,
+      komi: game.board.komi,
+      handicap: game.board.handicap,
+      moves: moves,
+    );
+
+    final sgfContent = gameRecord.toSgf();
+    final fileName = '${gameRecord.name}.sgf';
+
+    try {
+      if (kIsWeb) {
+        // On web, use share_plus or download
+        await Share.share(sgfContent, subject: fileName);
+      } else if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+        // On desktop, use save file dialog
+        final outputPath = await FilePicker.platform.saveFile(
+          dialogTitle: '匯出 SGF',
+          fileName: fileName,
+          type: FileType.any,
+        );
+
+        if (outputPath != null) {
+          await File(outputPath).writeAsString(sgfContent);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('已匯出至：$outputPath')),
+            );
+          }
+        }
+      } else {
+        // On mobile, use share
+        await Share.share(sgfContent, subject: fileName);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('匯出失敗：$e')),
+        );
+      }
+    }
   }
 
   void _showSettings(BuildContext context) {
@@ -670,8 +859,10 @@ class _ControlsPanel extends StatelessWidget {
         // Normal controls
         return Container(
           padding: const EdgeInsets.all(12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          child: Wrap(
+            alignment: WrapAlignment.spaceEvenly,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               ElevatedButton.icon(
                 onPressed: game.board.moveCount > 0 ? () => game.undo() : null,
@@ -690,10 +881,186 @@ class _ControlsPanel extends StatelessWidget {
                 icon: const Icon(Icons.refresh),
                 label: const Text('Re-analyze'),
               ),
+              ElevatedButton.icon(
+                onPressed: game.board.moveCount > 0
+                    ? () => _showSaveGameDialog(context)
+                    : null,
+                icon: const Icon(Icons.save),
+                label: const Text('Save'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
             ],
           ),
         );
       },
+    );
+  }
+
+  /// Show dialog to save current game
+  static void _showSaveGameDialog(BuildContext context) {
+    final nameController = TextEditingController();
+    final blackPlayerController = TextEditingController();
+    final whitePlayerController = TextEditingController();
+    final notesController = TextEditingController();
+
+    // Auto-generate default name with timestamp
+    final now = DateTime.now();
+    nameController.text = 'Game ${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('儲存棋譜'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: '棋譜名稱 *',
+                  hintText: '請輸入棋譜名稱',
+                ),
+                autofocus: true,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: blackPlayerController,
+                decoration: const InputDecoration(
+                  labelText: '黑方棋手',
+                  hintText: '選填',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: whitePlayerController,
+                decoration: const InputDecoration(
+                  labelText: '白方棋手',
+                  hintText: '選填',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: notesController,
+                decoration: const InputDecoration(
+                  labelText: '備註',
+                  hintText: '選填',
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              if (name.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('請輸入棋譜名稱')),
+                );
+                return;
+              }
+
+              Navigator.of(dialogContext).pop();
+
+              // Get game state and services
+              final game = Provider.of<GameProvider>(context, listen: false);
+              final recordService =
+                  Provider.of<GameRecordService>(context, listen: false);
+
+              // Convert BoardState moves to GameMove objects
+              final moves = <record.GameMove>[];
+              for (int i = 0; i < game.board.movesGtp.length; i++) {
+                final moveGtp = game.board.movesGtp[i];
+                final parts = moveGtp.split(' ');
+                if (parts.length >= 2) {
+                  moves.add(record.GameMove(
+                    player: parts[0], // 'B' or 'W'
+                    coordinate: parts[1], // GTP coordinate
+                    moveNumber: i + 1,
+                  ));
+                }
+              }
+
+              // Create GameRecord
+              final gameRecord = record.GameRecord(
+                name: name,
+                boardSize: game.board.size,
+                komi: game.board.komi,
+                handicap: game.board.handicap,
+                moves: moves,
+                blackPlayer: blackPlayerController.text.trim().isEmpty
+                    ? null
+                    : blackPlayerController.text.trim(),
+                whitePlayer: whitePlayerController.text.trim().isEmpty
+                    ? null
+                    : whitePlayerController.text.trim(),
+                notes: notesController.text.trim().isEmpty
+                    ? null
+                    : notesController.text.trim(),
+              );
+
+              // Save record
+              final savedRecord = await recordService.saveRecord(gameRecord);
+
+              if (savedRecord != null) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('棋譜已儲存：${savedRecord.name}'),
+                      action: SnackBarAction(
+                        label: '查看',
+                        onPressed: () {
+                          // Navigate to settings > records list
+                          final authService =
+                              Provider.of<AuthService>(context, listen: false);
+                          final cloudStorage = Provider.of<CloudStorageManager>(
+                              context,
+                              listen: false);
+
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => MultiProvider(
+                                providers: [
+                                  ChangeNotifierProvider.value(
+                                      value: authService),
+                                  ChangeNotifierProvider.value(
+                                      value: cloudStorage),
+                                  ChangeNotifierProvider.value(
+                                      value: recordService),
+                                ],
+                                child: const SettingsScreen(),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                }
+              } else {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                          '儲存失敗：${recordService.error ?? "未知錯誤"}'),
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('儲存'),
+          ),
+        ],
+      ),
     );
   }
 }

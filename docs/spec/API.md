@@ -53,6 +53,27 @@
     }
     ```
 
+### 2.4 快取統計 (Cache Statistics)
+取得分析快取的詳細統計資訊。
+- **URL**: `/stats`
+- **Method**: `GET`
+- **Response**:
+    ```json
+    {
+      "total_entries": 31590,
+      "by_board_size": {
+        "9": 10230,
+        "13": 8543,
+        "19": 12817
+      },
+      "by_model": {
+        "kata1-b18c384": 31590
+      },
+      "db_size_bytes": 52428800,
+      "db_path": "data/analysis.db"
+    }
+    ```
+
 ## 3. 資料模型 (Definitions)
 
 ### 3.1 AnalysisResponse

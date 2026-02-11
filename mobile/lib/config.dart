@@ -38,15 +38,21 @@ class AppConfig {
 
 
 
+  /// API port, configurable via --dart-define=API_PORT=8001
+  static const int apiPort = int.fromEnvironment('API_PORT', defaultValue: 8001);
+
+  /// API host for web, configurable via --dart-define=API_HOST=localhost
+  static const String apiHost = String.fromEnvironment('API_HOST', defaultValue: 'localhost');
+
   // For iOS Simulator / Android Emulator testing on local machine
   static String get _mobileApiUrl {
     if (kIsWeb) return _webApiUrl;
-    if (Platform.isAndroid) return 'http://10.0.2.2:8001';
-    return 'http://127.0.0.1:8001';
+    if (Platform.isAndroid) return 'http://10.0.2.2:$apiPort';
+    return 'http://127.0.0.1:$apiPort';
   }
 
-  // For web, use localhost or configure your deployment URL
-  static const String _webApiUrl = 'http://localhost:8001';
+  // For web, use configured host/port or defaults
+  static String get _webApiUrl => 'http://$apiHost:$apiPort';
 
   /// Get the appropriate API base URL based on platform
   static String get apiBaseUrl => _mobileApiUrl;

@@ -381,6 +381,12 @@ components:
     StatsResponse:
       type: object
       description: Cache statistics response.
+      required:
+        - total_entries
+        - by_board_size
+        - by_model
+        - db_size_bytes
+        - db_path
       properties:
         total_entries:
           type: integer
@@ -395,11 +401,21 @@ components:
             "9": 10230
             "13": 8543
             "19": 12817
-        by_visits:
+        by_model:
           type: object
-          description: Entry count by visit count
+          description: Entry count by KataGo model name
           additionalProperties:
             type: integer
+          example:
+            "kata1-b18c384": 31590
+        db_size_bytes:
+          type: integer
+          description: Database file size in bytes
+          example: 52428800
+        db_path:
+          type: string
+          description: Path to the database file
+          example: "data/analysis.db"
 
     ErrorResponse:
       type: object

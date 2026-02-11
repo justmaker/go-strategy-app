@@ -46,6 +46,8 @@ dependencies:
   # File handling
   archive: ^4.0.2
   sqflite_common_ffi: ^2.3.4+4
+  file_picker: ^8.0.0
+  share_plus: ^9.0.0
 
 dev_dependencies:
   flutter_test:

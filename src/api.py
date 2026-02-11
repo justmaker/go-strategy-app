@@ -13,11 +13,11 @@ Usage:
 
 from contextlib import asynccontextmanager
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Literal, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 import os
 
@@ -100,8 +100,8 @@ class AnalysisResponse(BaseModel):
 class AnalyzeRequest(BaseModel):
     """Request body for /analyze endpoint."""
 
-    board_size: int = Field(
-        default=19, ge=9, le=19, description="Board size (9, 13, or 19)"
+    board_size: Literal[9, 13, 19] = Field(
+        default=19, description="Board size (9, 13, or 19)"
     )
     moves: List[str] = Field(
         default=[], description="List of moves in GTP format (e.g., ['B Q16', 'W D4'])"
@@ -119,6 +119,18 @@ class AnalyzeRequest(BaseModel):
         default=False, description="Bypass cache and force new analysis"
     )
 
+    @field_validator("moves")
+    @classmethod
+    def validate_moves(cls, v: List[str]) -> List[str]:
+        import re
+        pattern = re.compile(r'^[BW] [A-HJ-T][1-9][0-9]?$')
+        for move in v:
+            if not pattern.match(move):
+                raise ValueError(
+                    f"Invalid move format: '{move}'. Expected GTP format like 'B Q16' or 'W D4'."
+                )
+        return v
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -135,14 +147,26 @@ class AnalyzeRequest(BaseModel):
 class QueryRequest(BaseModel):
     """Request body for /query endpoint (cache lookup only)."""
 
-    board_size: int = Field(
-        default=19, ge=9, le=19, description="Board size (9, 13, or 19)"
+    board_size: Literal[9, 13, 19] = Field(
+        default=19, description="Board size (9, 13, or 19)"
     )
     moves: List[str] = Field(default=[], description="List of moves in GTP format")
     handicap: int = Field(
         default=0, ge=0, le=9, description="Number of handicap stones"
     )
     komi: Optional[float] = Field(default=None, description="Komi value")
+
+    @field_validator("moves")
+    @classmethod
+    def validate_moves(cls, v: List[str]) -> List[str]:
+        import re
+        pattern = re.compile(r'^[BW] [A-HJ-T][1-9][0-9]?$')
+        for move in v:
+            if not pattern.match(move):
+                raise ValueError(
+                    f"Invalid move format: '{move}'. Expected GTP format like 'B Q16' or 'W D4'."
+                )
+        return v
 
     class Config:
         json_schema_extra = {
@@ -193,6 +217,31 @@ class HealthResponse(BaseModel):
     cache_only_mode: bool = Field(
         default=False, description="Whether running in cache-only mode (no GPU)"
     )
+
+
+class StatsResponse(BaseModel):
+    """Cache statistics response."""
+
+    total_entries: int = Field(..., description="Total number of cached entries")
+    by_board_size: Dict[str, int] = Field(
+        ..., description="Entry count by board size"
+    )
+    by_model: Dict[str, int] = Field(
+        ..., description="Entry count by KataGo model name"
+    )
+    db_size_bytes: int = Field(..., description="Database file size in bytes")
+    db_path: str = Field(..., description="Path to the database file")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total_entries": 31590,
+                "by_board_size": {"9": 10230, "13": 8543, "19": 12817},
+                "by_model": {"kata1-b18c384": 31590},
+                "db_size_bytes": 52428800,
+                "db_path": "data/analysis.db",
+            }
+        }
 
 
 class ErrorResponse(BaseModel):
@@ -332,10 +381,6 @@ async def analyze_position(request: AnalyzeRequest):
     if not state.analyzer:
         raise HTTPException(status_code=500, detail="Analyzer not initialized")
 
-    # Validate board size
-    if request.board_size not in (9, 13, 19):
-        raise HTTPException(status_code=400, detail="Board size must be 9, 13, or 19")
-
     try:
         result = state.analyzer.analyze(
             board_size=request.board_size,
@@ -470,6 +515,7 @@ async def query_cache(request: QueryRequest):
 
 @app.get(
     "/stats",
+    response_model=StatsResponse,
     tags=["System"],
     summary="Get cache statistics",
     description="Get detailed statistics about the analysis cache.",
@@ -479,7 +525,16 @@ async def get_stats():
     if not state.analyzer:
         raise HTTPException(status_code=500, detail="Analyzer not initialized")
 
-    return state.analyzer.get_cache_stats()
+    stats = state.analyzer.get_cache_stats()
+    # Convert integer keys from by_board_size to strings for JSON compatibility
+    by_board_size = {str(k): v for k, v in stats["by_board_size"].items()}
+    return StatsResponse(
+        total_entries=stats["total_entries"],
+        by_board_size=by_board_size,
+        by_model=stats["by_model"],
+        db_size_bytes=stats["db_size_bytes"],
+        db_path=stats["db_path"],
+    )
 
 
 # ============================================================================
