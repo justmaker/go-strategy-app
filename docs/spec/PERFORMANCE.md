@@ -441,3 +441,5 @@ cache.get_visit_counts(board_size=19, komi=7.5)
 2. **Canonical Hash 計算**：每次分析需 8 次 Zobrist XOR，目前忽略不計。若棋子數量極多（>200），可考慮快取 hash。
 3. **SQLite 無連線池（Python）**：每次操作新建連線，高並發時可能成為瓶頸。目前單使用者場景無影響。
 4. **Flutter Web Canvas 重繪**：Web 版每次 `paint()` 完整重繪，不適合作為主要平台。應優先使用 Native build。
+5. **App Bundle 大小**：Android APK ~25-54MB（含 KataGo native library），macOS ~47MB。KataGo neural network model (`kata1-b18c384`) 佔大部分體積。若需縮小，可考慮按需下載模型而非隨 App 打包。
+6. **Dart AOT vs JIT 對啟動時間的影響**：Release build 使用 AOT 編譯，啟動時間顯著優於 Debug build（JIT）。效能基準測試應一律使用 `flutter run --release` 或 `flutter build` 產出的 Release build。

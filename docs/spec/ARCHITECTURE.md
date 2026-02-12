@@ -277,7 +277,7 @@ flowchart LR
 | **AI Engine** | KataGo | 圍棋 AI 分析引擎 |
 | **AI Model** | kata1-b18c384nbt | 18-block 384-channel 神經網路 |
 | **Communication** | GTP Protocol / Analysis JSON API | KataGo 通訊 |
-| **API Spec** | OpenAPI 3.0 (Spec-First) | API 規範與驗證 |
+| **API Spec** | OpenAPI 3.1.0 (Spec-First) | API 規範與驗證 |
 | **Authentication** | Google Sign-In / Apple Sign-In | 多提供者登入 |
 | **Cloud Storage** | Google Drive / iCloud / OneDrive | 棋譜雲端同步 |
 | **Serialization** | JSON / gzip | 資料交換與壓縮 |

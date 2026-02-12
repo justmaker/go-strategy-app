@@ -340,7 +340,7 @@ debugPrint('[KataGo STDERR] ...');
 
 ### Python 端
 
-使用 `print` 進行日誌輸出（伺服器模式）：
+目前使用 `print` 進行日誌輸出（伺服器模式）：
 
 ```python
 print("Starting Go Strategy API...")
@@ -348,6 +348,8 @@ print(f"KataGo started. Cache has {count} entries.")
 print(f"Migrating database to support multiple visit counts...")
 print(f"Warning: Failed to seed/migrate database: {e}")
 ```
+
+> **建議改進**：未來應改用 Python `logging` 模組，支援日誌層級篩選、檔案輸出與 structured logging。
 
 ### 日誌層級指引
 
@@ -416,6 +418,30 @@ GO_API_CACHE_ONLY=1 uvicorn src.api:app --port 8000
 | Cache Miss | 啟動 KataGo 分析 | 回傳 HTTP 404 + `CacheMissError` |
 | `/health` | `katago_running: true` | `katago_running: false, cache_only_mode: true` |
 | Visits 匹配 | 精確匹配 `required_visits` | 接受任何 visits（回傳最高 visits 版本） |
+
+---
+
+## 11. Error Monitoring（錯誤監控與告警）
+
+### 目前狀態：無集中式錯誤監控
+
+App 與 Backend 目前都沒有集中式的 crash reporting 或 error tracking。
+
+### 建議整合方案
+
+| 工具 | 平台 | 用途 |
+|------|------|------|
+| **Sentry** | Flutter + Python | 跨平台 crash reporting、performance monitoring |
+| **Firebase Crashlytics** | Android / iOS | 原生 crash reporting，與 Firebase 整合 |
+| **Flutter `FlutterError.onError`** | All | 攔截 Flutter framework 層級的未處理例外 |
+| **Python `sys.excepthook`** | Backend | 攔截 Python 未處理例外 |
+
+### 建議監控的關鍵指標
+
+- KataGo 引擎啟動失敗率（by platform）
+- Cache miss rate（Opening Book / SQLite）
+- API 錯誤率與 P99 延遲
+- App crash-free rate
 
 ---
 

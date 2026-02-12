@@ -58,7 +58,7 @@ enum AuthState {
 #### OAuth 配置
 
 - **OAuth Type**: Desktop (macOS) / Mobile (iOS, Android)
-- **Client ID** (macOS): `1046387828217-hvuepmtgsh5fnbb08pidlcglmejpmfi0.apps.googleusercontent.com`
+- **Client ID** (macOS): `1046387...apps.googleusercontent.com`（完整值見 `mobile/macos/Runner/Info.plist`）
 - **iOS Client ID**: 尚未在 Info.plist 配置（仍為 placeholder `YOUR_CLIENT_ID`）
 
 #### 請求的 Scopes

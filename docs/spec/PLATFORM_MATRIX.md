@@ -56,11 +56,12 @@
 | Provider | Web | Android | iOS | macOS | Windows | Linux |
 |----------|:---:|:-------:|:---:|:-----:|:-------:|:-----:|
 | Anonymous (Local only) | OK | OK | OK | OK | OK | OK |
-| Google Sign-In | OK | OK | OK | OK | OK | OK |
+| Google Sign-In | OK | OK | WIP | WIP* | OK | OK |
 | Apple Sign-In | OK | -- | OK | OK | -- | -- |
 | Microsoft Sign-In | WIP | WIP | WIP | WIP | WIP | WIP |
 
 > Apple Sign-In: 僅在 Apple 平台 (iOS/macOS) 及 Web 上可用。`auth_service.dart` 中以 `Platform.isIOS || Platform.isMacOS` 判斷。
+> Google Sign-In WIP*: macOS OAuth callback 尚未正確處理（UI 未更新）；iOS `Info.plist` 中 Client ID 仍為 placeholder。詳見 [SECURITY.md](SECURITY.md)。
 > Microsoft Sign-In: 使用 `aad_oauth` 套件，目前為 placeholder，尚未實作。
 
 ### 2.4 Cloud Storage (雲端同步)
