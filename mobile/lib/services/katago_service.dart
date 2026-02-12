@@ -43,6 +43,7 @@ class KataGoService {
   KataGoStatus _status = KataGoStatus.stopped;
   String? _currentQueryId;
   StreamSubscription? _eventSubscription;
+  bool _isStarting = false;
 
   // Callbacks
   void Function(AnalysisProgress)? _progressCallback;
@@ -56,6 +57,8 @@ class KataGoService {
   /// Start the KataGo engine
   Future<bool> start() async {
     if (_status == KataGoStatus.running) return true;
+    if (_isStarting) return false;
+    _isStarting = true;
 
     _status = KataGoStatus.starting;
 
@@ -81,6 +84,8 @@ class KataGoService {
       debugPrint('Error starting KataGo: $e');
       _errorCallback?.call('Failed to start engine: $e');
       return false;
+    } finally {
+      _isStarting = false;
     }
   }
 
@@ -114,6 +119,14 @@ class KataGoService {
   }) async {
     if (!isRunning) {
       onError?.call('Engine not running');
+      return null;
+    }
+
+    // Health check: verify engine is actually alive
+    final alive = await checkEngineStatus();
+    if (!alive) {
+      _status = KataGoStatus.error;
+      onError?.call('Engine is not responding');
       return null;
     }
 
@@ -192,6 +205,7 @@ class KataGoService {
       },
       onError: (error) {
         debugPrint('Event stream error: $error');
+        _status = KataGoStatus.error;
         _errorCallback?.call('Stream error: $error');
       },
     );

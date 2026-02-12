@@ -29,6 +29,7 @@ class KataGoEngine(private val context: Context) {
     }
 
     private val isRunning = AtomicBoolean(false)
+    private val isReaderActive = AtomicBoolean(false)
     private val queryId = AtomicInteger(0)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
@@ -48,12 +49,21 @@ class KataGoEngine(private val context: Context) {
 
             Log.i(TAG, "Starting Native KataGo...")
             val success = startNative(configPath, modelPath)
-            
+
             if (success) {
-                isRunning.set(true)
                 startOutputReaders()
-                Log.i(TAG, "Native KataGo started")
-                return@withContext true
+
+                val ready = waitForReady(timeoutMs = 30000)
+                if (ready) {
+                    isRunning.set(true)
+                    Log.i(TAG, "Native KataGo started and ready")
+                    return@withContext true
+                } else {
+                    Log.e(TAG, "KataGo readiness probe timed out")
+                    isReaderActive.set(false)
+                    stopNative()
+                    return@withContext false
+                }
             } else {
                 Log.e(TAG, "Failed to start Native KataGo")
                 return@withContext false
@@ -64,10 +74,42 @@ class KataGoEngine(private val context: Context) {
         }
     }
 
+    private suspend fun waitForReady(timeoutMs: Long): Boolean {
+        val deferred = CompletableDeferred<Boolean>()
+        val previousCallback = analysisCallback
+
+        analysisCallback = { line ->
+            if (line.contains("probe_ready")) {
+                deferred.complete(true)
+            }
+        }
+
+        try {
+            val probe = JSONObject().apply {
+                put("id", "probe_ready")
+                put("boardXSize", 9)
+                put("boardYSize", 9)
+                put("komi", 5.5)
+                put("maxVisits", 1)
+                put("moves", JSONArray())
+            }
+            Log.d(TAG, "Sending readiness probe...")
+            writeToProcess(probe.toString())
+
+            return withTimeoutOrNull(timeoutMs) { deferred.await() } ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Readiness probe failed", e)
+            return false
+        } finally {
+            analysisCallback = previousCallback
+        }
+    }
+
     fun stop() {
         if (!isRunning.get()) return
         stopNative()
         isRunning.set(false)
+        isReaderActive.set(false)
         scope.cancel()
     }
 
@@ -141,24 +183,34 @@ class KataGoEngine(private val context: Context) {
 
     private fun extractModel(): String? {
         val modelFile = File(context.cacheDir, MODEL_FILE)
-        
+
         // Check if already extracted
         if (modelFile.exists() && modelFile.length() > 0) {
             return modelFile.absolutePath
         }
 
-        try {
-            context.assets.open("katago/$MODEL_FILE").use { input ->
-                FileOutputStream(modelFile).use { output ->
-                    input.copyTo(output)
+        // Flutter assets are stored under flutter_assets/assets/ in the APK
+        val assetPaths = listOf(
+            "flutter_assets/assets/katago/$MODEL_FILE",
+            "katago/$MODEL_FILE",
+        )
+
+        for (assetPath in assetPaths) {
+            try {
+                context.assets.open(assetPath).use { input ->
+                    FileOutputStream(modelFile).use { output ->
+                        input.copyTo(output)
+                    }
                 }
+                Log.i(TAG, "Model extracted from $assetPath to ${modelFile.absolutePath}")
+                return modelFile.absolutePath
+            } catch (e: Exception) {
+                Log.d(TAG, "Asset not found at $assetPath, trying next...")
             }
-            Log.i(TAG, "Model extracted to ${modelFile.absolutePath}")
-            return modelFile.absolutePath
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to extract model", e)
-            return null
         }
+
+        Log.e(TAG, "Failed to extract model from any asset path")
+        return null
     }
 
     private fun createConfigFile(): String {
@@ -221,10 +273,11 @@ class KataGoEngine(private val context: Context) {
     }
 
     private fun startOutputReaders() {
+        isReaderActive.set(true)
         // Read stdout (analysis results) from Native via JNI
         scope.launch {
             Log.i(TAG, "Starting Output Reader Loop")
-            while (isRunning.get()) {
+            while (isReaderActive.get()) {
                 try {
                     // Blocking read from native pipe
                     val line = readFromProcess()
@@ -232,12 +285,12 @@ class KataGoEngine(private val context: Context) {
                         Log.d(TAG, "KataGo stdout: $line")
                         processOutput(line)
                     } else {
-                        // Empty line might mean EOF or just empty flush? 
+                        // Empty line might mean EOF or just empty flush?
                         // Yield to prevent tight loop if non-blocking (though native is blocking)
                         yield()
                     }
                 } catch (e: Exception) {
-                    if (isRunning.get()) {
+                    if (isReaderActive.get()) {
                         Log.e(TAG, "Error reading from process", e)
                     }
                     delay(100) // Backoff on error

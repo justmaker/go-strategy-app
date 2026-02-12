@@ -39,6 +39,8 @@ class KataGoDesktopService {
   KataGoDesktopStatus _status = KataGoDesktopStatus.stopped;
   int _queryCounter = 0;
   String? _currentQueryId;
+  bool _isStarting = false;
+  Completer<bool>? _startCompleter;
 
   StreamSubscription? _stdoutSubscription;
   StreamSubscription? _stderrSubscription;
@@ -90,6 +92,8 @@ class KataGoDesktopService {
     String? modelPath,
   }) async {
     if (_status == KataGoDesktopStatus.running) return true;
+    if (_isStarting) return false;
+    _isStarting = true;
     _status = KataGoDesktopStatus.starting;
 
     try {
@@ -106,6 +110,8 @@ class KataGoDesktopService {
       debugPrint('Starting KataGo: $katagoPath ${args.join(' ')}');
       _process = await Process.start(katagoPath, args);
 
+      _startCompleter = Completer<bool>();
+
       _stdoutSubscription = _process!.stdout
           .transform(utf8.decoder)
           .transform(const LineSplitter())
@@ -116,18 +122,44 @@ class KataGoDesktopService {
           .transform(const LineSplitter())
           .listen(_handleStderrLine);
 
-      await Future.delayed(const Duration(seconds: 2));
+      // Detect unexpected process exit
+      _process!.exitCode.then((exitCode) {
+        if (_status == KataGoDesktopStatus.running ||
+            _status == KataGoDesktopStatus.starting) {
+          debugPrint('KataGo process exited unexpectedly with code $exitCode');
+          _status = KataGoDesktopStatus.error;
+          _currentQueryId = null;
+          _errorCallback?.call('KataGo process exited with code $exitCode');
+          if (_startCompleter != null && !_startCompleter!.isCompleted) {
+            _startCompleter!.complete(false);
+          }
+        }
+      });
 
-      if (_process != null) {
+      // Wait for readiness signal from stderr, with 30-second timeout
+      final ready = await _startCompleter!.future.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          debugPrint('KataGo start timed out after 30 seconds');
+          return false;
+        },
+      );
+
+      if (ready && _process != null) {
         _status = KataGoDesktopStatus.running;
         return true;
       }
-      _status = KataGoDesktopStatus.error;
+      if (_status != KataGoDesktopStatus.error) {
+        _status = KataGoDesktopStatus.error;
+      }
       return false;
     } catch (e) {
       _status = KataGoDesktopStatus.error;
       debugPrint('Error starting KataGo: $e');
       return false;
+    } finally {
+      _isStarting = false;
+      _startCompleter = null;
     }
   }
 
@@ -265,7 +297,23 @@ class KataGoDesktopService {
 
   void _handleStderrLine(String line) {
     debugPrint('[KataGo STDERR] $line');
-    if (line.contains('Error')) _errorCallback?.call(line);
+
+    // Detect readiness messages during startup
+    if (_startCompleter != null && !_startCompleter!.isCompleted) {
+      if (line.contains('Started, ready to begin handling requests') ||
+          line.contains('All neural net inits done')) {
+        _startCompleter!.complete(true);
+        return;
+      }
+    }
+
+    if (line.contains('Error') || line.contains('error:')) {
+      _errorCallback?.call(line);
+      // If still starting, signal failure
+      if (_startCompleter != null && !_startCompleter!.isCompleted) {
+        _startCompleter!.complete(false);
+      }
+    }
   }
 
   AnalysisResult _convertToAnalysisResult(Map<String, dynamic> data) {

@@ -39,6 +39,7 @@ class GameProvider extends ChangeNotifier {
 
   // Local engine state
   bool _localEngineEnabled = true;
+  String? _engineError;
   AnalysisProgress? _analysisProgress;
   DesktopAnalysisProgress? _desktopAnalysisProgress;
 
@@ -98,6 +99,7 @@ class GameProvider extends ChangeNotifier {
   bool get localEngineEnabled => _localEngineEnabled;
   bool get localEngineRunning =>
       _isDesktop ? _kataGoDesktop.isRunning : _kataGo.isRunning;
+  String? get engineError => _engineError;
   AnalysisProgress? get analysisProgress => _analysisProgress;
   DesktopAnalysisProgress? get desktopAnalysisProgress =>
       _desktopAnalysisProgress;
@@ -169,10 +171,34 @@ class GameProvider extends ChangeNotifier {
         success = await _kataGo.start();
         debugPrint(success ? 'Mobile KataGo started' : 'Mobile KataGo failed');
       }
+      if (success) {
+        _engineError = null;
+      }
       notifyListeners();
     } catch (e) {
+      _engineError = e.toString();
       debugPrint('Error starting local engine: $e');
     }
+  }
+
+  /// Ensure the local engine is started, attempting a restart if needed.
+  /// Returns true if the engine is running after the attempt.
+  Future<bool> _ensureEngineStarted() async {
+    if (localEngineRunning) return true;
+    await _initLocalEngine();
+    return localEngineRunning;
+  }
+
+  /// Restart the local engine (stop then start).
+  /// Returns true if the engine is running after the restart.
+  Future<bool> restartEngine() async {
+    if (_isDesktop) {
+      await _kataGoDesktop.stop();
+    } else {
+      await _kataGo.stop();
+    }
+    await _initLocalEngine();
+    return localEngineRunning;
   }
 
   /// Helper to extract bundled asset to filesystem
@@ -405,11 +431,13 @@ class GameProvider extends ChangeNotifier {
 
       // Step 3: Try local KataGo engine (Offline-first key principle)
       if (_localEngineEnabled) {
-        if (_isDesktop && _kataGoDesktop.isRunning) {
-          await _analyzeWithDesktopEngine();
-          return;
-        } else if (!_isDesktop && _kataGo.isRunning) {
-          await _analyzeWithMobileEngine();
+        final engineReady = await _ensureEngineStarted();
+        if (engineReady) {
+          if (_isDesktop) {
+            await _analyzeWithDesktopEngine();
+          } else {
+            await _analyzeWithMobileEngine();
+          }
           return;
         }
       }
@@ -437,7 +465,16 @@ class GameProvider extends ChangeNotifier {
       }
 
       // Step 5: No analysis available
-      _error = 'Position not in opening book/cache and local engine unavailable';
+      final parts = <String>['Position not in opening book/cache'];
+      if (_localEngineEnabled && !localEngineRunning) {
+        parts.add('local engine enabled but not running${_engineError != null ? ' ($_engineError)' : ''}');
+      } else if (!_localEngineEnabled) {
+        parts.add('local engine disabled');
+      }
+      if (_connectionStatus != ConnectionStatus.online) {
+        parts.add('API offline');
+      }
+      _error = parts.join('; ');
       _lastAnalysisSource = AnalysisSource.none;
     } catch (e) {
       _error = 'Error: $e';

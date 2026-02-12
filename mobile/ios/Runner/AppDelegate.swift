@@ -33,6 +33,12 @@ import KataGoMobile
            } else {
                result(FlutterError(code: "INVALID_ARGS", message: "Arguments must be map", details: nil))
            }
+      } else if call.method == "cancelAnalysis" {
+           if let args = call.arguments as? [String: Any],
+              let queryId = args["queryId"] as? String {
+               self.cancelAnalysis(queryId: queryId)
+           }
+           result(true)
       } else {
           result(FlutterMethodNotImplemented)
       }
@@ -121,7 +127,21 @@ import KataGoMobile
           result(FlutterError(code: "JSON_ERROR", message: "Failed to create query", details: nil))
       }
   }
-    
+
+  private func cancelAnalysis(queryId: String) {
+      if !isRunning { return }
+
+      let cmd: [String: Any] = [
+          "id": "cancel_\(queryId)",
+          "action": "terminate",
+          "terminateId": queryId
+      ]
+      if let jsonData = try? JSONSerialization.data(withJSONObject: cmd, options: []),
+         let jsonString = String(data: jsonData, encoding: .utf8) {
+          KataGoWrapper.write(toProcess: jsonString)
+      }
+  }
+
   private func startReadingOutput() {
       // Background thread loop
       DispatchQueue.global(qos: .background).async {
@@ -194,7 +214,25 @@ import KataGoMobile
       let docDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
       let configURL = docDir.appendingPathComponent("analysis.cfg")
       // Write default config
-      let configContent = "maxVisits = 50\nnumSearchThreads = 1\n"
+      let configContent = """
+          # KataGo Analysis Config for iOS
+
+          # Limits
+          maxVisits = 100
+          numSearchThreads = 1
+
+          # Analysis output
+          reportAnalysisWinratesAs = BLACK
+
+          # Performance tuning for mobile
+          nnCacheSizePowerOfTwo = 18
+          nnMutexPoolSizePowerOfTwo = 14
+          numNNServerThreadsPerModel = 1
+
+          # Disable features not needed for analysis
+          logSearchInfo = false
+          logToStderr = true
+          """
       try? configContent.write(to: configURL, atomically: true, encoding: .utf8)
       
       return (configURL.path, modelPath)

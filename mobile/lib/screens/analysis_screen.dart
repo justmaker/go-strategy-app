@@ -532,6 +532,7 @@ class _AnalysisView extends StatelessWidget {
         }
 
         if (game.error != null) {
+          final showRetry = !game.localEngineRunning && game.localEngineEnabled;
           return Container(
             padding: const EdgeInsets.all(12),
             color: Colors.red.shade100,
@@ -545,6 +546,16 @@ class _AnalysisView extends StatelessWidget {
                     style: const TextStyle(color: Colors.red),
                   ),
                 ),
+                if (showRetry)
+                  TextButton(
+                    onPressed: () async {
+                      await game.restartEngine();
+                      if (game.localEngineRunning) {
+                        game.analyze();
+                      }
+                    },
+                    child: const Text('Retry'),
+                  ),
               ],
             ),
           );
@@ -1136,6 +1147,79 @@ class _DataStatsWidget extends StatelessWidget {
             );
           },
         ),
+        const SizedBox(height: 8),
+        // Engine status
+        _buildEngineStatus(context),
+      ],
+    );
+  }
+
+  Widget _buildEngineStatus(BuildContext context) {
+    if (!game.localEngineEnabled) {
+      return Row(
+        children: [
+          const Icon(Icons.block, color: Colors.grey, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            'Local Engine: Disabled',
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+          ),
+        ],
+      );
+    }
+
+    if (game.localEngineRunning) {
+      return Row(
+        children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            'Local Engine: Running',
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+          ),
+        ],
+      );
+    }
+
+    // Enabled but not running
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.error, color: Colors.red, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              'Local Engine: Not running',
+              style: TextStyle(color: Colors.red.shade400, fontSize: 12),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 24,
+              child: TextButton(
+                onPressed: () => game.restartEngine(),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Restart', style: TextStyle(fontSize: 11)),
+              ),
+            ),
+          ],
+        ),
+        if (game.engineError != null) ...[
+          const SizedBox(height: 2),
+          Padding(
+            padding: const EdgeInsets.only(left: 24),
+            child: Text(
+              game.engineError!,
+              style: TextStyle(color: Colors.red.shade300, fontSize: 10),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ],
     );
   }
