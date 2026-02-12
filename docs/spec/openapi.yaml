@@ -1,12 +1,7 @@
 # Go Strategy Analysis API - OpenAPI Specification
 #
-# 此文件為 API 的正式規範，與 src/api.py 中的實作應保持同步。
-#
-# 驗證規範與實作一致性：
-#   python scripts/validate_openapi.py
-#
-# FastAPI 自動生成的規範：
-#   http://localhost:8000/openapi.json
+# ⚠️ 已停用：App 採用純離線架構，不依賴此 API。
+# 本規範保留供 Python 資料工具 (src/api.py) 開發參考。
 #
 openapi: 3.1.0
 info:

@@ -22,12 +22,12 @@ The app includes a bundled opening book with ~7,700 pre-analyzed positions:
 Analysis lookup priority:
 1. **Bundled Opening Book** - Instant, always available (~380KB compressed)
 2. **Local Cache** - Fast, persisted between sessions
-3. **API Call** - Requires network, results are cached locally
+3. **Local KataGo Engine** - On-device AI analysis (Desktop/Mobile)
 
 The UI shows the source of each analysis:
 - 📖 **Book** (green) - From bundled opening book
 - 💾 **Cache** (blue) - From local SQLite cache
-- ☁️ **Live** (orange) - From API server
+- 🔧 **Engine** (orange) - From local KataGo engine
 
 ## Prerequisites
 
@@ -69,19 +69,6 @@ flutter doctor -v
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 export PATH="$JAVA_HOME/bin:$PATH"
-```
-
-## Configuration
-
-Before building, edit `lib/config.dart` to set your API server URL:
-
-```dart
-class AppConfig {
-  // Change this to your server's address
-  static const String apiBaseUrl = 'http://YOUR_SERVER_IP:8000';
-  
-  // ... other settings
-}
 ```
 
 ## Building
@@ -143,28 +130,6 @@ The web files will be at: `build/web/`
    python3 -m http.server 8080
    # Open http://localhost:8080
    ```
-
-3. **Docker deployment** (serve with backend API):
-   ```bash
-   # From project root
-   docker-compose up
-   # Web app at http://localhost:8080
-   # API at http://localhost:8000
-   ```
-
-#### Web Configuration
-
-Edit `lib/config.dart` to set the API URL for web:
-
-```dart
-// For web, set your deployment URL
-static const String _webApiUrl = 'https://api.your-domain.com';
-
-// Or use same origin (if web and API are on same server)
-static const String _webApiUrl = '';
-```
-
-**Note**: The backend API must have CORS enabled for web to work from different origins.
 
 ### iOS
 
@@ -263,10 +228,11 @@ lib/
 │   └── game_provider.dart   # Offline-first analysis logic
 ├── screens/                 # UI screens
 │   └── analysis_screen.dart
-├── services/                # Backend services
-│   ├── api_service.dart     # REST API client
+├── services/                # App services
 │   ├── cache_service.dart   # Local SQLite cache
-│   └── opening_book_service.dart  # Bundled opening book
+│   ├── opening_book_service.dart  # Bundled opening book
+│   ├── katago_service.dart        # Mobile KataGo engine (JNI/FFI)
+│   └── katago_desktop_service.dart # Desktop KataGo engine (subprocess)
 └── widgets/                 # UI components
     └── go_board_widget.dart
 
@@ -282,25 +248,14 @@ The app uses GTP (Go Text Protocol) standard coordinates:
 
 Example: Q16 = column Q (16th), row 16
 
-## API Requirements
+## Offline Architecture
 
-The mobile app can work **fully offline** for positions in the opening book.
-For positions not in the book, it requires a running Go Strategy API server.
-
-Endpoints used:
-- `GET /health` - Connection check
-- `POST /analyze` - Get AI analysis for a position
-- `POST /query` - Check cache for existing analysis
-- `GET /stats` - Cache statistics
+App 採用純離線架構，**不依賴任何遠端 API Server**。所有分析在本地完成：
+1. Opening Book（隨 App 打包）
+2. Local SQLite Cache（累積歷史分析）
+3. Local KataGo Engine（Desktop/Mobile 即時運算）
 
 ## Troubleshooting
-
-### "Connection refused" error
-- **For opening book positions**: Works offline, no connection needed!
-- For other positions: Ensure the API server is running
-- Check the API URL in `lib/config.dart`
-- If using local network, ensure your device is on the same network
-- Android emulator: Use `10.0.2.2` instead of `localhost`
 
 ### "Cleartext traffic not permitted" error
 - The app is configured to allow HTTP traffic (for local development)

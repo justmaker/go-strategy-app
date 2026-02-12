@@ -1,6 +1,8 @@
 # API Specification v1.0
 
-本文件定義 Go Strategy App 後端 API 的通訊規範，適用於 Python FastAPI 後端與任何調用方（如 Flutter App）。
+> **⚠️ 已停用**：App 採用純離線架構，不依賴遠端 API Server。本文件保留供 Python 資料工具（`src/api.py`）開發參考，App 運行時不使用這些端點。
+
+本文件定義 Python 資料工具的 REST API 通訊規範。
 
 ## 1. 基礎資訊
 - **Base URL**: `http://<host>:8000`

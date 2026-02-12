@@ -261,8 +261,7 @@ key.properties
 
 ### 中期 (P1 -- 強化安全)
 
-4. **API Rate Limiting** -- 防止 `/analyze` 端點資源濫用
-5. **CORS 白名單** -- 限制 API 的 allowed origins
+4. **雲端 API Rate Limiting** -- 防止雲端同步 API 過度呼叫
 6. **Certificate Pinning** -- 可選，針對雲端儲存 API 的 TLS 憑證固定
 7. **實作 iCloud CloudKit 整合** -- 完成 Apple Sign-In 雲端同步
 
@@ -287,5 +286,5 @@ key.properties
 | `mobile/macos/Runner/DebugProfile.entitlements` | macOS Debug entitlements |
 | `mobile/macos/Runner/Release.entitlements` | macOS Release entitlements |
 | `mobile/android/app/src/main/AndroidManifest.xml` | Android 網路權限配置 |
-| `src/api.py` | Backend API（CORS、端點定義） |
+| `src/api.py` | Python 資料工具 API（非 App 運行時依賴） |
 | `.gitignore` | Secret 排除規則 |

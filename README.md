@@ -1,6 +1,6 @@
 # Go Strategy Analysis Tool
 
-A Go (Weiqi/Baduk) strategy analysis application powered by KataGo AI. Features a web GUI, REST API, CLI, and automated opening book generation with intelligent caching.
+A Go (Weiqi/Baduk) strategy analysis application powered by KataGo AI. Features a cross-platform Flutter app with offline-first architecture, automated opening book generation, and intelligent caching.
 
 ## 🚀 Try It Now - GitHub Pages
 
@@ -23,7 +23,6 @@ A Go (Weiqi/Baduk) strategy analysis application powered by KataGo AI. Features 
 ## Features
 
 - **Interactive Web GUI**: Click-to-play interface with real-time AI analysis
-- **REST API**: Cross-platform access for mobile/desktop clients (Flutter-ready)
 - **KataGo Integration**: World-class AI move suggestions with winrate and score estimates
 - **Smart Caching**: SQLite-based cache with D4 symmetry optimization (8x efficiency)
 - **Official Opening Book**: Pre-loaded with KataGo's official 9x9 book (1M+ positions, 282M avg visits)
@@ -90,34 +89,6 @@ Features:
 - Automatic AI analysis after each move
 - Adjustable board size and komi
 - View top 3 move candidates with statistics
-
-### REST API (FastAPI)
-
-```bash
-source venv/bin/activate
-uvicorn src.api:app --host 0.0.0.0 --port 8000
-```
-
-Access:
-- API: **http://localhost:8000**
-- Swagger Docs: **http://localhost:8000/docs**
-- OpenAPI Spec: **http://localhost:8000/openapi.json**
-
-Example requests:
-```bash
-# Health check
-curl http://localhost:8000/health
-
-# Analyze a position
-curl -X POST http://localhost:8000/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"board_size": 9, "moves": ["B E5", "W C3"], "komi": 7.5}'
-
-# Query cache only (fast)
-curl -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"board_size": 9, "moves": ["B E5"]}'
-```
 
 ### Command Line Interface
 
@@ -191,8 +162,8 @@ python -m src.scripts.export_db
 ```
 go-strategy-app/
 ├── src/
-│   ├── api.py              # FastAPI REST API
-│   ├── gui.py              # Streamlit web interface
+│   ├── api.py              # REST API (資料工具，非 App 依賴)
+│   ├── gui.py              # Streamlit web interface (開發用)
 │   ├── cli.py              # Command-line interface
 │   ├── analyzer.py         # Main analysis orchestration
 │   ├── board.py            # Board state & symmetry transforms
@@ -283,15 +254,6 @@ database:
   path: "data/analysis.db"
 ```
 
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Service health check |
-| POST | `/analyze` | Analyze position (may invoke KataGo) |
-| POST | `/query` | Cache-only lookup (fast) |
-| GET | `/stats` | Cache statistics |
-
 ## Development Roadmap
 
 - [x] Phase 1: Core Analysis Engine
@@ -299,10 +261,7 @@ database:
   - [x] SQLite caching with symmetry optimization
   - [x] Streamlit GUI
   - [x] Opening book generator
-- [x] Phase 2: Cross-Platform API
-  - [x] FastAPI REST endpoints
-  - [x] Pydantic models (OpenAPI spec)
-- [x] Phase 3: Mobile Client
+- [x] Phase 2: Cross-Platform App
   - [x] Flutter app for iOS/Android/Web
   - [x] Offline-first with local SQLite cache
   - [x] Intelligent merge logic for partial calculations
@@ -395,4 +354,3 @@ MIT License
 
 - [KataGo](https://github.com/lightvector/KataGo) - The incredible Go AI engine
 - [Streamlit](https://streamlit.io/) - Rapid web app framework
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework

@@ -4,9 +4,8 @@
 
 ## 📋 規範列表
 
-1.  **[API Specification (API.md)](./API.md)**
-    *   定義 REST API 端點、請求/回應格式。
-    *   規範 GTP 座標與棋盤狀態的傳輸標準。
+1.  **[API Specification (API.md)](./API.md)** _(已停用，僅供參考)_
+    *   Python 資料工具的 REST API 定義（App 不依賴此 API）。
 
 2.  **[Core Logic Specification (LOGIC.md)](./LOGIC.md)**
     *   詳細說明離線優先 (Offline-First) 的分析邏輯。

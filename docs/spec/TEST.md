@@ -25,7 +25,7 @@ cd mobile && flutter run -d chrome
 
 ## 1. 自動化測試 (Automated Testing)
 
-### 1.1 Python Backend 測試
+### 1.1 Python 資料工具測試
 - **範圍**: `board.py` (座標轉換、Hash)、`cache.py` (資料庫 CRUD)。
 - **指令**: `pytest tests/ -v`
 - **通過標準**: 100% Pass。
