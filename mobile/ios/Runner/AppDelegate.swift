@@ -5,8 +5,13 @@ import KataGoMobile
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   
-  // Flag to track engine state
-  var isRunning = false
+  // Flag to track engine state (thread-safe via serial queue)
+  private let engineQueue = DispatchQueue(label: "com.gostratefy.katago.engine")
+  private var _isRunning = false
+  var isRunning: Bool {
+      get { engineQueue.sync { _isRunning } }
+      set { engineQueue.sync { _isRunning = newValue } }
+  }
   
   override func application(
     _ application: UIApplication,

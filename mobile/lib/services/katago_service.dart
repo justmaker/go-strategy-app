@@ -45,6 +45,12 @@ class KataGoService {
   StreamSubscription? _eventSubscription;
   bool _isStarting = false;
 
+  // Track current analysis parameters for result construction
+  int _currentBoardSize = 19;
+  double _currentKomi = 7.5;
+  int _currentMaxVisits = 100;
+  String _currentMovesSequence = '';
+
   // Callbacks
   void Function(AnalysisProgress)? _progressCallback;
   void Function(AnalysisResult)? _resultCallback;
@@ -138,6 +144,10 @@ class KataGoService {
     _progressCallback = onProgress;
     _resultCallback = onResult;
     _errorCallback = onError;
+    _currentBoardSize = boardSize;
+    _currentKomi = komi;
+    _currentMaxVisits = maxVisits;
+    _currentMovesSequence = moves.join(',');
 
     try {
       final queryId = await _methodChannel.invokeMethod<String>('analyze', {
@@ -232,8 +242,8 @@ class KataGoService {
 
       if (rootInfo != null) {
         final visits = rootInfo['visits'] as int? ?? 0;
-        final winrate = rootInfo['winrate'] as double? ?? 0.5;
-        final scoreLead = rootInfo['scoreLead'] as double? ?? 0.0;
+        final winrate = (rootInfo['winrate'] as num?)?.toDouble() ?? 0.5;
+        final scoreLead = (rootInfo['scoreLead'] as num?)?.toDouble() ?? 0.0;
 
         String? bestMove;
         if (moveInfos != null && moveInfos.isNotEmpty) {
@@ -243,7 +253,7 @@ class KataGoService {
         // Send progress update
         final progress = AnalysisProgress(
           currentVisits: visits,
-          maxVisits: 100, // Will be updated from config
+          maxVisits: _currentMaxVisits,
           winrate: winrate,
           scoreLead: scoreLead,
           bestMove: bestMove,
@@ -279,9 +289,9 @@ class KataGoService {
 
     return AnalysisResult(
       boardHash: data['id'] as String? ?? '',
-      boardSize: 19, // Will be set by caller
-      komi: 7.5, // Will be set by caller
-      movesSequence: '',
+      boardSize: _currentBoardSize,
+      komi: _currentKomi,
+      movesSequence: _currentMovesSequence,
       topMoves: topMoves,
       engineVisits: rootInfo['visits'] as int? ?? 0,
       modelName: 'katago_local',

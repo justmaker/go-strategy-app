@@ -31,7 +31,7 @@ class KataGoEngine(private val context: Context) {
     private val isRunning = AtomicBoolean(false)
     private val isReaderActive = AtomicBoolean(false)
     private val queryId = AtomicInteger(0)
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
     // Callbacks
     private var analysisCallback: ((String) -> Unit)? = null
@@ -111,6 +111,7 @@ class KataGoEngine(private val context: Context) {
         isRunning.set(false)
         isReaderActive.set(false)
         scope.cancel()
+        scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     }
 
 

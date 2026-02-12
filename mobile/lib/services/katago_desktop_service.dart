@@ -307,7 +307,7 @@ class KataGoDesktopService {
       }
     }
 
-    if (line.contains('Error') || line.contains('error:')) {
+    if (line.startsWith('Error') || line.contains('FATAL') || line.contains('exception')) {
       _errorCallback?.call(line);
       // If still starting, signal failure
       if (_startCompleter != null && !_startCompleter!.isCompleted) {
