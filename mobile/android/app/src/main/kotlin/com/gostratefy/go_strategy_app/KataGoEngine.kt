@@ -21,11 +21,25 @@ class KataGoEngine(private val context: Context) {
     private external fun stopNative()
 
     companion object {
-        init {
-            System.loadLibrary("katago_mobile")
-        }
         private const val TAG = "KataGoEngine"
         private const val MODEL_FILE = "model.bin.gz"
+
+        var nativeLoaded = false
+            private set
+        var nativeLoadError: String? = null
+            private set
+
+        fun loadNativeLibrary() {
+            if (nativeLoaded) return
+            try {
+                System.loadLibrary("katago_mobile")
+                nativeLoaded = true
+                Log.i(TAG, "Native library loaded successfully")
+            } catch (e: UnsatisfiedLinkError) {
+                nativeLoadError = e.message
+                Log.e(TAG, "Failed to load native library: ${e.message}")
+            }
+        }
     }
 
     private val isRunning = AtomicBoolean(false)
@@ -42,6 +56,11 @@ class KataGoEngine(private val context: Context) {
      */
     suspend fun start(): Boolean = withContext(Dispatchers.IO) {
         if (isRunning.get()) return@withContext true
+
+        if (!nativeLoaded) {
+            Log.e(TAG, "Cannot start: native library not loaded (${nativeLoadError})")
+            return@withContext false
+        }
 
         try {
             val modelPath = extractModel() ?: return@withContext false

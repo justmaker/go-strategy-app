@@ -24,24 +24,33 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // Initialize KataGo engine
-        kataGoEngine = KataGoEngine(this)
-        kataGoEngine?.setErrorCallback { error ->
-            mainHandler.post {
-                eventSink?.success(mapOf(
-                    "type" to "error",
-                    "message" to error
-                ))
+        // Try to load native library and initialize KataGo engine
+        KataGoEngine.loadNativeLibrary()
+        if (KataGoEngine.nativeLoaded) {
+            kataGoEngine = KataGoEngine(this)
+            kataGoEngine?.setErrorCallback { error ->
+                mainHandler.post {
+                    eventSink?.success(mapOf(
+                        "type" to "error",
+                        "message" to error
+                    ))
+                }
             }
+        } else {
+            Log.w(TAG, "KataGo native library unavailable: ${KataGoEngine.nativeLoadError}")
         }
 
         // Set up Method Channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startEngine" -> {
-                    scope.launch {
-                        val success = kataGoEngine?.start() ?: false
-                        result.success(success)
+                    if (kataGoEngine == null) {
+                        result.success(false)
+                    } else {
+                        scope.launch {
+                            val success = kataGoEngine?.start() ?: false
+                            result.success(success)
+                        }
                     }
                 }
 
