@@ -26,6 +26,30 @@
 6. **[Branching Specification (BRANCHING.md)](./BRANCHING.md)**
     *   定義分支棋譜 (Variations) 的資料結構與 UI 互動規範。
 
+7.  **[Architecture Specification (ARCHITECTURE.md)](./ARCHITECTURE.md)**
+    *   系統架構總覽、元件關係圖、三層查詢流程。
+    *   線上/離線模式資料流與部署拓撲。
+
+8.  **[Database Specification (DATABASE.md)](./DATABASE.md)**
+    *   完整資料庫 Schema（analysis_cache、opening_book_meta、game_records）。
+    *   索引策略、Zobrist Hash、Schema 遷移紀錄。
+
+9.  **[Security Specification (SECURITY.md)](./SECURITY.md)**
+    *   認證架構（Google/Apple/Microsoft Sign-In）。
+    *   各平台憑證儲存、API 安全、未來安全路線圖。
+
+10. **[Error Handling Specification (ERROR_HANDLING.md)](./ERROR_HANDLING.md)**
+    *   錯誤分類（網路、引擎、資料、UI）與 Fallback 鏈。
+    *   重試策略、使用者錯誤訊息規範。
+
+11. **[Platform Matrix (PLATFORM_MATRIX.md)](./PLATFORM_MATRIX.md)**
+    *   各平台功能支援矩陣（Web、Android、iOS、macOS、Windows、Linux）。
+    *   平台特定限制與原生 API 使用情況。
+
+12. **[Performance Specification (PERFORMANCE.md)](./PERFORMANCE.md)**
+    *   效能目標與基準、SQLite 優化策略。
+    *   快取命中率、Flutter 渲染效能、記憶體管理。
+
 ## 🛠 文件維護標準
 *   每次重大功能更新後，應同步更新對應的 Spec 文件。
 *   Spec 文件的變更應與代碼變更一同 Commit。
