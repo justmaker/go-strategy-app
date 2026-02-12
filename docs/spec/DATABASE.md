@@ -35,7 +35,7 @@ Go Strategy App 使用多層資料儲存策略，在不同平台上搭配不同�
 
 ### 2.1 Server 端：`data/analysis.db`
 
-- **用途**：API Server 的分析快取，也是 Opening Book JSON 的源資料
+- **用途**：Opening Book JSON 的源資料，也供 Python 資料生成工具使用
 - **位置**：專案根目錄下 `data/analysis.db`，由 `config.yaml` 中 `database.path` 設定
 - **大小**：約 14 MB（含 31,590 筆紀錄）
 - **管理**：由 Python `AnalysisCache` class 管理 (`src/cache.py`)

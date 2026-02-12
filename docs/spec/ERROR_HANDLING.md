@@ -22,7 +22,7 @@ Version: 1.0.0 | Last Updated: 2026-02-12
 App 的分析功能依循嚴格的優先順序，逐層嘗試：
 
 ```
-Opening Book → Local Cache → Local KataGo Engine → Remote API → Error Message
+Opening Book → Local Cache → Local KataGo Engine → Error Message
 ```
 
 ### 完整流程
@@ -36,17 +36,12 @@ flowchart TD
     D -->|No| F{Local Engine<br/>可用?}
     F -->|Yes| G[啟動 KataGo 分析]
     G -->|成功| H[回傳引擎結果<br/>並存入 Cache]
-    G -->|失敗| I{Remote API<br/>可用?}
-    F -->|No| I
-    I -->|Yes| J[呼叫 API]
-    J -->|成功| K[回傳 API 結果<br/>並存入 Cache]
-    J -->|失敗| L[顯示錯誤訊息]
-    I -->|No| L
+    G -->|失敗| L[顯示錯誤訊息]
+    F -->|No| L
 
     style C fill:#4caf50
     style E fill:#4caf50
     style H fill:#4caf50
-    style K fill:#4caf50
     style L fill:#f44336
 ```
 
@@ -59,7 +54,6 @@ flowchart TD
 | `openingBook` | 隨 App 附帶的預算資料 | Book icon |
 | `localCache` | 本地 SQLite 快取 | Database icon |
 | `localEngine` | 本地 KataGo 即時運算 | CPU icon |
-| `api` | 遠端 API 伺服器 | Cloud icon |
 | `none` | 無可用分析 | Warning icon |
 
 ---
@@ -68,24 +62,13 @@ flowchart TD
 
 ### 3.1 Network Errors（網路錯誤）
 
+> **注意**：App 採用純離線架構，不依賴遠端 API Server。網路錯誤僅影響雲端棋譜同步功能。
+
 | 錯誤類型 | 觸發條件 | 處理方式 | 使用者影響 |
 |----------|---------|---------|-----------|
-| Timeout | HTTP 請求超過 30 秒 (預設 `ApiService.timeout`) | 自動降級至離線模式 | 低：仍可使用 Opening Book / Cache / Engine |
-| No Connection | 無網路連線 | `ConnectionStatus.offline`，跳過 API 呼叫 | 低：離線模式正常運作 |
-| Server Unreachable | Health check 失敗 | 標記 `ConnectionStatus.offline` | 低：同上 |
-| Invalid JSON | 回應格式不正確 | 拋出 `ApiException('Invalid JSON response')` | 中：該次查詢失敗，降級至下一層 |
-| HTTP 4xx/5xx | API 回傳錯誤 | 解析 `ErrorResponse.detail`，拋出 `ApiException` | 中：該次查詢失敗 |
-
-**實作位置**: `mobile/lib/services/api_service.dart`
-
-```dart
-// ApiService 的錯誤處理模式
-class ApiException implements Exception {
-  final String message;
-  final int? statusCode;
-  // ...
-}
-```
+| No Connection | 雲端同步時無網路 | 標記同步失敗，保留本地資料 | 低：分析功能不受影響 |
+| OAuth Timeout | 登入流程超時 | 顯示錯誤，維持匿名模式 | 低：核心功能不需登入 |
+| Cloud Storage Error | Google Drive / iCloud 存取失敗 | 記錄錯誤，保留本地棋譜 | 低：本地棋譜不受影響 |
 
 ### 3.2 Engine Errors（引擎錯誤）
 
@@ -122,7 +105,7 @@ KataGoStatus / KataGoDesktopStatus:
 | Invalid Opening Book JSON | JSON decode 或 entry 解析失敗 | 跳過無效 entry，繼續載入其餘 | 無：部分資料仍可用 |
 | DB Migration Failure | Schema migration 失敗 | `print` 警告，可能 raise（阻止啟動） | 高：需要清除 DB |
 | Bundled DB Copy Failure | 複製 bundled DB 到本地失敗 | 建立空 DB 繼續 | 低：首次啟動無預載資料 |
-| CacheMissError | Cache-only mode 無快取結果 | HTTP 404 回應 | 中：無分析結果 |
+| CacheMissError | 快取中無此局面 | 降級至本地引擎 | 低：引擎可即時運算 |
 
 **實作位置**: `src/cache.py`, `mobile/lib/services/cache_service.dart`, `mobile/lib/services/opening_book_service.dart`
 
@@ -139,50 +122,9 @@ KataGoStatus / KataGoDesktopStatus:
 
 ---
 
-## 4. API Error Response Format
+## 4. Retry Strategies（重試策略）
 
-所有 API 錯誤回應使用統一的 `ErrorResponse` schema（定義於 `docs/spec/openapi.yaml`）：
-
-```json
-{
-  "detail": "Error message describing what went wrong"
-}
-```
-
-### HTTP Status Code 對照
-
-| Status Code | 用途 | 範例 |
-|------------|------|------|
-| 400 | 請求參數無效 | `"Invalid move format: 'X99'. Expected GTP format like 'B Q16' or 'W D4'."` |
-| 404 | Cache-only mode 無快取 | `"Position not in cache (cache-only mode): Position not in cache (hash=a1b2c3d4...)"` |
-| 500 | 內部伺服器錯誤 | `"Analysis failed: KataGo process died unexpectedly"` |
-| 500 | 未初始化 | `"Analyzer not initialized"` |
-
-### 錯誤對應的 Exception 類型
-
-```python
-# src/api.py 中的 Exception → HTTP Status 對應
-ValueError       → 400  # 無效參數
-CacheMissError   → 404  # Cache-only mode 無結果
-Exception        → 500  # 所有其他未預期錯誤
-```
-
----
-
-## 5. Retry Strategies（重試策略）
-
-### 5.1 Network Retry
-
-**策略**: 不自動重試單一 API 呼叫。
-
-**原因**: App 採用 Offline-First 架構，網路呼叫是 fallback chain 的最後一環。如果 API 失敗，已有三層離線資料來源可用。使用者可手動觸發 `forceRefresh` 重新嘗試。
-
-```
-Health Check: 使用者可呼叫 checkConnection() 手動重新檢測
-Analyze:      自動跳過 API 層，不阻塞 UX
-```
-
-### 5.2 Engine Retry
+### 4.1 Engine Retry
 
 **策略**: 自動嘗試重啟一次，失敗則降級。
 
@@ -221,7 +163,7 @@ def _ensure_running(self):
         self.start()
 ```
 
-### 5.3 Cache Retry
+### 4.2 Cache Retry
 
 **策略**: 不重試。Cache miss 直接降級至下一層。
 
@@ -232,9 +174,9 @@ def _ensure_running(self):
 
 ---
 
-## 6. Platform-Specific Error Handling（平台特定處理）
+## 5. Platform-Specific Error Handling（平台特定處理）
 
-### 6.1 Desktop (macOS / Windows / Linux)
+### 5.1 Desktop (macOS / Windows / Linux)
 
 | 層級 | 錯誤類型 | 處理 |
 |------|---------|------|
@@ -257,7 +199,7 @@ if (line.startsWith('Error') || line.contains('FATAL') || line.contains('excepti
 }
 ```
 
-### 6.2 Mobile (Android / iOS)
+### 5.2 Mobile (Android / iOS)
 
 | 層級 | 錯誤類型 | 處理 |
 |------|---------|------|
@@ -272,7 +214,7 @@ static const _methodChannel = MethodChannel('com.gostratefy.go_strategy_app/kata
 static const _eventChannel = EventChannel('com.gostratefy.go_strategy_app/katago_events');
 ```
 
-### 6.3 Web
+### 5.3 Web
 
 ```dart
 // Web 平台停用本地 SQFlite
@@ -285,11 +227,11 @@ if (kIsWeb) {
 Web 平台限制：
 - 無本地 SQLite 支援（CacheService 回傳空結果）
 - 無本地 KataGo 引擎
-- 僅依賴 Opening Book（in-memory）+ Remote API
+- 僅依賴 Opening Book（in-memory）
 
 ---
 
-## 7. User-Facing Error Messages（使用者錯誤訊息規範）
+## 6. User-Facing Error Messages（使用者錯誤訊息規範）
 
 ### 訊息原則
 
@@ -301,7 +243,7 @@ Web 平台限制：
 
 | 情境 | 訊息 |
 |------|------|
-| 所有來源皆失敗 | `"Position not in opening book/cache; local engine disabled; API offline"` |
+| 所有來源皆失敗 | `"Position not in opening book/cache; local engine disabled"` |
 | 引擎錯誤 | `"Local engine error: {detail}"` / `"Desktop engine error: {detail}"` |
 | 分析超時 | `"Analysis timed out"` |
 | 分析取消 | `"Analysis cancelled"` |
@@ -316,15 +258,12 @@ final parts = <String>['Position not in opening book/cache'];
 if (_localEngineEnabled && !localEngineRunning) {
   parts.add('local engine enabled but not running');
 }
-if (_connectionStatus != ConnectionStatus.online) {
-  parts.add('API offline');
-}
 _error = parts.join('; ');
 ```
 
 ---
 
-## 8. Logging Standards（日誌規範）
+## 7. Logging Standards（日誌規範）
 
 ### Flutter 端
 
@@ -362,7 +301,7 @@ print(f"Warning: Failed to seed/migrate database: {e}")
 
 ---
 
-## 9. Error Recovery Flowchart（完整錯誤恢復流程）
+## 8. Error Recovery Flowchart（完整錯誤恢復流程）
 
 ```mermaid
 flowchart TD
@@ -401,27 +340,7 @@ flowchart TD
 
 ---
 
-## 10. Cache-Only Mode（伺服器端離線模式）
-
-Python API 伺服器支援 Cache-Only 模式（無 GPU / 無 KataGo）：
-
-```bash
-# 透過環境變數啟用
-GO_API_CACHE_ONLY=1 uvicorn src.api:app --port 8000
-```
-
-行為差異：
-
-| 場景 | 正常模式 | Cache-Only 模式 |
-|------|---------|----------------|
-| Cache Hit | 回傳結果 | 回傳結果 |
-| Cache Miss | 啟動 KataGo 分析 | 回傳 HTTP 404 + `CacheMissError` |
-| `/health` | `katago_running: true` | `katago_running: false, cache_only_mode: true` |
-| Visits 匹配 | 精確匹配 `required_visits` | 接受任何 visits（回傳最高 visits 版本） |
-
----
-
-## 11. Error Monitoring（錯誤監控與告警）
+## 9. Error Monitoring（錯誤監控與告警）
 
 ### 目前狀態：無集中式錯誤監控
 

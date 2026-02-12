@@ -67,3 +67,15 @@
 | PLATFORM_MATRIX.md | Google Sign-In iOS/macOS 狀態修正為 WIP，新增與 SECURITY.md 交叉引用 |
 | ERROR_HANDLING.md | 新增 Python `logging` 模組建議；新增第 11 節「錯誤監控與告警」 |
 | PERFORMANCE.md | 新增 App bundle 大小考量；新增 Dart AOT vs JIT 啟動時間說明 |
+
+### 2026-02-12 — v1.1 移除 API Server 架構
+App 採用純離線架構，不依賴遠端 API Server（成本考量）。Python 程式碼僅作為資料生成工具保留。
+
+| 文件 | 修正內容 |
+|------|---------|
+| ARCHITECTURE.md | 重寫為純離線架構，移除 Python Backend 元件圖、REST HTTP 協定、Client-Server 部署拓撲 |
+| ERROR_HANDLING.md | 移除 API fallback chain、Cache-Only Mode 段落、Network retry 策略 |
+| PERFORMANCE.md | 移除 API 回應優化段落、Remote API 引用 |
+| PLATFORM_MATRIX.md | 移除 API Analysis 功能列、Web fallback 改為僅 Opening Book |
+| SECURITY.md | 移除 API 安全段落，改為網路安全範圍說明 |
+| DATABASE.md | Server 端 DB 用途說明改為資料生成工具 |

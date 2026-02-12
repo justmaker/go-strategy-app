@@ -136,40 +136,14 @@ static const String _syncPrefKey = 'cloud_sync_prefs';
 
 ---
 
-## API 安全
+## 網路安全範圍
 
-### 目前狀態: 無認證
+App 採用純離線架構，**不依賴任何遠端 API Server**。網路通訊僅限於：
 
-Backend API (`src/api.py`) **目前沒有任何認證機制**。所有端點皆為公開存取：
+1. **OAuth 認證**：Google / Apple / Microsoft Sign-In（HTTPS）
+2. **雲端棋譜同步**：Google Drive / iCloud / OneDrive API（HTTPS）
 
-```python
-# CORS - 目前允許所有來源
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],          # 所有來源
-    allow_credentials=True,
-    allow_methods=["*"],          # 所有方法
-    allow_headers=["*"],          # 所有 header
-)
-```
-
-API 提供的是 **唯讀** 分析功能（查詢 KataGo 分析結果），不處理使用者資料，因此目前的安全風險較低。但 CORS 應在 production 環境限制。
-
-### API 端點風險評估
-
-| 端點 | 方法 | 風險 | 說明 |
-|------|------|------|------|
-| `/health` | GET | 低 | 系統狀態，無敏感資訊 |
-| `/analyze` | POST | 中 | 可能觸發 KataGo 運算（資源消耗） |
-| `/query` | POST | 低 | 僅查詢快取 |
-| `/stats` | GET | 低 | 快取統計，含 DB 路徑（可移除） |
-
-### 建議的未來安全措施
-
-1. **Rate Limiting** -- 限制 `/analyze` 的請求頻率，防止資源濫用
-2. **CORS 白名單** -- 限制 `allow_origins` 到已知的 App domain
-3. **API Key** -- 為 App client 分配 API key（若 API 公開部署）
-4. **Input Validation** -- 目前已有 Pydantic model 驗證，但可加強 moves 格式檢查
+> **注意**：專案中保留了 Python Backend 程式碼（`src/api.py`），僅用於開發階段的資料生成工具，不參與 App 運行。
 
 ---
 
@@ -192,7 +166,6 @@ API 提供的是 **唯讀** 分析功能（查詢 KataGo 分析結果），不�
 **重要**: Production 部署時應：
 - iOS: 移除 `NSAllowsArbitraryLoads` 或配置 exception domain
 - Android: 設定 `android:usesCleartextTraffic="false"` 並使用 Network Security Config
-- API Server: 使用 HTTPS（TLS 1.2+）
 
 ### Debug / Log 中的敏感資訊
 
@@ -290,7 +263,7 @@ key.properties
 
 4. **API Rate Limiting** -- 防止 `/analyze` 端點資源濫用
 5. **CORS 白名單** -- 限制 API 的 allowed origins
-6. **Certificate Pinning** -- 可選，針對 API server 的 TLS 憑證固定
+6. **Certificate Pinning** -- 可選，針對雲端儲存 API 的 TLS 憑證固定
 7. **實作 iCloud CloudKit 整合** -- 完成 Apple Sign-In 雲端同步
 
 ### 長期 (P2 -- 完整安全架構)
@@ -308,7 +281,6 @@ key.properties
 |------|------|
 | `mobile/lib/services/auth_service.dart` | 認證服務（Google、Apple、Microsoft） |
 | `mobile/lib/services/cloud_storage_service.dart` | 雲端儲存服務（Drive、iCloud、OneDrive） |
-| `mobile/lib/services/api_service.dart` | API 通訊服務 |
 | `mobile/lib/models/game_record.dart` | 棋譜模型（含雲端同步狀態） |
 | `mobile/ios/Runner/Info.plist` | iOS OAuth / ATS 配置 |
 | `mobile/macos/Runner/Info.plist` | macOS OAuth 配置 |

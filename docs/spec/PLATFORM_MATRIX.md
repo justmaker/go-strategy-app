@@ -43,7 +43,6 @@
 |---------|:---:|:-------:|:---:|:-----:|:-------:|:-----:|
 | Opening Book Lookup | OK | OK | OK | OK | OK | OK |
 | Local SQLite Cache | -- | OK | OK | OK | OK | OK |
-| API Analysis (Remote) | OK | OK | OK | OK | OK | OK |
 | Local KataGo (Native) | -- | JNI | FFI* | Process | Process | Process |
 | Real-time Progress | -- | OK | OK* | OK | OK | OK |
 | Symmetry Expansion | OK | OK | OK | OK | OK | OK |
@@ -134,8 +133,7 @@ which katago / where katago    (PATH fallback)
 1. Opening Book (bundled JSON)     → Instant, all platforms
 2. Local Cache (SQLite)            → Instant, non-web platforms
 3. Local KataGo Engine             → Seconds, depends on platform
-4. Remote API (server)             → Network dependent
-5. No analysis available           → Error message
+4. No analysis available           → Error message
 ```
 
 ---
@@ -318,7 +316,7 @@ assets/katago/analysis.cfg     → KataGo configuration
 | Issue | Detail | Workaround |
 |-------|--------|------------|
 | No SQFlite | `sqflite` 不支援 Web | 離線僅依賴 Opening Book JSON |
-| No local KataGo | 無法在瀏覽器執行 native binary | 必須連線 API server |
+| No local KataGo | 無法在瀏覽器執行 native binary | 僅依賴 Opening Book |
 | Canvas redraw | 每步棋完整重繪，效能差 | 避免在 Web 上進行開發測試 |
 | `dart:io` unavailable | Web 不能使用 `Platform.*` | 使用 `kIsWeb` 先判斷 |
 

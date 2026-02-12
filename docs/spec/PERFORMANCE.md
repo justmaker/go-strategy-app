@@ -21,7 +21,6 @@
 | 棋盤渲染（每次 frame） | < 16ms | CustomPainter.paint() 執行時間 |
 | 落子到建議顯示（Book hit） | < 100ms | 使用者感知延遲 |
 | 落子到建議顯示（Cache hit） | < 200ms | 使用者感知延遲 |
-| API 回應時間（Cache hit） | < 100ms | Server-side response time |
 | Memory footprint（idle） | < 150MB | App 閒置時常駐記憶體 |
 
 ---
@@ -71,10 +70,10 @@ conn.execute("PRAGMA synchronous=NORMAL")
 
 ### 2.4 Connection Management（連線管理）
 
-**Python Backend**：
+**Python 資料工具**（`src/cache.py`，非運行時）：
 - 使用 `with self._get_connection() as conn:` 確保連線及時釋放
 - 設定 `timeout=60` 避免長時間等待鎖
-- 每次操作獨立連線，適合低並發的分析場景
+- 每次操作獨立連線，適合批次資料生成場景
 
 **Flutter (sqflite)**：
 - `openDatabase()` 內部維護連線池
@@ -94,7 +93,7 @@ Layer 1: Opening Book (In-Memory HashMap)
    ↓ miss
 Layer 2: Local SQLite Cache (Disk)
    ↓ miss
-Layer 3: Local KataGo Engine / Remote API
+Layer 3: Local KataGo Engine (即時運算)
 ```
 
 | Layer | Storage | Lookup Time | 容量 |
@@ -311,22 +310,14 @@ App 在完全離線的情況下仍能提供分析功能：
 Opening Book (bundled)  →  永遠可用
 Local SQLite Cache      →  累積歷史分析
 Local KataGo Engine     →  即時運算（Desktop/高階手機）
-Remote API              →  最後手段
 ```
 
 **好處**：
-- 減少 90%+ 的網路請求（Opening Book + Cache 覆蓋絕大多數常見局面）
+- 無任何網路依賴，所有分析完全在本地完成
 - 零延遲的離線體驗
-- 節省使用者行動數據
+- 無伺服器成本
 
-### 6.2 API Response Optimization（API 回應優化）
-
-API 端（FastAPI）的分析回應已經精簡：
-- 只回傳 top 5 候選手（`top_moves_count: 5`）
-- JSON 格式，無額外序列化開銷
-- Cache-hit 回應接近零延遲（SQLite 查詢 < 10ms）
-
-### 6.3 Data Compression（資料壓縮）
+### 6.2 Data Compression（資料壓縮）
 
 | 資產 | 壓縮方式 | 原始大小 | 壓縮後 |
 | :--- | :--- | :--- | :--- |
@@ -439,7 +430,7 @@ cache.get_visit_counts(board_size=19, komi=7.5)
 
 1. **Opening Book gzip 解壓**：啟動時需解壓 ~2MB gzip，耗時約 200-500ms。若 Book 持續增長，考慮分片載入。
 2. **Canonical Hash 計算**：每次分析需 8 次 Zobrist XOR，目前忽略不計。若棋子數量極多（>200），可考慮快取 hash。
-3. **SQLite 無連線池（Python）**：每次操作新建連線，高並發時可能成為瓶頸。目前單使用者場景無影響。
+3. **SQLite 無連線池（Python 工具）**：資料生成工具每次操作新建連線，批次匯入時效能可接受。
 4. **Flutter Web Canvas 重繪**：Web 版每次 `paint()` 完整重繪，不適合作為主要平台。應優先使用 Native build。
 5. **App Bundle 大小**：Android APK ~25-54MB（含 KataGo native library），macOS ~47MB。KataGo neural network model (`kata1-b18c384`) 佔大部分體積。若需縮小，可考慮按需下載模型而非隨 App 打包。
 6. **Dart AOT vs JIT 對啟動時間的影響**：Release build 使用 AOT 編譯，啟動時間顯著優於 Debug build（JIT）。效能基準測試應一律使用 `flutter run --release` 或 `flutter build` 產出的 Release build。
