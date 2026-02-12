@@ -46,7 +46,7 @@
 
 2. **設定 Google Cloud OAuth**
    - 建立 Desktop 類型 OAuth Client ID
-   - Client ID: `1046387828217-hvuepmtgsh5fnbb08pidlcglmejpmfi0`
+   - Client ID: `1046387...`（完整值見 `mobile/macos/Runner/Info.plist`）
    - 加入測試使用者
 
 3. **OAuth 流程測試結果**
@@ -77,8 +77,10 @@
 
 ## Status Overview (GPU Server - Updated 2026-02-05 12:38)
 
-| Board Size | Database Entries | Avg Visits | Status | Export Ready |
-|------------|------------------|------------|--------|--------------|
+> **注意**：以下為 GPU Server 上的資料量。本地 `data/analysis.db` 的數字可能不同（目前：9x9=10,230 / 13x13=8,543 / 19x19=12,822）。
+
+| Board Size | Database Entries (GPU) | Avg Visits | Status | Export Ready |
+|------------|------------------------|------------|--------|--------------|
 | **9x9** | 1,519,000 | 205M | ✅ **COMPLETE** | ✅ 64MB .gz |
 | **13x13** | 8,552 | 500 | ⏳ Waiting for 19x19 | ✅ Ready |
 | **19x19** | 16,898 | 500 | 🔄 **RUNNING** depth 12 | ⏳ In progress |
