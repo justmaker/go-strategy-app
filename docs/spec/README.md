@@ -53,3 +53,17 @@
 ## 🛠 文件維護標準
 *   每次重大功能更新後，應同步更新對應的 Spec 文件。
 *   Spec 文件的變更應與代碼變更一同 Commit。
+
+## 📝 變更紀錄
+
+### 2026-02-12 — v1.0 初版建立
+*   新增 #7~#12 共 6 份規格文件（ARCHITECTURE、DATABASE、SECURITY、ERROR_HANDLING、PLATFORM_MATRIX、PERFORMANCE）。
+
+### 2026-02-12 — v1.0.1 品質修正
+| 文件 | 修正內容 |
+|------|---------|
+| ARCHITECTURE.md | OpenAPI 版本號修正為 3.1.0 |
+| SECURITY.md | 截斷 OAuth Client ID，避免完整值暴露於文件中 |
+| PLATFORM_MATRIX.md | Google Sign-In iOS/macOS 狀態修正為 WIP，新增與 SECURITY.md 交叉引用 |
+| ERROR_HANDLING.md | 新增 Python `logging` 模組建議；新增第 11 節「錯誤監控與告警」 |
+| PERFORMANCE.md | 新增 App bundle 大小考量；新增 Dart AOT vs JIT 啟動時間說明 |
