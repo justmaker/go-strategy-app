@@ -6,6 +6,7 @@
 library;
 
 import '../../models/models.dart';
+import '../katago_service.dart' show AnalysisProgress;
 
 /// Analysis progress callback
 typedef AnalysisProgressCallback = void Function(AnalysisProgress progress);

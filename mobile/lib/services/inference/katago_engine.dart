@@ -7,7 +7,7 @@ library;
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import '../../models/models.dart';
-import '../katago_service.dart';
+import '../katago_service.dart' show KataGoService, AnalysisProgress;
 import '../katago_desktop_service.dart';
 import 'inference_engine.dart';
 
@@ -37,9 +37,9 @@ class KataGoEngine implements InferenceEngine {
   @override
   bool get isRunning {
     if (_isDesktop) {
-      return (_engine as KataGoDesktopService).isEngineRunning;
+      return (_engine as KataGoDesktopService).isRunning;
     } else {
-      return (_engine as KataGoService).isEngineRunning;
+      return (_engine as KataGoService).isRunning;
     }
   }
 

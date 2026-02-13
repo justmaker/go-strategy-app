@@ -14,6 +14,8 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import '../models/models.dart';
 import '../services/services.dart';
+import '../services/inference/inference_engine.dart';
+import '../services/inference/inference_factory.dart';
 
 /// Connection status
 enum ConnectionStatus { online, offline, checking }
@@ -28,6 +30,9 @@ class GameProvider extends ChangeNotifier {
   final OpeningBookService _openingBook;
   final KataGoService _kataGo;
   final KataGoDesktopService _kataGoDesktop;
+
+  // New inference engine (Android uses ONNX, others use KataGo)
+  InferenceEngine? _inferenceEngine;
 
   BoardState _board;
   AnalysisResult? _lastAnalysis;
@@ -97,8 +102,14 @@ class GameProvider extends ChangeNotifier {
 
   // Local engine getters
   bool get localEngineEnabled => _localEngineEnabled;
-  bool get localEngineRunning =>
-      _isDesktop ? _kataGoDesktop.isRunning : _kataGo.isRunning;
+  bool get localEngineRunning {
+    // Android: check inference engine
+    if (!kIsWeb && Platform.isAndroid && _inferenceEngine != null) {
+      return _inferenceEngine!.isRunning;
+    }
+    // Desktop/iOS: check KataGo services
+    return _isDesktop ? _kataGoDesktop.isRunning : _kataGo.isRunning;
+  }
   String? get engineError => _engineError;
   AnalysisProgress? get analysisProgress => _analysisProgress;
   DesktopAnalysisProgress? get desktopAnalysisProgress =>
@@ -137,10 +148,31 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
-  /// Initialize local KataGo engine
+  /// Initialize local inference engine (platform-specific)
   Future<void> _initLocalEngine() async {
     if (!_localEngineEnabled) return;
 
+    // On Android, use new inference engine (ONNX Runtime)
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        _inferenceEngine ??= createInferenceEngine();
+        final success = await _inferenceEngine!.start();
+        debugPrint(success
+            ? 'Android inference engine started: ${_inferenceEngine!.engineName}'
+            : 'Android inference engine failed to start');
+        if (success) {
+          _engineError = null;
+        }
+        notifyListeners();
+        return;
+      } catch (e) {
+        _engineError = e.toString();
+        debugPrint('Error starting Android inference engine: $e');
+        return;
+      }
+    }
+
+    // Desktop/iOS: use original KataGo
     try {
       bool success;
       if (_isDesktop) {
