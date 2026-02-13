@@ -31,6 +31,17 @@ class MainActivity : FlutterActivity() {
             Build.HARDWARE.contains("ranchu")
     }
 
+    // Check for devices with known pthread_mutex crash issues
+    private fun isProblematicDevice(): Boolean {
+        val model = Build.MODEL
+        val hardware = Build.HARDWARE
+        val platform = Build.BOARD
+
+        // ASUS Zenfone 12 Ultra / Snapdragon 8 Gen 3 / Adreno 750
+        return model.contains("ASUS_AI2401") ||
+               (hardware == "qcom" && platform == "pineapple")
+    }
+
     private fun ensureKataGoEngine(): Boolean {
         if (kataGoEngine != null) return true
         if (isEmulator) {
@@ -66,6 +77,12 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "startEngine" -> {
                     scope.launch(Dispatchers.IO) {
+                        // Extreme delay for problematic devices to let GPU/HWUI fully initialize
+                        if (isProblematicDevice()) {
+                            Log.i(TAG, "Problematic device: waiting 30s before KataGo start")
+                            kotlinx.coroutines.delay(30000)
+                        }
+
                         val success = if (ensureKataGoEngine()) {
                             kataGoEngine?.start() ?: false
                         } else {

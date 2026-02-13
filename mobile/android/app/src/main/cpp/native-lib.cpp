@@ -4,7 +4,7 @@
 #include <memory>
 #include <streambuf>
 #include <string>
-#include <thread>
+#include <pthread.h>
 #include <unistd.h>
 #include <vector>
 
@@ -61,8 +61,13 @@ protected:
   }
 };
 
+// Thread data structure to pass args to pthread
+struct KataGoThreadData {
+  std::vector<std::string> args;
+};
+
 // Global state
-static std::thread g_kataGoThread;
+static pthread_t g_kataGoThread;
 static int g_pipeIn[2];  // Java -> KataGo
 static int g_pipeOut[2]; // KataGo -> Java
 
@@ -70,6 +75,24 @@ static std::unique_ptr<fdinbuf> g_bufIn;
 static std::unique_ptr<fdoutbuf> g_bufOut;
 static std::unique_ptr<std::istream> g_kpCin;
 static std::unique_ptr<std::ostream> g_kpCout;
+
+// pthread worker function
+static void* kataGoThreadFunc(void* arg) {
+  KataGoThreadData* data = static_cast<KataGoThreadData*>(arg);
+  LOGI("KataGo pthread started");
+
+  try {
+    MainCmds::analysis(data->args, *g_kpCin, *g_kpCout);
+  } catch (const std::exception &e) {
+    LOGE("KataGo Exception: %s", e.what());
+  } catch (...) {
+    LOGE("KataGo Unknown Exception");
+  }
+
+  delete data;
+  LOGI("KataGo pthread ended");
+  return nullptr;
+}
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_gostratefy_go_1strategy_1app_KataGoEngine_startNative(
@@ -105,30 +128,35 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_startNative(
 
   // Prepare Args
   // argv[0] is program name
-  std::vector<std::string> args;
-  args.push_back("katago");
-  args.push_back("analysis");
-  args.push_back("-config");
-  args.push_back(cfgStr);
-  args.push_back("-model");
-  args.push_back(modelStr);
+  KataGoThreadData* threadData = new KataGoThreadData();
+  threadData->args.push_back("katago");
+  threadData->args.push_back("analysis");
+  threadData->args.push_back("-config");
+  threadData->args.push_back(cfgStr);
+  threadData->args.push_back("-model");
+  threadData->args.push_back(modelStr);
 
-  // Launch Thread
-  g_kataGoThread = std::thread([args]() {
-    LOGI("KataGo Thread Started");
-    try {
-      MainCmds::analysis(args, *g_kpCin, *g_kpCout);
-    } catch (const std::exception &e) {
-      LOGE("KataGo Exception: %s", e.what());
-    } catch (...) {
-      LOGE("KataGo Unknown Exception");
-    }
-    LOGI("KataGo Thread Ended");
-  });
+  // Create pthread with increased stack size for KataGo's heavy computation
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
-  // Detach to let it run
-  g_kataGoThread.detach();
+  // Set large stack size (4MB) to avoid JNI issues on Android
+  // Default stack may be insufficient for KataGo + JNI calls
+  size_t stackSize = 4 * 1024 * 1024; // 4MB
+  pthread_attr_setstacksize(&attr, stackSize);
+  LOGI("Creating pthread with stack size: %zu bytes", stackSize);
 
+  int ret = pthread_create(&g_kataGoThread, &attr, kataGoThreadFunc, threadData);
+  pthread_attr_destroy(&attr);
+
+  if (ret != 0) {
+    LOGE("Failed to create pthread: %d", ret);
+    delete threadData;
+    return JNI_FALSE;
+  }
+
+  LOGI("KataGo pthread created successfully");
   return JNI_TRUE;
 }
 
@@ -167,4 +195,11 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_gostratefy_go_1strategy_1app_KataGoEngine_stopNative(JNIEnv *env,
                                                               jobject thiz) {
   close(g_pipeIn[1]); // Close write end, KataGo sees EOF
+}
+
+// JNI_OnLoad: Called when library is loaded
+// Initialize resources early to avoid static initialization issues
+JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
+  LOGI("JNI_OnLoad called - early initialization");
+  return JNI_VERSION_1_6;
 }
