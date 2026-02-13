@@ -50,7 +50,7 @@ dependencies:
   share_plus: ^9.0.0
 
   # AI Inference (Android only)
-  tflite_flutter: ^0.11.0  # TensorFlow Lite for Android
+  onnxruntime: ^1.4.1  # ONNX Runtime for Android (avoids pthread crash)
 
 dev_dependencies:
   flutter_test:
@@ -64,7 +64,7 @@ flutter:
   assets:
     - assets/data/opening_book.db.gz
     - assets/katago/model.bin.gz
-    - assets/katago/model.tflite  # TFLite model for Android
+    - assets/katago/model.onnx  # ONNX model for Android
     - assets/katago/analysis.cfg
     - assets/katago/README.md
     - assets/data/analysis.db
