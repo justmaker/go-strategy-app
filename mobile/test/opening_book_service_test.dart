@@ -23,19 +23,10 @@ void main() {
       expect(service.loadError, isNull);
     });
 
-    test('lookup returns null when not loaded', () {
+    test('lookupByMoves returns null when not loaded', () async {
       final service = OpeningBookService();
-      expect(service.lookup('some_hash'), isNull);
-    });
-
-    test('lookupByMoves returns null when not loaded', () {
-      final service = OpeningBookService();
-      expect(service.lookupByMoves(19, 7.5, ['B Q16']), isNull);
-    });
-
-    test('contains returns false when not loaded', () {
-      final service = OpeningBookService();
-      expect(service.contains('some_hash'), false);
+      final result = await service.lookupByMoves(19, 7.5, ['B Q16']);
+      expect(result, isNull);
     });
   });
 
@@ -72,7 +63,6 @@ void main() {
 
       expect(stats['is_loaded'], false);
       expect(stats['total_entries'], 0);
-      expect(stats['indexed_entries'], 0);
     });
   });
 
@@ -96,28 +86,6 @@ void main() {
   });
 
   group('OpeningBookEntry', () {
-    test('fromJson parses correctly', () {
-      final json = {
-        'h': 'abc123',
-        's': 19,
-        'k': 7.5,
-        'm': 'B[Q16]',
-        'v': 500,
-        't': [
-          {'move': 'D4', 'winrate': 0.52, 'scoreLead': 0.3, 'visits': 100},
-        ],
-      };
-
-      final entry = OpeningBookEntry.fromJson(json);
-      expect(entry.hash, 'abc123');
-      expect(entry.boardSize, 19);
-      expect(entry.komi, 7.5);
-      expect(entry.movesSequence, 'B[Q16]');
-      expect(entry.visits, 500);
-      expect(entry.topMoves.length, 1);
-      expect(entry.topMoves[0].move, 'D4');
-    });
-
     test('toAnalysisResult converts correctly', () {
       final entry = OpeningBookEntry(
         hash: 'abc123',

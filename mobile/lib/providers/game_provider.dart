@@ -396,7 +396,7 @@ class GameProvider extends ChangeNotifier {
 
       // Step 1: Try bundled opening book first
       if (!forceRefresh && _openingBookLoaded) {
-        final bookResult = _openingBook.lookupByMoves(
+        final bookResult = await _openingBook.lookupByMoves(
           _board.size,
           _board.komi,
           _board.movesGtp,

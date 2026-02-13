@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-Export opening book data from SQLite to JSON format for mobile app bundling.
+Export opening book data from SQLite to JSON or SQLite format for mobile app bundling.
 
-This script exports the analysis cache to a compressed JSON file that can be
-bundled with the Flutter mobile app for offline access.
+This script exports the analysis cache to a compressed JSON file or a SQLite
+database that can be bundled with the Flutter mobile app for offline access.
 
 Usage:
     python -m src.scripts.export_opening_book [options]
 
 Options:
     --output PATH      Output file path (default: mobile/assets/opening_book.json)
+    --format FORMAT    Output format: json or sqlite (default: json)
     --board-size SIZE  Only export specific board size (9, 13, or 19)
     --min-visits N     Minimum visits to include (default: 50)
     --compress         Compress output with gzip
@@ -17,6 +18,7 @@ Options:
 """
 
 import argparse
+import datetime
 import gzip
 import json
 import sqlite3
@@ -310,6 +312,218 @@ def export_opening_book(
     return stats
 
 
+def export_opening_book_sqlite(
+    db_path: Path,
+    output_path: Path,
+    board_size: Optional[int] = None,
+    min_visits: int = 50,
+    filter_dead_moves: bool = True,
+) -> Dict[str, Any]:
+    """
+    Export opening book data to SQLite for mobile app bundling.
+
+    Stores canonical entries only (no symmetry expansion).
+    The Dart app handles symmetry at query time.
+
+    Args:
+        db_path: Path to source SQLite database
+        output_path: Output SQLite file path
+        board_size: Filter by board size (None = all)
+        min_visits: Minimum visits threshold
+        filter_dead_moves: Remove top moves that have no follow-up data
+
+    Returns:
+        Export statistics
+    """
+    if not db_path.exists():
+        raise FileNotFoundError(f"Database not found: {db_path}")
+
+    src_conn = sqlite3.connect(str(db_path))
+    src_conn.row_factory = sqlite3.Row
+
+    # Remove existing output file
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.exists():
+        output_path.unlink()
+
+    dst_conn = sqlite3.connect(str(output_path))
+    dst_conn.execute("PRAGMA journal_mode=OFF")
+    dst_conn.execute("PRAGMA synchronous=OFF")
+    dst_conn.execute("PRAGMA page_size=4096")
+
+    # Create schema (no indices yet - add after bulk insert for speed)
+    dst_conn.execute("""
+        CREATE TABLE opening_book (
+            id INTEGER PRIMARY KEY,
+            board_size INTEGER NOT NULL,
+            komi REAL NOT NULL,
+            moves_sequence TEXT NOT NULL DEFAULT '',
+            top_moves TEXT NOT NULL,
+            visits INTEGER NOT NULL
+        )
+    """)
+    dst_conn.execute("""
+        CREATE TABLE opening_book_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+
+    # Build dead-move filter set if needed (canonical sequences only)
+    existing_sequences: Set[str] = set()
+    if filter_dead_moves:
+        print("Collecting existing sequences for dead move filtering...")
+        seq_cursor = src_conn.execute(
+            "SELECT board_size, komi, moves_sequence FROM analysis_cache WHERE engine_visits >= ?",
+            [min_visits]
+        )
+        for row in seq_cursor:
+            bs = row['board_size']
+            k = row['komi']
+            seq = row['moves_sequence'] or ''
+            existing_sequences.add(f"{bs}:{k}:{seq}")
+        print(f"  Found {len(existing_sequences)} canonical sequences")
+
+    # Build main query
+    query = """
+        SELECT
+            board_size,
+            komi,
+            moves_sequence,
+            analysis_result,
+            engine_visits
+        FROM analysis_cache
+        WHERE engine_visits >= ?
+    """
+    params: List[Any] = [min_visits]
+
+    if board_size:
+        query += " AND board_size = ?"
+        params.append(board_size)
+
+    query += " ORDER BY board_size, engine_visits DESC"
+
+    cursor = src_conn.execute(query, params)
+
+    stats: Dict[str, Any] = {
+        'total': 0,
+        'by_board_size': {},
+        'filtered_moves': 0,
+    }
+
+    batch = []
+    batch_size = 5000
+
+    for row in cursor:
+        try:
+            top_moves_json = json.loads(row['analysis_result'])
+            bs = row['board_size']
+            komi_val = row['komi']
+            seq = row['moves_sequence'] or ''
+            visits = row['engine_visits']
+
+            # Optionally filter dead moves
+            if filter_dead_moves and existing_sequences and top_moves_json:
+                # Determine next player from move sequence
+                if seq:
+                    num_black = seq.count('B[')
+                    num_white = seq.count('W[')
+                else:
+                    num_black = 0
+                    num_white = 0
+                next_player = 'B' if num_black == num_white else 'W'
+
+                filtered_candidates = []
+                for mc in top_moves_json:
+                    m_gtp = mc['move']
+                    if seq:
+                        next_seq = f"{seq};{next_player}[{m_gtp}]"
+                    else:
+                        next_seq = f"{next_player}[{m_gtp}]"
+                    next_key = f"{bs}:{komi_val}:{next_seq}"
+                    if next_key in existing_sequences:
+                        filtered_candidates.append(mc)
+                    else:
+                        stats['filtered_moves'] += 1
+
+                if not filtered_candidates:
+                    continue
+                top_moves_json = filtered_candidates
+
+            # Convert to compact JSON format: {m, w, s, v}
+            compact_moves = json.dumps([
+                {
+                    'm': mc['move'],
+                    'w': round(mc['winrate'], 6),
+                    's': round(mc['score_lead'], 2),
+                    'v': mc['visits'],
+                }
+                for mc in top_moves_json
+            ], separators=(',', ':'))
+
+            batch.append((bs, komi_val, seq, compact_moves, visits))
+
+            if len(batch) >= batch_size:
+                dst_conn.executemany(
+                    "INSERT INTO opening_book (board_size, komi, moves_sequence, top_moves, visits) VALUES (?, ?, ?, ?, ?)",
+                    batch,
+                )
+                batch.clear()
+
+            stats['total'] += 1
+            stats['by_board_size'][bs] = stats['by_board_size'].get(bs, 0) + 1
+
+        except Exception as e:
+            print(f"Warning: Failed to process entry: {e}")
+            continue
+
+    # Flush remaining batch
+    if batch:
+        dst_conn.executemany(
+            "INSERT INTO opening_book (board_size, komi, moves_sequence, top_moves, visits) VALUES (?, ?, ?, ?, ?)",
+            batch,
+        )
+
+    # NOTE: Index is NOT created here to reduce bundled file size.
+    # The Dart app creates the index on first launch after decompression.
+    # This saves ~300MB in the uncompressed DB and ~30MB compressed.
+
+    # Insert metadata
+    dst_conn.execute(
+        "INSERT INTO opening_book_meta (key, value) VALUES (?, ?)",
+        ('version', '1'),
+    )
+    dst_conn.execute(
+        "INSERT INTO opening_book_meta (key, value) VALUES (?, ?)",
+        ('generated_at', datetime.datetime.now().isoformat()),
+    )
+    dst_conn.execute(
+        "INSERT INTO opening_book_meta (key, value) VALUES (?, ?)",
+        ('total_entries', str(stats['total'])),
+    )
+    dst_conn.execute(
+        "INSERT INTO opening_book_meta (key, value) VALUES (?, ?)",
+        ('by_board_size', json.dumps(stats['by_board_size'])),
+    )
+    dst_conn.execute(
+        "INSERT INTO opening_book_meta (key, value) VALUES (?, ?)",
+        ('min_visits', str(min_visits)),
+    )
+
+    dst_conn.commit()
+
+    # VACUUM to compact
+    print("Running VACUUM...")
+    dst_conn.execute("VACUUM")
+    dst_conn.close()
+    src_conn.close()
+
+    stats['output_path'] = str(output_path)
+    stats['output_size'] = output_path.stat().st_size
+
+    return stats
+
+
 def show_stats(db_path: Path) -> None:
     """Show database statistics without exporting."""
     if not db_path.exists():
@@ -360,13 +574,19 @@ def show_stats(db_path: Path) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Export opening book to JSON for mobile app"
+        description="Export opening book for mobile app"
     )
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=Path("mobile/assets/opening_book.json"),
-        help="Output file path"
+        default=None,
+        help="Output file path (default depends on format)"
+    )
+    parser.add_argument(
+        "--format", "-f",
+        choices=["json", "sqlite"],
+        default="json",
+        help="Output format: json or sqlite (default: json)"
     )
     parser.add_argument(
         "--board-size", "-s",
@@ -403,22 +623,39 @@ def main():
         show_stats(db_path)
         return
 
+    # Set default output path based on format
+    if args.output is None:
+        if args.format == "sqlite":
+            args.output = Path("mobile/assets/data/opening_book.db")
+        else:
+            args.output = Path("mobile/assets/opening_book.json")
+
     filter_dead = not args.no_filter_dead_moves
     print(f"Exporting opening book from {db_path}...")
+    print(f"  Format: {args.format}")
     print(f"  Board size: {args.board_size or 'all'}")
     print(f"  Min visits: {args.min_visits}")
     print(f"  Compress: {args.compress}")
     print(f"  Filter dead moves: {filter_dead}")
-    
+
     try:
-        stats = export_opening_book(
-            db_path=db_path,
-            output_path=args.output,
-            board_size=args.board_size,
-            min_visits=args.min_visits,
-            compress=args.compress,
-            filter_dead_moves=filter_dead,
-        )
+        if args.format == "sqlite":
+            stats = export_opening_book_sqlite(
+                db_path=db_path,
+                output_path=args.output,
+                board_size=args.board_size,
+                min_visits=args.min_visits,
+                filter_dead_moves=filter_dead,
+            )
+        else:
+            stats = export_opening_book(
+                db_path=db_path,
+                output_path=args.output,
+                board_size=args.board_size,
+                min_visits=args.min_visits,
+                compress=args.compress,
+                filter_dead_moves=filter_dead,
+            )
 
         print(f"\nExport complete!")
         print(f"  Total entries: {stats['total']}")
@@ -426,10 +663,12 @@ def main():
         if stats.get('filtered_moves'):
             print(f"  Filtered dead moves: {stats['filtered_moves']}")
         print(f"  Output: {stats['output_path']}")
-        print(f"  Size: {stats['output_size'] / 1024:.1f} KB")
-        
+        print(f"  Size: {stats['output_size'] / 1024 / 1024:.1f} MB")
+
     except Exception as e:
         print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 

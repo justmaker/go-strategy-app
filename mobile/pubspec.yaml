@@ -59,8 +59,7 @@ flutter:
   
   # Bundled assets
   assets:
-    - assets/opening_book.json
-    - assets/opening_book.json.gz
+    - assets/data/opening_book.db.gz
     - assets/katago/model.bin.gz
     - assets/katago/analysis.cfg
     - assets/katago/README.md

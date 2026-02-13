@@ -1,5 +1,6 @@
 package com.gostratefy.go_strategy_app
 
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -24,8 +25,18 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // Try to load native library and initialize KataGo engine
-        KataGoEngine.loadNativeLibrary()
+        // Skip KataGo on emulators to avoid native thread crash
+        val isEmulator = Build.FINGERPRINT.contains("generic") ||
+            Build.FINGERPRINT.contains("emulator") ||
+            Build.MODEL.contains("Emulator") ||
+            Build.PRODUCT.contains("sdk") ||
+            Build.HARDWARE.contains("ranchu")
+
+        if (isEmulator) {
+            Log.w(TAG, "Emulator detected, skipping KataGo native engine")
+        } else {
+            KataGoEngine.loadNativeLibrary()
+        }
         if (KataGoEngine.nativeLoaded) {
             kataGoEngine = KataGoEngine(this)
             kataGoEngine?.setErrorCallback { error ->
