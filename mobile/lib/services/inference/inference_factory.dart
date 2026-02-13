@@ -4,7 +4,7 @@ library;
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'inference_engine.dart';
-import 'tflite_engine.dart';
+import 'tflite_engine.dart' show TFLiteEngineImpl;
 import 'katago_engine.dart';
 
 /// Create the appropriate inference engine for the current platform
@@ -16,7 +16,7 @@ InferenceEngine createInferenceEngine() {
   // Android: Use TFLite (avoids pthread crash on Android 16 + Qualcomm)
   if (Platform.isAndroid) {
     debugPrint('[InferenceFactory] Creating TFLite engine for Android');
-    return TFLiteEngine();
+    return TFLiteEngineImpl();
   }
 
   // iOS, macOS, Windows, Linux: Use native KataGo
