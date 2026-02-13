@@ -48,6 +48,10 @@ class MainActivity : FlutterActivity() {
             Log.w(TAG, "Emulator detected, skipping KataGo native engine")
             return false
         }
+        if (isProblematicDevice()) {
+            Log.w(TAG, "Problematic device: KataGo disabled (TFLite migration in progress)")
+            return false
+        }
 
         KataGoEngine.loadNativeLibrary()
         if (KataGoEngine.nativeLoaded) {
