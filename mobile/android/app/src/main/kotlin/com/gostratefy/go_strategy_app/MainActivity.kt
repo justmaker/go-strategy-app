@@ -22,21 +22,23 @@ class MainActivity : FlutterActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-        super.configureFlutterEngine(flutterEngine)
-
-        // Skip KataGo on emulators to avoid native thread crash
-        val isEmulator = Build.FINGERPRINT.contains("generic") ||
+    // Skip KataGo on emulators to avoid native thread crash
+    private val isEmulator by lazy {
+        Build.FINGERPRINT.contains("generic") ||
             Build.FINGERPRINT.contains("emulator") ||
             Build.MODEL.contains("Emulator") ||
             Build.PRODUCT.contains("sdk") ||
             Build.HARDWARE.contains("ranchu")
+    }
 
+    private fun ensureKataGoEngine(): Boolean {
+        if (kataGoEngine != null) return true
         if (isEmulator) {
             Log.w(TAG, "Emulator detected, skipping KataGo native engine")
-        } else {
-            KataGoEngine.loadNativeLibrary()
+            return false
         }
+
+        KataGoEngine.loadNativeLibrary()
         if (KataGoEngine.nativeLoaded) {
             kataGoEngine = KataGoEngine(this)
             kataGoEngine?.setErrorCallback { error ->
@@ -47,19 +49,29 @@ class MainActivity : FlutterActivity() {
                     ))
                 }
             }
+            return true
         } else {
             Log.w(TAG, "KataGo native library unavailable: ${KataGoEngine.nativeLoadError}")
+            return false
         }
+    }
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
 
         // Set up Method Channel
+        // NOTE: KataGo native library is loaded lazily on first startEngine call
+        // to avoid static initializer conflicts with HWUI thread during Activity init
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startEngine" -> {
-                    if (kataGoEngine == null) {
-                        result.success(false)
-                    } else {
-                        scope.launch {
-                            val success = kataGoEngine?.start() ?: false
+                    scope.launch(Dispatchers.IO) {
+                        val success = if (ensureKataGoEngine()) {
+                            kataGoEngine?.start() ?: false
+                        } else {
+                            false
+                        }
+                        withContext(Dispatchers.Main) {
                             result.success(success)
                         }
                     }

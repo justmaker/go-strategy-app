@@ -126,8 +126,9 @@ class GameProvider extends ChangeNotifier {
     // Check server connection (non-blocking for UI)
     checkConnection();
 
-    // Try to start local engine (non-blocking)
-    await _initLocalEngine();
+    // KataGo engine starts lazily on first analysis request (not in opening book).
+    // Eager startup during init causes HWUI mutex crash on some Qualcomm/Adreno devices
+    // because the native library thread creation conflicts with GPU driver initialization.
 
     // Trigger initial analysis (for empty board)
     // Use validation to prevent race conditions

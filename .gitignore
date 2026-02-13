@@ -26,8 +26,15 @@ mobile/android/app/src/main/jniLibs/
 build/
 /external/
 
+# KataGo C++ external dependencies (downloaded during build)
+mobile/android/app/src/main/cpp/katago/cpp/external/
+mobile/ios/KataGoMobile/Sources/katago/cpp/external/
+
 # Database
 *.db
+*.db-shm
+*.db-wal
+*.db-journal
 !src/assets/*.sql
 
 # Logs
