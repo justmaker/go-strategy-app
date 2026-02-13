@@ -1,5 +1,60 @@
 # Tasks
 
+## 🚨 Android Crash Fix: TensorFlow Lite Migration (Priority 1)
+
+### 狀態: 📋 Planning
+
+### 問題描述
+
+ASUS Zenfone 12 Ultra (Snapdragon 8 Gen 3 / Adreno 750 / Android 16) 上無法執行 KataGo native pthread，任何從 native code 建立的 thread 都會觸發系統層級的 `pthread_mutex_lock called on a destroyed mutex` crash。
+
+已嘗試的方法（全部失敗）：
+- ✅ 延遲載入 native library
+- ✅ std::thread → pthread 轉換
+- ✅ shared C++ runtime (c++_shared)
+- ✅ 4MB stack size
+- ✅ JNI_OnLoad 提早初始化
+- ✅ 30 秒啟動延遲
+- ❌ 所有方法都在 pthread_create 後 50ms 內 crash
+
+### 解決方案: 改用 TensorFlow Lite Mobile + NNAPI
+
+採用 BadukAI 的做法，使用 Google 官方 mobile AI framework。
+
+### 工作項目
+
+#### Phase 1: 模型轉換 (估計 1-2 天)
+1. 研究 KataGo 模型格式與 TFLite 轉換流程
+2. 將 KataGo `.bin.gz` 模型轉換為 `.tflite`
+3. 驗證轉換後模型的準確性（與原 KataGo 比對）
+
+#### Phase 2: TFLite 整合 (估計 2-3 天)
+1. 加入 TensorFlow Lite dependencies 到 `pubspec.yaml`
+2. 建立 `TFLiteKataGoService` 替換現有 `KataGoService`
+3. 實作 NNAPI delegate 啟用硬體加速
+4. 實作 pre/post-processing（board state → tensor → move probabilities）
+
+#### Phase 3: 測試與優化 (估計 1 天)
+1. 在 ASUS Zenfone 12 Ultra 上測試
+2. 效能 benchmark (latency, memory)
+3. 與原 KataGo 結果比對（確保準確性）
+
+### 參考資源
+
+- [TensorFlow Lite Android Quickstart](https://www.tensorflow.org/lite/android/quickstart)
+- [LiteRT (TFLite successor)](https://github.com/google-ai-edge/LiteRT)
+- [NNAPI Migration Guide](https://developer.android.com/ndk/guides/neuralnetworks/migration-guide)
+- BadukAI 使用 `libtensorflowlite.so` + Qualcomm QNN/SNPE
+
+### 備註
+
+- 此修復也會讓其他 Android 裝置受益（TFLite 效能通常優於自編譯 KataGo）
+- Opening book (2.5M entries) 不受影響，持續可用
+
+---
+
+# Tasks
+
 ## CI/CD: GitHub Actions Multi-Platform Release
 
 ### 狀態: ✅ 已完成 (2026-02-10)
