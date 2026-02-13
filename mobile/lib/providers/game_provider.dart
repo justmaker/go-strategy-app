@@ -462,11 +462,14 @@ class GameProvider extends ChangeNotifier {
         }
       }
 
-      // Step 3: Try local KataGo engine (Offline-first key principle)
+      // Step 3: Try local engine (Offline-first key principle)
       if (_localEngineEnabled) {
         final engineReady = await _ensureEngineStarted();
         if (engineReady) {
-          if (_isDesktop) {
+          // Android: use inference engine
+          if (!kIsWeb && Platform.isAndroid && _inferenceEngine != null) {
+            await _analyzeWithInferenceEngine();
+          } else if (_isDesktop) {
             await _analyzeWithDesktopEngine();
           } else {
             await _analyzeWithMobileEngine();
@@ -515,6 +518,45 @@ class GameProvider extends ChangeNotifier {
     } finally {
       _isAnalyzing = false;
       notifyListeners();
+    }
+  }
+
+  /// Analyze using inference engine (Android ONNX Runtime)
+  Future<void> _analyzeWithInferenceEngine() async {
+    try {
+      debugPrint('[GameProvider] Using inference engine for analysis');
+      final result = await _inferenceEngine!.analyze(
+        boardSize: _board.size,
+        moves: _board.movesGtp,
+        komi: _board.komi,
+        maxVisits: _computeVisits,
+      );
+
+      // Convert EngineAnalysisResult to AnalysisResult
+      _lastAnalysis = AnalysisResult(
+        boardHash: _computeSimpleHash(),
+        boardSize: _board.size,
+        komi: _board.komi,
+        movesSequence: _board.movesGtp.join(' '),
+        topMoves: result.topMoves,
+        engineVisits: result.visits,
+        modelName: result.modelName,
+        fromCache: false,
+        timestamp: DateTime.now().toIso8601String(),
+      );
+      _lastAnalysisSource = AnalysisSource.localEngine;
+      _isAnalyzing = false;
+
+      // Save to cache
+      await _cache.put(_lastAnalysis!);
+
+      notifyListeners();
+      debugPrint('[GameProvider] Inference engine analysis complete');
+    } catch (e) {
+      _error = 'Inference engine error: $e';
+      _isAnalyzing = false;
+      notifyListeners();
+      debugPrint('[GameProvider] Inference engine analysis failed: $e');
     }
   }
 
