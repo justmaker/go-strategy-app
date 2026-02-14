@@ -112,10 +112,11 @@ class OnnxEngine implements InferenceEngine {
 
     final session = _sessions[boardSize];
     if (session == null) {
+      debugPrint('$_tag ERROR: No session for ${boardSize}x$boardSize. Available: ${_sessions.keys.toList()}');
       throw UnsupportedError("No ONNX model for ${boardSize}x$boardSize");
     }
 
-    debugPrint('$_tag Analyzing: ${boardSize}x$boardSize, ${moves.length} moves');
+    debugPrint('$_tag Analyzing: ${boardSize}x$boardSize, ${moves.length} moves (using model for ${boardSize}x$boardSize)');
 
     try {
       // Prepare input tensors
@@ -265,12 +266,14 @@ class OnnxEngine implements InferenceEngine {
     for (final stone in currentStones) {
       data[channel1Offset + stone] = 1.0;
     }
+    debugPrint('$_tag Channel 1 (current player): ${currentStones.length} stones at indices ${currentStones.take(5).join(", ")}');
 
     // Channel 2: Opponent stones - KataGo feature 2
     final channel2Offset = 2 * boardSize * boardSize;
     for (final stone in opponentStones) {
       data[channel2Offset + stone] = 1.0;
     }
+    debugPrint('$_tag Channel 2 (opponent): ${opponentStones.length} stones at indices ${opponentStones.take(5).join(", ")}');
 
     // Channels 3-5: Liberties (1, 2, 3+) - KataGo features 3-5
     final libertyCalc = LibertyCalculator(
@@ -463,9 +466,21 @@ class OnnxEngine implements InferenceEngine {
       // Skip occupied positions (illegal moves)
       if (_occupiedPositions.contains(i)) continue;
 
-      final prob = probabilities[i];
+      var prob = probabilities[i];
       final row = i ~/ boardSize;
       final col = i % boardSize;
+
+      // Apply edge penalty - edges are rarely good in opening
+      // This compensates for uniform model output
+      final isFirstLine = row == 0 || row == boardSize - 1 || col == 0 || col == boardSize - 1;
+      final isSecondLine = !isFirstLine && (row == 1 || row == boardSize - 2 || col == 1 || col == boardSize - 2);
+
+      if (isFirstLine) {
+        prob *= 0.1; // 90% penalty for first line
+      } else if (isSecondLine) {
+        prob *= 0.5; // 50% penalty for second line
+      }
+
       final gtp = _indexToGtp(row, col, boardSize);
 
       // Calculate move-specific winrate
