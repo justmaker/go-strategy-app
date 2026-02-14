@@ -61,23 +61,42 @@ class TacticalEvaluator {
 
     // Simulate placing stone
     final testMyStones = Set<int>.from(myStones)..add(position);
+    final testOppStones = Set<int>.from(oppStones);
 
     // Check all opponent neighbors
     final neighbors = _getNeighbors(position);
-    var captureCount = 0;
+    var captureValue = 0.0;
 
     for (final n in neighbors) {
       if (oppStones.contains(n)) {
         // Check if this opponent group would have 0 liberties
-        final libs = _calculateLibertiesAfterMove(n, oppStones, testMyStones);
+        final libs = _calculateLibertiesAfterMove(n, testOppStones, testMyStones);
         if (libs == 0) {
-          // This move captures!
-          captureCount++;
+          // This move captures! Count group size
+          final groupSize = _getGroupSize(n, oppStones);
+          captureValue += groupSize; // Bigger captures are better
+
+          // BUT: Check if we get captured back (2-ply reading)
+          final testOccupied = Set<int>.from(occupiedPositions)..add(position);
+          testOccupied.removeAll(_getGroup(n, oppStones)); // Remove captured stones
+
+          // Simulate opponent's response at our new stone
+          for (final counterMove in _getNeighbors(position)) {
+            if (!testOccupied.contains(counterMove)) {
+              final testCounterOpp = Set<int>.from(testOppStones)..add(counterMove);
+              final ourLibsAfter = _calculateLibertiesAfterMove(position, testMyStones, testCounterOpp);
+              if (ourLibsAfter == 0) {
+                // We get captured back - bad exchange!
+                captureValue *= 0.3; // 70% penalty
+                break;
+              }
+            }
+          }
         }
       }
     }
 
-    return captureCount.toDouble();
+    return captureValue;
   }
 
   /// Check if playing here saves our stones from atari
@@ -191,5 +210,25 @@ class TacticalEvaluator {
       whiteStones: nextPlayerIsBlack ? groupStones : opponentStones,
     );
     return libertyCalc.calculateLiberties(stone);
+  }
+
+  Set<int> _getGroup(int stone, Set<int> groupStones) {
+    final group = <int>{};
+    final queue = [stone];
+    group.add(stone);
+    while (queue.isNotEmpty) {
+      final pos = queue.removeLast();
+      for (final n in _getNeighbors(pos)) {
+        if (groupStones.contains(n) && !group.contains(n)) {
+          group.add(n);
+          queue.add(n);
+        }
+      }
+    }
+    return group;
+  }
+
+  int _getGroupSize(int stone, Set<int> groupStones) {
+    return _getGroup(stone, groupStones).length;
   }
 }
