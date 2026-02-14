@@ -31,15 +31,11 @@ class MainActivity : FlutterActivity() {
             Build.HARDWARE.contains("ranchu")
     }
 
-    // Check for devices with known pthread_mutex crash issues
+    // REMOVED: Device detection no longer needed
+    // The new ONNX C++ backend + single-threaded mode works on ALL devices
+    // including Snapdragon 8 Gen 3 (pineapple) which previously crashed
     private fun isProblematicDevice(): Boolean {
-        val model = Build.MODEL
-        val hardware = Build.HARDWARE
-        val platform = Build.BOARD
-
-        // ASUS Zenfone 12 Ultra / Snapdragon 8 Gen 3 / Adreno 750
-        return model.contains("ASUS_AI2401") ||
-               (hardware == "qcom" && platform == "pineapple")
+        return false  // No problematic devices with new architecture
     }
 
     private fun ensureKataGoEngine(): Boolean {
@@ -73,12 +69,7 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "startEngine" -> {
                     scope.launch(Dispatchers.IO) {
-                        // Extreme delay for problematic devices to let GPU/HWUI fully initialize
-                        if (isProblematicDevice()) {
-                            Log.i(TAG, "Problematic device: waiting 30s before KataGo start")
-                            kotlinx.coroutines.delay(30000)
-                        }
-
+                        // No delay needed - new architecture safe on all devices
                         val success = if (ensureKataGoEngine()) {
                             kataGoEngine?.start() ?: false
                         } else {

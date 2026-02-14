@@ -4,6 +4,7 @@
 /// Wraps the existing KataGoService and KataGoDesktopService.
 library;
 
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import '../../models/models.dart';
@@ -75,9 +76,41 @@ class KataGoEngine implements InferenceEngine {
     required int maxVisits,
     AnalysisProgressCallback? onProgress,
   }) async {
-    // TODO: Implement by wrapping KataGoService.analyze()
-    // This requires refactoring the existing analyze() method
-    throw UnimplementedError('KataGo engine analyze() not yet wrapped');
+    try {
+      debugPrint('$_tag analyze() called: ${moves.length} moves, $maxVisits visits');
+
+      // For KataGoService (Android/iOS), use the existing analyze method
+      if (_engine is KataGoService) {
+        final completer = Completer<EngineAnalysisResult>();
+
+        await (_engine as KataGoService).analyze(
+          boardSize: boardSize,
+          moves: moves,
+          komi: komi,
+          maxVisits: maxVisits,
+          onProgress: onProgress,  // Pass through directly
+          onResult: (result) {
+            // AnalysisResult already has topMoves (List<MoveCandidate>)
+            completer.complete(EngineAnalysisResult(
+              topMoves: result.topMoves,
+              visits: maxVisits,
+              modelName: 'kata1-b6c96',
+            ));
+          },
+          onError: (error) {
+            completer.completeError(error);
+          },
+        );
+
+        return await completer.future;
+      }
+
+      // For desktop service
+      throw UnimplementedError('Desktop KataGo engine analyze() not yet wrapped');
+    } catch (e) {
+      debugPrint('$_tag analyze() error: $e');
+      rethrow;
+    }
   }
 
   @override

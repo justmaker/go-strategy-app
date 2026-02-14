@@ -32,6 +32,7 @@ static NNEvaluator* g_nnEval = nullptr;
 static SearchParams* g_searchParams = nullptr;
 static Rules g_rules;
 static std::string g_modelName = "kata1-b6c96";
+std::string g_onnxModelPath;  // Global for onnxbackend.cpp
 
 // ============================================================================
 // Helper Functions
@@ -119,6 +120,9 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_initializeNative(
   LOGI("Config: %s", configFile.c_str());
   LOGI("Model (bin.gz): %s", modelBinFile.c_str());
   LOGI("Model (onnx): %s", modelOnnxFile.c_str());
+
+  // Set global ONNX model path for onnxbackend.cpp
+  g_onnxModelPath = modelOnnxFile;
 
   try {
     // 1. Initialize logger

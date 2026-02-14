@@ -427,8 +427,11 @@ class GameProvider extends ChangeNotifier {
     try {
       final boardHash = _computeSimpleHash();
 
+      // TEMPORARY: Force native engine test
+      const bool FORCE_NATIVE_TEST = true;
+
       // Step 1: Try bundled opening book first
-      if (!forceRefresh && _openingBookLoaded) {
+      if (!FORCE_NATIVE_TEST && !forceRefresh && _openingBookLoaded) {
         final bookResult = await _openingBook.lookupByMoves(
           _board.size,
           _board.komi,
@@ -445,6 +448,10 @@ class GameProvider extends ChangeNotifier {
           notifyListeners();
           return;
         }
+      }
+
+      if (FORCE_NATIVE_TEST) {
+        debugPrint('[TEST] === FORCING NATIVE ENGINE (SKIP OPENING BOOK) ===');
       }
 
       // Step 2: Try local cache

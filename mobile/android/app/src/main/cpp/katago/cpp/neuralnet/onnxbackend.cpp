@@ -53,18 +53,26 @@ struct LoadedModel {
   LoadedModel& operator=(const LoadedModel&) = delete;
 };
 
+// Global variable set by native-lib.cpp
+extern std::string g_onnxModelPath;
+
 LoadedModel* NeuralNet::loadModelFile(const string& file, const string& expectedSha256) {
   // For ONNX backend, we expect TWO files:
   // - file: the .bin.gz for metadata
-  // - file.replace(".bin.gz", ".onnx"): the ONNX model
+  // - g_onnxModelPath: the .onnx model (set by initializeNative)
 
-  string onnxPath = file;
-  size_t pos = onnxPath.rfind(".bin.gz");
-  if (pos != string::npos) {
-    onnxPath.replace(pos, 7, ".onnx");
+  string onnxPath;
+  if (!g_onnxModelPath.empty()) {
+    onnxPath = g_onnxModelPath;
+    LOGI("Using ONNX model path from global: %s", onnxPath.c_str());
   } else {
-    // Fallback: try .onnx next to .bin.gz
-    onnxPath = file + ".onnx";
+    // Fallback: try to guess from .bin.gz path
+    onnxPath = file;
+    size_t pos = onnxPath.rfind(".bin.gz");
+    if (pos != string::npos) {
+      onnxPath.replace(pos, 7, ".onnx");
+    }
+    LOGI("Guessed ONNX model path: %s", onnxPath.c_str());
   }
 
   LoadedModel* loadedModel = new LoadedModel(file, onnxPath, expectedSha256);
@@ -122,6 +130,7 @@ struct ComputeHandle {
 
   // Input/output tensor names
   vector<const char*> inputNames;
+  vector<string> outputNameStrings;  // Must persist for C strings
   vector<const char*> outputNames;
 
   ComputeHandle() = delete;
@@ -168,10 +177,23 @@ struct ComputeHandle {
     spatialNCHW.resize(maxBatchSize * C * H * W);
     globalBuffer.resize(maxBatchSize * modelDesc.numInputGlobalChannels);
 
-    // Setup input/output names (ONNX Runtime requires const char*)
-    inputNames = {"input_spatial", "input_global"};
-    outputNames = {"output_policy", "output_policy_pass", "output_value",
-                   "output_scorevalue", "output_ownership"};
+    // Setup input/output names (must match ONNX model exactly)
+    // Based on Dart onnx_engine.dart line 145
+    inputNames = {"input_binary", "input_global"};
+
+    // Query model for output names
+    Ort::AllocatorWithDefaultOptions allocator;
+    size_t numOutputs = session->GetOutputCount();
+    LOGI("ONNX model has %zu outputs", numOutputs);
+    for (size_t i = 0; i < numOutputs; i++) {
+      auto nameAlloc = session->GetOutputNameAllocated(i, allocator);
+      outputNameStrings.push_back(string(nameAlloc.get()));
+      LOGI("  Output %zu: %s", i, nameAlloc.get());
+    }
+    // Convert to const char* array
+    for (const auto& s : outputNameStrings) {
+      outputNames.push_back(s.c_str());
+    }
 
     LOGI("ComputeHandle ready: maxBatch=%d, spatial=%dx%dx%d, global=%d",
          maxBatchSize, C, H, W, modelDesc.numInputGlobalChannels);
@@ -466,6 +488,7 @@ void NeuralNet::getOutput(
 
   // Step 4: Run ONNX inference (synchronous, no threads)
   try {
+    // Run with explicit output names
     vector<Ort::Value> outputTensors = computeHandle->session->Run(
       Ort::RunOptions{nullptr},
       computeHandle->inputNames.data(),
@@ -476,17 +499,27 @@ void NeuralNet::getOutput(
     );
 
     // Step 5: Extract output tensor data
-    // ONNX outputs are in NCHW format, need to convert back to NHWC for symmetry reversal
+    // outputs[0] = output_policy: [1, boardSize*boardSize+1]
+    // outputs[1] = output_value: [1, 3]
+    // outputs[2] = output_miscvalue: [1, 4 or 6]
+    // outputs[3] = output_ownership: [1, boardSize*boardSize]
+
+    if (outputTensors.size() < 2) {
+      throw StringError("ONNX model returned < 2 outputs");
+    }
 
     // Get raw pointers to output data
     float* policyData = outputTensors[0].GetTensorMutableData<float>();
-    float* policyPassData = outputTensors[1].GetTensorMutableData<float>();
-    float* valueData = outputTensors[2].GetTensorMutableData<float>();
-    float* scoreValueData = outputTensors[3].GetTensorMutableData<float>();
-    float* ownershipData = nullptr;
-    if (outputTensors.size() > 4) {
-      ownershipData = outputTensors[4].GetTensorMutableData<float>();
-    }
+    float* valueData = outputTensors[1].GetTensorMutableData<float>();
+    float* scoreValueData = outputTensors.size() > 2
+        ? outputTensors[2].GetTensorMutableData<float>()
+        : valueData;  // Fallback
+    float* ownershipData = outputTensors.size() > 3
+        ? outputTensors[3].GetTensorMutableData<float>()
+        : nullptr;
+
+    // Policy includes pass as last element
+    float* policyPassData = policyData + (nnXLen * nnYLen);
 
     // Step 6: Fill NNOutput structs (same logic as Eigen backend)
     float policyProbsTmp[NNPos::MAX_NN_POLICY_SIZE];
