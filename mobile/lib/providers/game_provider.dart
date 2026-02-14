@@ -414,6 +414,17 @@ class GameProvider extends ChangeNotifier {
     await analyze();
   }
 
+  /// Pass (no stone placed, turn changes)
+  Future<void> pass() async {
+    if (_isAnalyzing) return;
+    _board.passMove();
+    _lastAnalysis = null;
+    _analysisProgress = null;
+    _error = null;
+    notifyListeners();
+    await analyze();
+  }
+
   /// Analyze current position (offline-first with opening book)
   Future<void> analyze({bool forceRefresh = false}) async {
     if (_isAnalyzing) return;

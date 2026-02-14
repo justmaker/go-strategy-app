@@ -138,13 +138,15 @@ class AnalysisScreen extends StatelessWidget {
               children: [
                 // Board
                 Expanded(
+                  flex: 3,
                   child: Padding(
-                    padding: const EdgeInsets.all(8.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 2.0, vertical: 4.0),
                     child: _buildBoard(context),
                   ),
                 ),
                 // Analysis panel
                 const Expanded(
+                  flex: 2,
                   child: _AnalysisPanel(),
                 ),
                 // Controls
@@ -450,7 +452,9 @@ class _HistoryView extends StatelessWidget {
                   ),
                 ),
                 title: Text(
-                  '${isBlack ? "Black" : "White"} placed at $coord',
+                  coord.toLowerCase() == 'pass'
+                      ? '${isBlack ? "Black" : "White"} passed'
+                      : '${isBlack ? "Black" : "White"} placed at $coord',
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ),
@@ -881,7 +885,14 @@ class _ControlsPanel extends StatelessWidget {
                 label: const Text('Undo'),
               ),
               ElevatedButton.icon(
-                onPressed: game.board.moveCount > 0 ? () => game.clear() : null,
+                onPressed: game.isAnalyzing ? null : () => game.pass(),
+                icon: const Icon(Icons.skip_next),
+                label: const Text('Pass'),
+              ),
+              ElevatedButton.icon(
+                onPressed: game.board.moveCount > 0
+                    ? () => _showClearConfirmDialog(context)
+                    : null,
                 icon: const Icon(Icons.clear),
                 label: const Text('Clear'),
               ),
@@ -907,6 +918,34 @@ class _ControlsPanel extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  /// Show confirmation dialog before clearing the board
+  static void _showClearConfirmDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('清除棋盤'),
+        content: const Text('確定要清除所有棋子嗎？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              context.read<GameProvider>().clear();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('清除'),
+          ),
+        ],
+      ),
     );
   }
 

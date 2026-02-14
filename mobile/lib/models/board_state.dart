@@ -70,7 +70,7 @@ class BoardPoint {
 /// Represents a move in the game
 class GameMove {
   final StoneColor color;
-  final BoardPoint point;
+  final BoardPoint? point; // null = pass
   final List<BoardPoint> captives;
   final BoardPoint? previousKoPoint;
 
@@ -79,10 +79,14 @@ class GameMove {
     this.previousKoPoint,
   });
 
-  /// Convert to GTP format (e.g., "B Q16")
+  /// Whether this move is a pass
+  bool get isPass => point == null;
+
+  /// Convert to GTP format (e.g., "B Q16" or "B pass")
   String toGtp(int boardSize) {
     final colorStr = color == StoneColor.black ? 'B' : 'W';
-    return '$colorStr ${point.toGtp(boardSize)}';
+    if (isPass) return '$colorStr pass';
+    return '$colorStr ${point!.toGtp(boardSize)}';
   }
 
   /// Parse from GTP format
@@ -98,6 +102,11 @@ class GameMove {
             : null;
     if (color == null) return null;
 
+    // Handle pass moves
+    if (parts[1].toUpperCase() == 'PASS') {
+      return GameMove(color, null);
+    }
+
     final point = BoardPoint.fromGtp(parts[1], boardSize);
     if (point == null) return null;
 
@@ -105,7 +114,7 @@ class GameMove {
   }
 
   @override
-  String toString() => 'GameMove($color, $point)';
+  String toString() => 'GameMove($color, ${isPass ? "pass" : point})';
 }
 
 /// Manages the board state
@@ -239,22 +248,37 @@ class BoardState {
     return true;
   }
 
+  /// Pass (no stone placed, turn changes)
+  bool passMove() {
+    final color = nextPlayer;
+    _moves.add(GameMove(color, null, previousKoPoint: _koPoint));
+    _koPoint = null; // pass clears Ko
+    return true;
+  }
+
   /// Undo the last move
   bool undo() {
     if (_moves.isEmpty) return false;
 
     final lastMove = _moves.removeLast();
-    _stones[lastMove.point.y][lastMove.point.x] = StoneColor.empty;
-    
+
+    // Pass moves don't modify the board
+    if (lastMove.isPass) {
+      _koPoint = lastMove.previousKoPoint;
+      return true;
+    }
+
+    _stones[lastMove.point!.y][lastMove.point!.x] = StoneColor.empty;
+
     // Restore captives
     final opponent = lastMove.color == StoneColor.black ? StoneColor.white : StoneColor.black;
     for (final p in lastMove.captives) {
       _stones[p.y][p.x] = opponent;
     }
-    
+
     // Restore Ko state
     _koPoint = lastMove.previousKoPoint;
-    
+
     return true;
   }
 
