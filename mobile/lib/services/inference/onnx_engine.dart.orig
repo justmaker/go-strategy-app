@@ -420,14 +420,8 @@ class OnnxEngine implements InferenceEngine {
     final expSum = policyLogits
         .map((x) => math.exp(x - maxLogit))
         .reduce((a, b) => a + b);
-    var probabilities =
+    final probabilities =
         policyLogits.map((x) => math.exp(x - maxLogit) / expSum).toList();
-
-    // CRITICAL FIX: ONNX model's policy is too uniform to be useful
-    // Use center-distance heuristic for move selection
-    // Keep ONNX value (winrate) as it's more reliable
-    debugPrint('$_tag Using center-distance heuristic for move selection (ONNX policy too uniform)');
-    probabilities = _generateCenterBiasedPolicy(boardSize);
 
     final maxProb = probabilities.reduce(math.max);
     final nonZeroProbs = probabilities.where((p) => p > 0.0001).length;
@@ -472,8 +466,7 @@ class OnnxEngine implements InferenceEngine {
       // Skip occupied positions (illegal moves)
       if (_occupiedPositions.contains(i)) continue;
 
-      final originalProb = probabilities[i];
-      var adjustedProb = originalProb;
+      var prob = probabilities[i];
       final row = i ~/ boardSize;
       final col = i % boardSize;
 
@@ -483,17 +476,16 @@ class OnnxEngine implements InferenceEngine {
       final isSecondLine = !isFirstLine && (row == 1 || row == boardSize - 2 || col == 1 || col == boardSize - 2);
 
       if (isFirstLine) {
-        adjustedProb *= 0.1; // 90% penalty for first line
+        prob *= 0.1; // 90% penalty for first line
       } else if (isSecondLine) {
-        adjustedProb *= 0.5; // 50% penalty for second line
+        prob *= 0.5; // 50% penalty for second line
       }
 
       final gtp = _indexToGtp(row, col, boardSize);
 
-      // Winrate reflects adjusted probability (with edge penalty)
-      // Scale to reasonable range: top move ~60%, worst ~30%
-      final relativeProb = adjustedProb / maxProb;
-      final moveWinrate = 30 + relativeProb * 40; // Scale to 30-70% range
+      // Calculate move-specific winrate
+      // Higher probability moves should have higher winrate
+      final moveWinrate = winrate + (prob - maxProb / 2) * 5;
 
       candidates.add(MoveCandidate(
         move: gtp,
@@ -511,35 +503,6 @@ class OnnxEngine implements InferenceEngine {
       debugPrint('$_tag Top move: ${topMoves[0].move} (${topMoves[0].winrate}%)');
     }
     return topMoves;
-  }
-
-  double _calculateVariance(List<double> values) {
-    final mean = values.reduce((a, b) => a + b) / values.length;
-    final squaredDiffs = values.map((x) => math.pow(x - mean, 2));
-    return squaredDiffs.reduce((a, b) => a + b) / values.length;
-  }
-
-  List<double> _generateCenterBiasedPolicy(int boardSize) {
-    // Generate probabilities based on distance from center
-    final center = boardSize / 2;
-    final probs = List<double>.filled(boardSize * boardSize + 1, 0.0);
-
-    for (var i = 0; i < boardSize * boardSize; i++) {
-      final row = i ~/ boardSize;
-      final col = i % boardSize;
-
-      // Distance from center (Manhattan distance)
-      final distFromCenter = (row - center).abs() + (col - center).abs();
-
-      // Closer to center = higher probability
-      // Max distance ~= boardSize, scale to 0-1
-      final normalized = 1.0 - (distFromCenter / (boardSize * 1.5));
-      probs[i] = math.max(0.01, normalized);
-    }
-
-    // Normalize to sum = 1
-    final sum = probs.reduce((a, b) => a + b);
-    return probs.map((p) => p / sum).toList();
   }
 
   List<int> _getNeighbors(int position, int boardSize) {
