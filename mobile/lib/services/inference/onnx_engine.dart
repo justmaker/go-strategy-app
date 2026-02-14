@@ -275,7 +275,29 @@ class OnnxEngine implements InferenceEngine {
       }
     }
 
-    // TODO: Add remaining 18 channels (ko, liberties, ladder, etc.)
+    // Channels 9-13: Move history (last 5 moves)
+    // This is CRITICAL for model to understand recent play
+    final movesList = <int>[];
+    for (var i = 0; i < moves.length; i++) {
+      final parts = moves[i].trim().split(' ');
+      if (parts.length < 2) continue;
+      final coordStr = parts[1];
+      final coord = _gtpToIndex(coordStr, boardSize);
+      if (coord != null && coord >= 0 && coord < boardSize * boardSize) {
+        movesList.add(coord);
+      }
+    }
+
+    // Encode last 5 moves (reverse order: most recent first)
+    final historyChannels = [9, 10, 11, 12, 13];
+    for (var i = 0; i < math.min(5, movesList.length); i++) {
+      final moveIdx = movesList[movesList.length - 1 - i];
+      final channel = historyChannels[i];
+      final offset = channel * boardSize * boardSize;
+      data[offset + moveIdx] = 1.0;
+    }
+
+    // TODO: Channels 3-5 (liberties), 6 (ko), 14-17 (ladder), 18-19 (territory)
 
     return data;
   }
