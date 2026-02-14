@@ -121,6 +121,12 @@ class OnnxEngine implements InferenceEngine {
       final binaryInput = _prepareBinaryInput(boardSize, moves);
       final globalInput = _prepareGlobalInput(boardSize, komi, moves);
 
+      // Debug: check if inputs are all zeros
+      final nonZeroBinary = binaryInput.where((x) => x != 0).length;
+      final nonZeroGlobal = globalInput.where((x) => x != 0).length;
+      debugPrint('$_tag Binary input non-zero: $nonZeroBinary / ${binaryInput.length}');
+      debugPrint('$_tag Global input non-zero: $nonZeroGlobal / ${globalInput.length}');
+
       // Create ONNX tensors
       final inputBinary = OrtValueTensor.createTensorWithDataList(
         binaryInput,
@@ -207,12 +213,23 @@ class OnnxEngine implements InferenceEngine {
     final blackStones = <int>{};
     final whiteStones = <int>{};
 
+    debugPrint('$_tag Encoding ${moves.length} moves: ${moves.join(" ")}');
+
     for (var i = 0; i < moves.length; i++) {
       final move = moves[i];
-      if (move.toLowerCase() == 'pass') continue;
+      if (move.toLowerCase().contains('pass')) continue;
 
-      final coord = _gtpToIndex(move, boardSize);
-      if (coord == null) continue;
+      // GTP format can be "B E3" or just "E3"
+      // Extract coordinate part (skip player prefix if present)
+      final parts = move.trim().split(' ');
+      final coordStr = parts.length > 1 ? parts[1] : parts[0];
+
+      final coord = _gtpToIndex(coordStr, boardSize);
+      debugPrint('$_tag   Move $i: "$move" → coord="$coordStr" → index=$coord');
+      if (coord == null) {
+        debugPrint('$_tag   WARNING: Failed to parse move "$move"');
+        continue;
+      }
 
       if (i % 2 == 0) {
         blackStones.add(coord);
@@ -220,6 +237,8 @@ class OnnxEngine implements InferenceEngine {
         whiteStones.add(coord);
       }
     }
+
+    debugPrint('$_tag Black stones: ${blackStones.length}, White stones: ${whiteStones.length}');
 
     // Channel 0: Current player's stones (last to move)
     final currentIsBlack = moves.length % 2 == 1;
@@ -274,14 +293,23 @@ class OnnxEngine implements InferenceEngine {
     debugPrint('$_tag Max probability: ${probabilities.reduce(math.max)}');
 
     // Extract winrate from value output
-    // KataGo value output: [win, loss, draw] probabilities
-    debugPrint('$_tag Value raw: ${valueOutput[0]}, ${valueOutput[1]}, ${valueOutput[2]}');
-    final winProb = valueOutput[0]; // Win probability
-    final lossProb = valueOutput[1]; // Loss probability
-    // Winrate = (win / (win + loss)) * 100
+    // KataGo value output: [win_logit, loss_logit, draw_logit]
+    debugPrint('$_tag Value logits: ${valueOutput[0]}, ${valueOutput[1]}, ${valueOutput[2]}');
+
+    // Apply softmax to value logits
+    final maxVal = [valueOutput[0], valueOutput[1], valueOutput[2]].reduce(math.max);
+    final expWin = math.exp(valueOutput[0] - maxVal);
+    final expLoss = math.exp(valueOutput[1] - maxVal);
+    final expDraw = math.exp(valueOutput[2] - maxVal);
+    final valueExpSum = expWin + expLoss + expDraw;
+
+    final winProb = expWin / valueExpSum;
+    final lossProb = expLoss / valueExpSum;
+
+    // Winrate = win / (win + loss) * 100 (excluding draws)
     final total = winProb + lossProb;
     final winrate = total > 0 ? (winProb / total) * 100 : 50.0;
-    debugPrint('$_tag Base winrate: $winrate%');
+    debugPrint('$_tag Winrate: $winrate% (win=$winProb, loss=$lossProb, draw=${expDraw/valueExpSum})');
 
     // Create move candidates
     final candidates = <MoveCandidate>[];
