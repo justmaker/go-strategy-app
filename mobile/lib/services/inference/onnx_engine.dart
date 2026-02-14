@@ -466,7 +466,8 @@ class OnnxEngine implements InferenceEngine {
       // Skip occupied positions (illegal moves)
       if (_occupiedPositions.contains(i)) continue;
 
-      var prob = probabilities[i];
+      final originalProb = probabilities[i];
+      var adjustedProb = originalProb;
       final row = i ~/ boardSize;
       final col = i % boardSize;
 
@@ -476,16 +477,17 @@ class OnnxEngine implements InferenceEngine {
       final isSecondLine = !isFirstLine && (row == 1 || row == boardSize - 2 || col == 1 || col == boardSize - 2);
 
       if (isFirstLine) {
-        prob *= 0.1; // 90% penalty for first line
+        adjustedProb *= 0.1; // 90% penalty for first line
       } else if (isSecondLine) {
-        prob *= 0.5; // 50% penalty for second line
+        adjustedProb *= 0.5; // 50% penalty for second line
       }
 
       final gtp = _indexToGtp(row, col, boardSize);
 
-      // Calculate move-specific winrate
-      // Higher probability moves should have higher winrate
-      final moveWinrate = winrate + (prob - maxProb / 2) * 5;
+      // Winrate reflects adjusted probability (with edge penalty)
+      // Scale to reasonable range: top move ~60%, worst ~30%
+      final relativeProb = adjustedProb / maxProb;
+      final moveWinrate = 30 + relativeProb * 40; // Scale to 30-70% range
 
       candidates.add(MoveCandidate(
         move: gtp,
