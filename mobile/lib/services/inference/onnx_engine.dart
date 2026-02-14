@@ -300,13 +300,10 @@ class OnnxEngine implements InferenceEngine {
     debugPrint('$_tag Liberty distribution: 1lib=$lib1Count, 2lib=$lib2Count, 3+lib=$lib3Count');
 
     // Channel 6: Ko ban - KataGo feature 6
-    // Simple ko detection: if last move was a capture, mark the capture position
-    if (moves.length >= 2) {
-      // Check if last move might be a ko (would need full game logic)
-      // For now, simple heuristic: if a stone disappeared, that's a capture
-      // Proper implementation would check if it's a single-stone capture
-      // TODO: Implement proper ko detection with game state
-    }
+    // Leave empty for now (requires game state to track captures)
+
+    // Channels 7-8: Encore ko features
+    // Leave empty (only used in encore phase, rare)
 
     // Channels 9-13: Move history (last 5 moves)
     // This is CRITICAL for model to understand recent play
@@ -330,6 +327,60 @@ class OnnxEngine implements InferenceEngine {
       data[offset + moveIdx] = 1.0;
     }
 
+    // Channels 14-17: Ladder features
+    // Complex tactical feature requiring ladder search algorithm
+    // Simplified: Mark stones with exactly 2 liberties adjacent to opponent
+    // (rough approximation of ladder candidates)
+    for (final entry in liberties.entries) {
+      final position = entry.key;
+      final libCount = entry.value;
+
+      if (libCount == 2) {
+        // Check if adjacent to opponent
+        final neighbors = _getNeighbors(position, boardSize);
+        var hasOpponentNeighbor = false;
+        final isOurStone = currentStones.contains(position);
+
+        for (final n in neighbors) {
+          if (isOurStone && opponentStones.contains(n)) {
+            hasOpponentNeighbor = true;
+            break;
+          } else if (!isOurStone && currentStones.contains(n)) {
+            hasOpponentNeighbor = true;
+            break;
+          }
+        }
+
+        if (hasOpponentNeighbor) {
+          data[14 * boardSize * boardSize + position] = 1.0; // Simplified ladder
+        }
+      }
+    }
+
+    // Channels 18-19: Pass-alive territory
+    // Simplified: mark empty positions near our stones as potential territory
+    for (var i = 0; i < boardSize * boardSize; i++) {
+      if (_occupiedPositions.contains(i)) continue;
+
+      final neighbors = _getNeighbors(i, boardSize);
+      var nearCurrent = 0;
+      var nearOpponent = 0;
+
+      for (final n in neighbors) {
+        if (currentStones.contains(n)) nearCurrent++;
+        if (opponentStones.contains(n)) nearOpponent++;
+      }
+
+      // If mostly surrounded by our stones, likely our territory
+      if (nearCurrent > nearOpponent && nearCurrent >= 2) {
+        data[18 * boardSize * boardSize + i] = 1.0; // Our territory
+      } else if (nearOpponent > nearCurrent && nearOpponent >= 2) {
+        data[19 * boardSize * boardSize + i] = 1.0; // Opponent territory
+      }
+    }
+
+    // Channels 20-21: Reserved/unused in this model version
+    // Leave as zeros
 
     return data;
   }
@@ -437,6 +488,19 @@ class OnnxEngine implements InferenceEngine {
       debugPrint('$_tag Top move: ${topMoves[0].move} (${topMoves[0].winrate}%)');
     }
     return topMoves;
+  }
+
+  List<int> _getNeighbors(int position, int boardSize) {
+    final row = position ~/ boardSize;
+    final col = position % boardSize;
+    final neighbors = <int>[];
+
+    if (row > 0) neighbors.add((row - 1) * boardSize + col); // Up
+    if (row < boardSize - 1) neighbors.add((row + 1) * boardSize + col); // Down
+    if (col > 0) neighbors.add(row * boardSize + (col - 1)); // Left
+    if (col < boardSize - 1) neighbors.add(row * boardSize + (col + 1)); // Right
+
+    return neighbors;
   }
 
   int? _gtpToIndex(String gtp, int boardSize) {
