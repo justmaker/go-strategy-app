@@ -206,12 +206,16 @@ class OnnxEngine implements InferenceEngine {
     }
   }
 
+  // Store occupied positions to filter them from policy output
+  Set<int> _occupiedPositions = {};
+
   Float32List _prepareBinaryInput(int boardSize, List<String> moves) {
     final data = Float32List(kNumBinaryFeatures * boardSize * boardSize);
 
     // Parse moves and build board state
     final blackStones = <int>{};
     final whiteStones = <int>{};
+    _occupiedPositions.clear();
 
     debugPrint('$_tag Encoding ${moves.length} moves: ${moves.join(" ")}');
 
@@ -236,9 +240,11 @@ class OnnxEngine implements InferenceEngine {
       } else {
         whiteStones.add(coord);
       }
+      _occupiedPositions.add(coord);
     }
 
     debugPrint('$_tag Black stones: ${blackStones.length}, White stones: ${whiteStones.length}');
+    debugPrint('$_tag Occupied positions: ${_occupiedPositions.length}');
 
     // Channel 0: Current player's stones (last to move)
     final currentIsBlack = moves.length % 2 == 1;
@@ -254,8 +260,22 @@ class OnnxEngine implements InferenceEngine {
       data[boardSize * boardSize + stone] = 1.0; // Channel 1
     }
 
-    // TODO: Add remaining 20 channels (ko, liberties, etc.)
-    // For now, basic stone positions should give reasonable results
+    // Channel 2: All 1s (indicates valid board positions)
+    final channel2Offset = 2 * boardSize * boardSize;
+    for (var i = 0; i < boardSize * boardSize; i++) {
+      data[channel2Offset + i] = 1.0;
+    }
+
+    // Channel 3: Current player color (1 if black to move)
+    if (moves.length % 2 == 0) {
+      // Black to move
+      final channel3Offset = 3 * boardSize * boardSize;
+      for (var i = 0; i < boardSize * boardSize; i++) {
+        data[channel3Offset + i] = 1.0;
+      }
+    }
+
+    // TODO: Add remaining 18 channels (ko, liberties, ladder, etc.)
 
     return data;
   }
@@ -282,15 +302,33 @@ class OnnxEngine implements InferenceEngine {
     debugPrint('$_tag Parsing policy: ${policyLogits.length} logits');
     debugPrint('$_tag Value output: ${valueOutput.length} values');
 
-    // Apply softmax to policy logits
+    // Check policy logits distribution
     final maxLogit = policyLogits.reduce(math.max);
+    final minLogit = policyLogits.reduce(math.min);
+    final nonNegLogits = policyLogits.where((x) => x > -10).length;
+    debugPrint('$_tag Policy logit range: [$minLogit, $maxLogit], >-10: $nonNegLogits');
+
+    // Apply softmax to policy logits
     final expSum = policyLogits
         .map((x) => math.exp(x - maxLogit))
         .reduce((a, b) => a + b);
     final probabilities =
         policyLogits.map((x) => math.exp(x - maxLogit) / expSum).toList();
 
-    debugPrint('$_tag Max probability: ${probabilities.reduce(math.max)}');
+    final maxProb = probabilities.reduce(math.max);
+    final nonZeroProbs = probabilities.where((p) => p > 0.0001).length;
+    debugPrint('$_tag Prob stats: max=$maxProb, non-zero count=$nonZeroProbs / ${probabilities.length}');
+
+    // Find top 5 highest probability indices
+    final indexed = List.generate(probabilities.length, (i) => {'idx': i, 'prob': probabilities[i]});
+    indexed.sort((a, b) => (b['prob'] as double).compareTo(a['prob'] as double));
+    debugPrint('$_tag Top 5 policy indices:');
+    for (var i = 0; i < math.min(5, indexed.length); i++) {
+      final idx = indexed[i]['idx'] as int;
+      final prob = indexed[i]['prob'] as double;
+      final occupied = _occupiedPositions.contains(idx) ? ' (OCCUPIED)' : '';
+      debugPrint('$_tag   Index $idx: prob=$prob$occupied');
+    }
 
     // Extract winrate from value output
     // KataGo value output: [win_logit, loss_logit, draw_logit]
@@ -311,19 +349,23 @@ class OnnxEngine implements InferenceEngine {
     final winrate = total > 0 ? (winProb / total) * 100 : 50.0;
     debugPrint('$_tag Winrate: $winrate% (win=$winProb, loss=$lossProb, draw=${expDraw/valueExpSum})');
 
-    // Create move candidates
+    // Create move candidates for ALL legal (unoccupied) positions
+    // Policy output = [boardSize*boardSize positions + 1 pass move]
+    // We exclude the pass move (last element)
     final candidates = <MoveCandidate>[];
-    for (var i = 0; i < boardSize * boardSize; i++) {
-      final prob = probabilities[i];
-      if (prob < 0.001) continue; // Skip low probability moves
+    final numBoardPositions = boardSize * boardSize;
+    for (var i = 0; i < numBoardPositions; i++) {
+      // Skip occupied positions (illegal moves)
+      if (_occupiedPositions.contains(i)) continue;
 
+      final prob = probabilities[i];
       final row = i ~/ boardSize;
       final col = i % boardSize;
       final gtp = _indexToGtp(row, col, boardSize);
 
       // Calculate move-specific winrate
       // Higher probability moves should have higher winrate
-      final moveWinrate = winrate + (prob - probabilities.reduce(math.max) / 2) * 5;
+      final moveWinrate = winrate + (prob - maxProb / 2) * 5;
 
       candidates.add(MoveCandidate(
         move: gtp,
@@ -333,7 +375,7 @@ class OnnxEngine implements InferenceEngine {
       ));
     }
 
-    // Sort by probability and return top 20
+    // Sort by probability (highest first) and return top 20
     candidates.sort((a, b) => b.winrate.compareTo(a.winrate));
     final topMoves = candidates.take(20).toList();
     debugPrint('$_tag Created ${candidates.length} candidates, returning top ${topMoves.length}');
@@ -345,12 +387,16 @@ class OnnxEngine implements InferenceEngine {
 
   int? _gtpToIndex(String gtp, int boardSize) {
     if (gtp.length < 2) return null;
-    final col = gtp[0].toUpperCase().codeUnitAt(0) - 'A'.codeUnitAt(0);
-    if (col >= 8) return null; // Skip 'I'
+    final colChar = gtp[0].toUpperCase();
+    final col = colChar.codeUnitAt(0) - 'A'.codeUnitAt(0);
+
+    // Adjust for skipped 'I' (I=8, J=9 → J adjusted to 8)
+    final adjustedCol = col > 8 ? col - 1 : col;
+    if (adjustedCol < 0 || adjustedCol >= boardSize) return null;
+
     final row = int.tryParse(gtp.substring(1));
     if (row == null || row < 1 || row > boardSize) return null;
 
-    final adjustedCol = col >= 8 ? col - 1 : col;
     return (boardSize - row) * boardSize + adjustedCol;
   }
 
