@@ -279,19 +279,25 @@ class OnnxEngine implements InferenceEngine {
       whiteStones: whiteStones,
     );
     final liberties = libertyCalc.calculateAllLiberties();
+    debugPrint('$_tag Calculated liberties for ${liberties.length} stones');
 
+    var lib1Count = 0, lib2Count = 0, lib3Count = 0;
     for (final entry in liberties.entries) {
       final position = entry.key;
       final libCount = entry.value;
 
       if (libCount == 1) {
         data[3 * boardSize * boardSize + position] = 1.0; // Channel 3
+        lib1Count++;
       } else if (libCount == 2) {
         data[4 * boardSize * boardSize + position] = 1.0; // Channel 4
+        lib2Count++;
       } else if (libCount >= 3) {
         data[5 * boardSize * boardSize + position] = 1.0; // Channel 5
+        lib3Count++;
       }
     }
+    debugPrint('$_tag Liberty distribution: 1lib=$lib1Count, 2lib=$lib2Count, 3+lib=$lib3Count');
 
     // Channel 6: Ko ban - KataGo feature 6
     // Simple ko detection: if last move was a capture, mark the capture position
@@ -324,7 +330,6 @@ class OnnxEngine implements InferenceEngine {
       data[offset + moveIdx] = 1.0;
     }
 
-    // TODO: Channels 3-5 (liberties), 6 (ko), 14-17 (ladder), 18-19 (territory)
 
     return data;
   }
