@@ -17,6 +17,9 @@ env/
 # KataGo binary and model (too large for git)
 katago/katago
 katago/*.bin.gz
+katago/*.bin.gz.small
+katago/*.zip
+katago/*.bak
 katago/books/
 
 # Android native libraries (built locally)
@@ -52,3 +55,16 @@ Thumbs.db
 
 # Streamlit
 .streamlit/
+
+# Python virtual environments
+katago_env/
+**/katago_env/
+
+# Android NDK build cache
+mobile/android/app/.cxx/
+
+# Old/backup directories
+.github_old/
+
+# OpenCode
+.opencode/

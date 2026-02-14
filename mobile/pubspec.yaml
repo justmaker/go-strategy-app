@@ -1,7 +1,7 @@
 name: go_strategy_app
 description: "Go Strategy Analysis App - Powered by KataGo AI"
 publish_to: 'none'
-version: 1.0.0+73
+version: 1.0.0+187
 
 environment:
   sdk: ^3.5.0
