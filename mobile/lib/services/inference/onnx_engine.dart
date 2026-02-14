@@ -17,9 +17,9 @@ const int kNumGlobalFeatures = 19;
 /// ONNX Runtime-based KataGo engine (Android only)
 class OnnxEngine implements InferenceEngine {
   static const String _tag = '[OnnxEngine]';
-  static const String _modelAsset = 'assets/katago/model.onnx';
 
-  OrtSession? _session;
+  // Separate models for each board size
+  final Map<int, OrtSession> _sessions = {};
   OrtSessionOptions? _sessionOptions;
   bool _isRunning = false;
 
@@ -50,11 +50,6 @@ class OnnxEngine implements InferenceEngine {
       final providers = OrtEnv.instance.availableProviders();
       debugPrint('$_tag Available providers: $providers');
 
-      debugPrint('$_tag Loading ONNX model from assets...');
-      final rawAssetFile = await rootBundle.load(_modelAsset);
-      final modelBytes = rawAssetFile.buffer.asUint8List();
-      debugPrint('$_tag Model loaded: ${modelBytes.length} bytes');
-
       _sessionOptions = OrtSessionOptions()
         ..setInterOpNumThreads(2)
         ..setIntraOpNumThreads(2)
@@ -62,14 +57,20 @@ class OnnxEngine implements InferenceEngine {
           GraphOptimizationLevel.ortEnableAll,
         );
 
-      debugPrint('$_tag Creating ONNX session...');
-      _session = OrtSession.fromBuffer(modelBytes, _sessionOptions!);
+      // Load models for all board sizes
+      debugPrint('$_tag Loading ONNX models for all board sizes...');
+      for (final size in [9, 13, 19]) {
+        final modelAsset = 'assets/katago/model_${size}x$size.onnx';
+        final rawAssetFile = await rootBundle.load(modelAsset);
+        final modelBytes = rawAssetFile.buffer.asUint8List();
+        debugPrint('$_tag Model $size x$size loaded: ${modelBytes.length} bytes');
 
-      debugPrint('$_tag Session created successfully');
-      debugPrint('$_tag Input count: ${_session!.inputCount}');
-      debugPrint('$_tag Input names: ${_session!.inputNames}');
-      debugPrint('$_tag Output count: ${_session!.outputCount}');
-      debugPrint('$_tag Output names: ${_session!.outputNames}');
+        final session = OrtSession.fromBuffer(modelBytes, _sessionOptions!);
+        _sessions[size] = session;
+        debugPrint('$_tag Session ${size}x$size created');
+      }
+
+      debugPrint('$_tag All sessions created successfully');
 
       _isRunning = true;
       return true;
@@ -84,8 +85,10 @@ class OnnxEngine implements InferenceEngine {
   Future<void> stop() async {
     if (!_isRunning) return;
 
-    _session?.release();
-    _session = null;
+    for (final session in _sessions.values) {
+      session.release();
+    }
+    _sessions.clear();
     _sessionOptions?.release();
     _sessionOptions = null;
     OrtEnv.instance.release();
@@ -102,12 +105,13 @@ class OnnxEngine implements InferenceEngine {
     required int maxVisits,
     AnalysisProgressCallback? onProgress,
   }) async {
-    if (!_isRunning || _session == null) {
+    if (!_isRunning) {
       throw StateError('Engine not running');
     }
 
-    if (boardSize != 19) {
-      throw UnsupportedError("ONNX model only supports 19x19 (got ${boardSize}x$boardSize)");
+    final session = _sessions[boardSize];
+    if (session == null) {
+      throw UnsupportedError("No ONNX model for ${boardSize}x$boardSize");
     }
 
     debugPrint('$_tag Analyzing: ${boardSize}x$boardSize, ${moves.length} moves');
@@ -129,7 +133,7 @@ class OnnxEngine implements InferenceEngine {
 
       // Run inference
       final runOptions = OrtRunOptions();
-      final outputs = _session!.run(
+      final outputs = session.run(
         runOptions,
         {'input_binary': inputBinary, 'input_global': inputGlobal},
       );
@@ -256,6 +260,9 @@ class OnnxEngine implements InferenceEngine {
     List<double> policyLogits,
     List<double> valueOutput,
   ) {
+    debugPrint('$_tag Parsing policy: ${policyLogits.length} logits');
+    debugPrint('$_tag Value output: ${valueOutput.length} values');
+
     // Apply softmax to policy logits
     final maxLogit = policyLogits.reduce(math.max);
     final expSum = policyLogits
@@ -264,9 +271,17 @@ class OnnxEngine implements InferenceEngine {
     final probabilities =
         policyLogits.map((x) => math.exp(x - maxLogit) / expSum).toList();
 
+    debugPrint('$_tag Max probability: ${probabilities.reduce(math.max)}');
+
     // Extract winrate from value output
+    // KataGo value output: [win, loss, draw] probabilities
+    debugPrint('$_tag Value raw: ${valueOutput[0]}, ${valueOutput[1]}, ${valueOutput[2]}');
     final winProb = valueOutput[0]; // Win probability
-    final winrate = winProb * 100;
+    final lossProb = valueOutput[1]; // Loss probability
+    // Winrate = (win / (win + loss)) * 100
+    final total = winProb + lossProb;
+    final winrate = total > 0 ? (winProb / total) * 100 : 50.0;
+    debugPrint('$_tag Base winrate: $winrate%');
 
     // Create move candidates
     final candidates = <MoveCandidate>[];
@@ -278,18 +293,26 @@ class OnnxEngine implements InferenceEngine {
       final col = i % boardSize;
       final gtp = _indexToGtp(row, col, boardSize);
 
+      // Calculate move-specific winrate
+      // Higher probability moves should have higher winrate
+      final moveWinrate = winrate + (prob - probabilities.reduce(math.max) / 2) * 5;
+
       candidates.add(MoveCandidate(
         move: gtp,
-        winrate: winrate + (prob - 0.5) * 10, // Adjust based on policy
+        winrate: moveWinrate.clamp(0.0, 100.0),
         scoreLead: 0.0, // TODO: Extract from miscvalue output
         visits: 1,
-        // prior: prob,
       ));
     }
 
     // Sort by probability and return top 20
     candidates.sort((a, b) => b.winrate.compareTo(a.winrate));
-    return candidates.take(20).toList();
+    final topMoves = candidates.take(20).toList();
+    debugPrint('$_tag Created ${candidates.length} candidates, returning top ${topMoves.length}');
+    if (topMoves.isNotEmpty) {
+      debugPrint('$_tag Top move: ${topMoves[0].move} (${topMoves[0].winrate}%)');
+    }
+    return topMoves;
   }
 
   int? _gtpToIndex(String gtp, int boardSize) {

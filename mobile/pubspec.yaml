@@ -64,7 +64,9 @@ flutter:
   assets:
     - assets/data/opening_book.db.gz
     - assets/katago/model.bin.gz
-    - assets/katago/model.onnx  # ONNX model for Android
+    - assets/katago/model_9x9.onnx  # ONNX for Android 9x9
+    - assets/katago/model_13x13.onnx  # ONNX for Android 13x13
+    - assets/katago/model_19x19.onnx  # ONNX for Android 19x19
     - assets/katago/analysis.cfg
     - assets/katago/README.md
     - assets/data/analysis.db
