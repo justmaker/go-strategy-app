@@ -493,11 +493,11 @@ class OnnxEngine implements InferenceEngine {
       // Winrate: normalize to 40-60% range based on adjusted probability
       // Don't use ONNX winrate directly as it can be unreliable
       final relativeProb = adjustedProb / (maxProb + 0.0001);
-      final moveWinrate = 40 + relativeProb * 20; // Scale to 40-60% range
+      final moveWinrate = 0.40 + relativeProb * 0.20; // Scale to 40-60% range
 
       candidates.add(MoveCandidate(
         move: gtp,
-        winrate: moveWinrate.clamp(0.0, 100.0),
+        winrate: moveWinrate.clamp(0.0, 1.0),
         scoreLead: 0.0, // TODO: Extract from miscvalue output
         visits: 1,
       ));
