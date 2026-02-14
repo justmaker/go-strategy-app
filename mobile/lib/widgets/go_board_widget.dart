@@ -340,9 +340,11 @@ class _BoardPainter extends CustomPainter {
 
       final displayRank = moveRanks[i]!;
 
-      // Filter out moves that are too bad (10% drop)
+      // Filter out moves that are too bad
+      // Use relative drop (10% of best) to handle small absolute differences
       final winrateDrop = bestWinrate - suggestion.winrate;
-      if (winrateDrop > 0.10) {
+      final relativeThreshold = bestWinrate * 0.1; // 10% of best winrate
+      if (winrateDrop > relativeThreshold && winrateDrop > 0.10) {
         continue;
       }
 
