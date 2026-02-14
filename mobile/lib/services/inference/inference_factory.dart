@@ -4,7 +4,6 @@ library;
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'inference_engine.dart';
-import 'onnx_engine.dart';
 import 'katago_engine.dart';
 
 /// Create the appropriate inference engine for the current platform
