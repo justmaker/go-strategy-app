@@ -463,11 +463,13 @@ class GameProvider extends ChangeNotifier {
       }
 
       // Step 3: Try local engine (Offline-first key principle)
-      debugPrint('[GameProvider] Step 3: localEngineEnabled=$_localEngineEnabled');
+      debugPrint('[GameProvider] Step 3: localEngineEnabled=$_localEngineEnabled, isAndroid=${!kIsWeb && Platform.isAndroid}');
       if (_localEngineEnabled) {
+        debugPrint('[GameProvider] Calling _ensureEngineStarted()...');
         final engineReady = await _ensureEngineStarted();
-        debugPrint('[GameProvider] Engine ready: $engineReady, inferenceEngine=$_inferenceEngine');
+        debugPrint('[GameProvider] Engine ready: $engineReady, inferenceEngine=$_inferenceEngine, isRunning=${_inferenceEngine?.isRunning}');
         if (engineReady) {
+          debugPrint('[GameProvider] Engine is ready, choosing analysis method...');
           // Android: use inference engine
           if (!kIsWeb && Platform.isAndroid && _inferenceEngine != null) {
             await _analyzeWithInferenceEngine();
