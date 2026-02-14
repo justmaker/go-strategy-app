@@ -1,7 +1,7 @@
 # Architecture Specification
 
-**Version**: 1.1
-**Last Updated**: 2026-02-12
+**Version**: 1.2
+**Last Updated**: 2026-02-14
 
 ## 1. 系統概述 (System Overview)
 
@@ -18,34 +18,42 @@ graph TB
     subgraph "Flutter App (iOS / Android / macOS / Windows / Linux / Web)"
         UI[UI Layer<br/>AnalysisScreen / BoardWidget]
         GP[GameProvider<br/>State Management]
+        IF[InferenceFactory<br/>Platform Engine Selector]
         OBS[OpeningBookService<br/>Bundled JSON.gz]
         CS[CacheService<br/>Local SQLite]
-        KGM[KataGoService<br/>Mobile Platform Channel]
         KGD[KataGoDesktopService<br/>Desktop Subprocess]
+        KGE[KataGoEngine<br/>iOS Platform Channel]
+        ONNX[OnnxEngine<br/>Android ONNX Runtime]
         AUTH[AuthService<br/>Google / Apple / Microsoft]
         CLOUD[CloudStorageManager<br/>Google Drive / iCloud / OneDrive]
         GRS[GameRecordService<br/>棋譜管理]
     end
 
     subgraph "Local Resources"
-        KATAGO_BIN["KataGo Engine Binary"]
+        KATAGO_BIN["KataGo Engine Binary<br/>(Desktop / iOS)"]
         KATAGO_MODEL["Neural Network Model<br/>kata1-b18c384"]
+        ONNX_MODEL["ONNX Model<br/>kata1-b6c96 (3.9MB)"]
+        ONNX_LIB["ONNX Runtime + NNAPI<br/>(Android only)"]
         CLOUD_STORAGE["Cloud Storage<br/>Google Drive / iCloud / OneDrive"]
     end
 
     UI --> GP
     GP --> OBS
     GP --> CS
-    GP --> KGM
-    GP --> KGD
+    GP --> IF
+    IF -->|Desktop| KGD
+    IF -->|iOS| KGE
+    IF -->|Android| ONNX
     GP --> AUTH
     AUTH --> CLOUD
     CLOUD --> GRS
     GRS --> CLOUD_STORAGE
 
-    KGM -->|Platform Channel / JNI| KATAGO_BIN
     KGD -->|Subprocess / Analysis JSON API| KATAGO_BIN
+    KGE -->|Platform Channel / FFI| KATAGO_BIN
     KATAGO_BIN --> KATAGO_MODEL
+    ONNX -->|Dart FFI| ONNX_LIB
+    ONNX_LIB --> ONNX_MODEL
 ```
 
 ---
@@ -55,9 +63,13 @@ graph TB
 | 元件 | 檔案 | 職責 |
 |------|------|------|
 | **GameProvider** | `mobile/lib/providers/game_provider.dart` | 核心狀態管理，實作離線查詢流程 (Opening Book → Cache → Local Engine)，管理棋盤狀態、分析結果、雙滑桿設定 |
+| **InferenceFactory** | `mobile/lib/services/inference/inference_factory.dart` | 平台選擇器，根據 OS 建立對應的 InferenceEngine 實例 |
+| **InferenceEngine** | `mobile/lib/services/inference/inference_engine.dart` | 抽象介面，定義 `start()` / `analyze()` / `stop()` 等方法 |
+| **KataGoEngine** | `mobile/lib/services/inference/katago_engine.dart` | iOS/Desktop 平台引擎，包裝 KataGoService / KataGoDesktopService |
+| **OnnxEngine** | `mobile/lib/services/inference/onnx_engine.dart` | Android 平台引擎，使用 ONNX Runtime + NNAPI 進行推論，實作 22 個 KataGo feature channels |
 | **OpeningBookService** | `mobile/lib/services/opening_book_service.dart` | 載入並查詢隨 App 打包的 `opening_book.json.gz`，支援 8 種對稱變換查詢，提供即時離線分析 |
 | **CacheService** | `mobile/lib/services/cache_service.dart` | 本地 SQLite 快取管理，支援智慧合併邏輯 (completeness → effort → recency) |
-| **KataGoService** | `mobile/lib/services/katago_service.dart` | 行動裝置本地引擎，透過 Platform Channel (Android JNI / iOS FFI) 與原生 KataGo 通訊，支援串流進度回報 |
+| **KataGoService** | `mobile/lib/services/katago_service.dart` | iOS 本地引擎，透過 Platform Channel FFI 與原生 KataGo 通訊，支援串流進度回報 |
 | **KataGoDesktopService** | `mobile/lib/services/katago_desktop_service.dart` | 桌面平台本地引擎，透過 `dart:io Process` 啟動 KataGo Analysis JSON API 子進程，支援即時進度串流 |
 | **AuthService** | `mobile/lib/services/auth_service.dart` | 多提供者認證 (Google / Apple / Microsoft / Anonymous)，使用者可匿名使用但雲端同步需登入 |
 | **CloudStorageManager** | `mobile/lib/services/cloud_storage_service.dart` | 統一雲端儲存介面，支援 Google Drive / iCloud / OneDrive 棋譜同步 |
@@ -151,11 +163,18 @@ flowchart LR
 - 透過 stdin 發送 JSON 查詢，stdout 接收 JSON 回應
 - 支援 `reportDuringSearchEvery` 串流進度回報
 
-### 6.2 Flutter Mobile <-> KataGo: Platform Channel
+### 6.2 Flutter iOS <-> KataGo: Platform Channel
 
-- Android: 透過 MethodChannel 呼叫 JNI 原生 KataGo
-- iOS: 透過 MethodChannel 呼叫 FFI 原生 KataGo
+- 透過 MethodChannel 呼叫 FFI 原生 KataGo
 - EventChannel 用於串流分析進度 (visits, winrate, scoreLead)
+
+### 6.3 Flutter Android <-> ONNX Runtime: Dart FFI
+
+- 使用 `package:onnxruntime` (Dart FFI bindings)
+- ONNX Runtime 1.23.2 + NNAPI hardware acceleration
+- C++ native library (`libonnxruntime.so`) 透過 CMake 編譯打包
+- OnnxEngine 在 Dart 端完成 feature encoding (22 channels) 與 policy decoding
+- 模型為 KataGo b6c96 (6-block 96-channel) 轉換為 ONNX 格式 (3.9MB)
 
 ---
 
@@ -189,9 +208,11 @@ flowchart LR
 | **Frontend Framework** | Flutter 3.x (Dart) | 跨平台 UI (iOS / Android / macOS / Windows / Linux / Web) |
 | **State Management** | Provider + ChangeNotifier | App 狀態管理 |
 | **Local Database** | SQLite (sqflite / sqflite_common_ffi) | 本地分析快取 |
-| **AI Engine** | KataGo | 圍棋 AI 分析引擎 |
-| **AI Model** | kata1-b18c384nbt | 18-block 384-channel 神經網路 |
-| **Communication** | Analysis JSON API / Platform Channel | KataGo 通訊 |
+| **AI Engine (Desktop/iOS)** | KataGo | 圍棋 AI 分析引擎 (Eigen / Metal backend) |
+| **AI Engine (Android)** | ONNX Runtime 1.23.2 + NNAPI | 避免 pthread crash，支援硬體加速 |
+| **AI Model (Desktop/iOS)** | kata1-b18c384nbt | 18-block 384-channel 神經網路 |
+| **AI Model (Android)** | kata1-b6c96 ONNX | 6-block 96-channel (3.9MB) |
+| **Communication** | Analysis JSON API / Platform Channel / Dart FFI | 各平台 AI 引擎通訊 |
 | **Authentication** | Google Sign-In / Apple Sign-In | 多提供者登入 |
 | **Cloud Storage** | Google Drive / iCloud / OneDrive | 棋譜雲端同步 |
 | **Serialization** | JSON / gzip | 資料交換與壓縮 |
@@ -214,7 +235,24 @@ flowchart LR
 - **Compute Visits** (10-200): 控制本地引擎運算強度，平衡分析品質與裝置耗能
 
 ### 9.4 平台自適應引擎 (Platform-Adaptive Engine)
-- Desktop (macOS/Windows/Linux): 透過 `dart:io Process` 啟動 KataGo Analysis JSON API
-- Mobile (Android): 透過 JNI Platform Channel 呼叫原生 KataGo 庫
-- Mobile (iOS): 透過 FFI Platform Channel 呼叫原生 KataGo 庫
-- Web: 不支援本地引擎，僅依賴 Opening Book
+
+由 `InferenceFactory` 根據平台建立對應的 `InferenceEngine` 實例：
+
+| 平台 | Engine | Backend | 模型 |
+|------|--------|---------|------|
+| **Desktop** (macOS/Windows/Linux) | KataGoEngine → KataGoDesktopService | `dart:io Process` subprocess | kata1-b18c384 |
+| **iOS** | KataGoEngine → KataGoService | Platform Channel / FFI | kata1-b18c384 |
+| **Android** | OnnxEngine | ONNX Runtime + NNAPI (Dart FFI) | kata1-b6c96 ONNX (3.9MB) |
+| **Web** | 不支援 | — | 僅依賴 Opening Book |
+
+#### Android 採用 ONNX Runtime 的原因
+
+Android 16 + Qualcomm Snapdragon 8 Gen 3 (Adreno 750) 存在系統層級 bug：任何從 native code 建立的 pthread 會在 50ms 內觸發 `FORTIFY: pthread_mutex_lock called on a destroyed mutex` crash。所有 native KataGo 的 workaround（延遲載入、shared runtime、stack size 調整等）均失敗。
+
+解決方案：改用 ONNX Runtime Mobile，透過 Dart FFI 呼叫（非 native pthread），搭配 NNAPI 硬體加速。OnnxEngine 在 Dart 端實作完整的 22-channel KataGo feature encoding（包含 liberty calculation、territory estimation、ladder detection 等），直接輸入 ONNX 模型進行推論。
+
+相關檔案：
+- `mobile/android/app/src/main/cpp/CMakeLists.txt` — 編譯 ONNX Runtime native library
+- `mobile/android/app/src/main/cpp/onnxruntime/` — ONNX Runtime headers 與 prebuilt .so
+- `mobile/assets/katago/model.bin` — ONNX 模型檔案
+- `.github/workflows/release.yml` — CI 中自動從 Maven Central 下載 ONNX Runtime AAR

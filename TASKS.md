@@ -1,76 +1,38 @@
 # Tasks
 
-## 🚨 Android Crash Fix: TensorFlow Lite Migration (Priority 1)
+## Android pthread Crash Fix: ONNX Runtime Migration
 
-### 狀態: 🔄 Implementation (70% Complete)
+### 狀態: ✅ 已完成 (2026-02-14)
 
-### 問題描述
+### 問題
 
-ASUS Zenfone 12 Ultra (Snapdragon 8 Gen 3 / Adreno 750 / Android 16) 上無法執行 KataGo native pthread，任何從 native code 建立的 thread 都會觸發系統層級的 `pthread_mutex_lock called on a destroyed mutex` crash。
+ASUS Zenfone 12 Ultra (Snapdragon 8 Gen 3 / Adreno 750 / Android 16) 上 KataGo native pthread crash：`FORTIFY: pthread_mutex_lock called on a destroyed mutex`。所有 native workaround 均失敗。
 
-已嘗試的方法（全部失敗）：
-- ✅ 延遲載入 native library
-- ✅ std::thread → pthread 轉換
-- ✅ shared C++ runtime (c++_shared)
-- ✅ 4MB stack size
-- ✅ JNI_OnLoad 提早初始化
-- ✅ 30 秒啟動延遲
-- ❌ 所有方法都在 pthread_create 後 50ms 內 crash
+### 解決方案
 
-### 解決方案: 改用 TensorFlow Lite Mobile + NNAPI
+改用 **ONNX Runtime 1.23.2 + NNAPI**，透過 Dart FFI 呼叫（無 native pthread）。
 
-採用 BadukAI 的做法，使用 Google 官方 mobile AI framework。
+### 最終架構
 
-### 工作項目
+| 平台 | Engine | 模型 |
+|------|--------|------|
+| Android | OnnxEngine (ONNX Runtime + NNAPI) | kata1-b6c96 ONNX (3.9MB) |
+| iOS | KataGoEngine (Platform Channel / FFI) | kata1-b18c384 |
+| Desktop | KataGoEngine (Subprocess) | kata1-b18c384 |
+| Web | 無引擎，僅 Opening Book | — |
 
-#### Phase 1: 模型轉換 (估計 1-2 天) - 🔄 部分完成
-1. ✅ 研究 KataGo 模型格式與 TFLite 轉換流程
-2. ✅ KataGo `.bin.gz` → ONNX 成功（4.3MB）
-3. 🔄 ONNX → TFLite 遇到 dynamic shape 問題（使用 placeholder 測試中）
-4. ⏳ 驗證轉換後模型的準確性（待模型轉換完成）
+### 關鍵檔案
 
-#### Phase 2: TFLite 整合 (估計 2-3 天) - ✅ 已完成
-1. ✅ 加入 TensorFlow Lite dependencies 到 `pubspec.yaml`
-2. ✅ 建立 `TFLiteEngineImpl` 替換現有 `KataGoService`
-3. ✅ 實作 NNAPI delegate 啟用硬體加速
-4. ✅ 實作 pre/post-processing（board state → tensor → move probabilities）
-5. ✅ Platform-specific architecture (Android=TFLite, 其他=KataGo)
-6. ✅ Placeholder model (2.8MB) for testing
+| 檔案 | 說明 |
+|------|------|
+| `mobile/lib/services/inference/inference_engine.dart` | 抽象介面 |
+| `mobile/lib/services/inference/inference_factory.dart` | 平台選擇器 |
+| `mobile/lib/services/inference/onnx_engine.dart` | Android ONNX 實作 (22 KataGo features) |
+| `mobile/lib/services/inference/katago_engine.dart` | iOS/Desktop KataGo wrapper |
+| `mobile/android/app/src/main/cpp/CMakeLists.txt` | ONNX Runtime native build |
+| `mobile/assets/katago/model.bin` | ONNX 模型 |
 
-#### Phase 3: 測試與優化 (估計 1 天) - ⏳ 待測試
-1. ⏳ 在 ASUS Zenfone 12 Ultra 上測試
-2. ⏳ 效能 benchmark (latency, memory)
-3. ⏳ 與原 KataGo 結果比對（確保準確性）
-
-### 目前狀態 (2026-02-14)
-
-✅ **架構完成** - Platform-specific inference engine 已實作並 push
-✅ **Dependencies 完成** - tflite_flutter 已加入
-✅ **Placeholder 模型** - 可用於測試架構（不會 crash，但結果是隨機的）
-🔄 **模型轉換** - ONNX 轉換成功，TFLite 轉換遇到技術問題
-
-### 檔案清單
-
-| 檔案 | 狀態 | 說明 |
-|------|------|------|
-| `inference_engine.dart` | ✅ | Abstract interface |
-| `inference_factory.dart` | ✅ | Platform selector |
-| `tflite_engine.dart` | ✅ | Android TFLite impl |
-| `katago_engine.dart` | ✅ | iOS/Desktop wrapper |
-| `model.tflite` | ⚠️ | Placeholder (待替換真實模型) |
-| `/tmp/katago_b6c96.onnx` | ✅ | ONNX 模型（4.3MB）|
-
-### 參考資源
-
-- [TensorFlow Lite Android Quickstart](https://www.tensorflow.org/lite/android/quickstart)
-- [LiteRT (TFLite successor)](https://github.com/google-ai-edge/LiteRT)
-- [NNAPI Migration Guide](https://developer.android.com/ndk/guides/neuralnetworks/migration-guide)
-- BadukAI 使用 `libtensorflowlite.so` + Qualcomm QNN/SNPE
-
-### 備註
-
-- 此修復也會讓其他 Android 裝置受益（TFLite 效能通常優於自編譯 KataGo）
-- Opening book (2.5M entries) 不受影響，持續可用
+詳細架構說明見 `docs/spec/ARCHITECTURE.md` §9.4
 
 ---
 
