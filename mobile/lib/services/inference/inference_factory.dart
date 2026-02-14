@@ -13,13 +13,9 @@ InferenceEngine createInferenceEngine() {
     throw UnsupportedError('Web platform not supported for local inference');
   }
 
-  // Android: Use ONNX Runtime (avoids pthread crash on Android 16 + Qualcomm)
-  if (Platform.isAndroid) {
-    debugPrint('[InferenceFactory] Creating ONNX Runtime engine for Android');
-    return OnnxEngine();
-  }
-
-  // iOS, macOS, Windows, Linux: Use native KataGo
+  // All platforms now use KataGo native engine
+  // Android: Uses ONNX Runtime C++ backend (single-threaded, no pthread)
+  // iOS/macOS/Desktop: Uses Eigen backend (multi-threaded)
   debugPrint('[InferenceFactory] Creating KataGo native engine for ${Platform.operatingSystem}');
   return KataGoEngine();
 }

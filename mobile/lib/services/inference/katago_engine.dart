@@ -32,7 +32,7 @@ class KataGoEngine implements InferenceEngine {
   String get engineName => _isDesktop ? 'KataGo Desktop' : 'KataGo Mobile';
 
   @override
-  bool get isAvailable => !kIsWeb && !Platform.isAndroid;
+  bool get isAvailable => !kIsWeb;  // Available on all platforms (Android now uses ONNX C++ backend)
 
   @override
   bool get isRunning {
