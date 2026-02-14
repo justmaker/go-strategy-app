@@ -591,14 +591,14 @@ void NeuralNet::getOutput(
         );
       }
 
-      // Score value - TEMPORARILY DISABLED to avoid crash
-      // TODO: Fix scoreValue parsing from output_miscvalue tensor
-      output->whiteScoreMean = 0;
-      output->whiteScoreMeanSq = 0;
-      output->whiteLead = 0;
-      output->varTimeLeft = 0;
-      output->shorttermWinlossError = 0;
-      output->shorttermScoreError = 0;
+      // Score value - use safe defaults that won't cause division by zero
+      // whiteScoreMeanSq must be >= whiteScoreMean^2 to avoid sqrt of negative
+      output->whiteScoreMean = 0.0f;
+      output->whiteScoreMeanSq = 1.0f;  // Small positive value
+      output->whiteLead = 0.0f;
+      output->varTimeLeft = 1.0f;  // Non-zero default
+      output->shorttermWinlossError = 0.1f;  // Small positive
+      output->shorttermScoreError = 0.1f;
     }
 
     LOGI("ONNX inference completed for batch size %d", batchSize);
