@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <chrono>
 
 // KataGo Headers
 #include "katago/cpp/core/global.h"
@@ -33,6 +34,7 @@ static SearchParams* g_searchParams = nullptr;
 static Rules g_rules;
 static std::string g_modelName = "kata1-b6c96";
 std::string g_onnxModelPath;  // Global for onnxbackend.cpp
+static bool g_globalsInitialized = false;  // Track one-time global init
 
 // ============================================================================
 // Helper Functions
@@ -102,7 +104,8 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_initializeNative(
     jobject thiz,
     jstring configPath,
     jstring modelBinPath,
-    jstring modelOnnxPath) {
+    jstring modelOnnxPath,
+    jint boardSize) {
 
   const char* cfgStr = env->GetStringUTFChars(configPath, nullptr);
   const char* binStr = env->GetStringUTFChars(modelBinPath, nullptr);
@@ -120,18 +123,29 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_initializeNative(
   LOGI("Config: %s", configFile.c_str());
   LOGI("Model (bin.gz): %s", modelBinFile.c_str());
   LOGI("Model (onnx): %s", modelOnnxFile.c_str());
+  LOGI("Board size: %dx%d", boardSize, boardSize);
 
   // Set global ONNX model path for onnxbackend.cpp
   g_onnxModelPath = modelOnnxFile;
 
   try {
-    // 1. Initialize logger
-    g_logger = new Logger(nullptr, false, false, false, false);
-    g_logger->addFile("/sdcard/katago_debug.log");
+    // 1. Initialize logger (reuse if exists)
+    if (g_logger == nullptr) {
+      g_logger = new Logger(nullptr, false, false, false, false);
+    }
 
-    // 2. Initialize ScoreValue tables (CRITICAL - must be before any Search usage)
-    ScoreValue::initTables();
-    LOGI("✓ ScoreValue tables initialized");
+    // 2. One-time global initialization (must skip on reinit to avoid crash)
+    if (!g_globalsInitialized) {
+      Board::initHash();
+      LOGI("✓ Board zobrist hash initialized");
+      ScoreValue::initTables();
+      LOGI("✓ ScoreValue tables initialized");
+      NeuralNet::globalInitialize();
+      LOGI("✓ NeuralNet backend initialized");
+      g_globalsInitialized = true;
+    } else {
+      LOGI("Reinit: reusing global state (Board hash, ScoreValue, NeuralNet)");
+    }
 
     // 3. Parse config
     ConfigParser cfg(configFile);
@@ -144,9 +158,6 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_initializeNative(
     LOGI("maxVisits: %d", maxVisits);
     LOGI("numSearchThreads: %d (forced single-threaded)", numSearchThreads);
 
-    // 4. Initialize NeuralNet backend
-    NeuralNet::globalInitialize();
-
     // 4. Load model (LoadedModel will load both .bin.gz and .onnx)
     // IMPORTANT: For ONNX backend, loadModelFile expects .bin.gz path
     // and automatically finds the .onnx file
@@ -155,10 +166,10 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_initializeNative(
     const ModelDesc& modelDesc = NeuralNet::getModelDesc(loadedModel);
     LOGI("Model loaded: %s, version %d", modelDesc.name.c_str(), modelDesc.modelVersion);
 
-    // 5. Get board size (use 19x19 as default, will be overridden per-analysis)
-    int nnXLen = 19;
-    int nnYLen = 19;
-    LOGI("Default board size: %dx%d", nnXLen, nnYLen);
+    // 5. Set board size for NN evaluation (must match ONNX model dimensions)
+    int nnXLen = boardSize > 0 ? boardSize : 19;
+    int nnYLen = boardSize > 0 ? boardSize : 19;
+    LOGI("NN board size: %dx%d", nnXLen, nnYLen);
 
     // 6. Create NNEvaluator (single-threaded mode)
     std::vector<int> gpuIdxs = {-1};  // Default GPU
@@ -232,10 +243,16 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_analyzePositionNative(
   LOGI("=== analyzePositionNative ===");
   LOGI("Board: %dx%d, Komi: %.1f, MaxVisits: %d", boardXSize, boardYSize, komi, maxVisits);
 
+  auto timeStart = std::chrono::steady_clock::now();
+  auto timeMark = [&timeStart]() -> double {
+    auto now = std::chrono::steady_clock::now();
+    return std::chrono::duration<double>(now - timeStart).count();
+  };
+
   try {
     // 1. Parse moves array
     jsize numMoves = env->GetArrayLength(movesArray);
-    LOGI("Number of moves: %d", numMoves);
+    LOGI("[%.3fs] Parsing %d moves...", timeMark(), numMoves);
 
     std::vector<std::pair<Player, Loc>> moves;
     for (jsize i = 0; i < numMoves; i++) {
@@ -261,6 +278,7 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_analyzePositionNative(
     }
 
     // 2. Build Board and BoardHistory
+    LOGI("[%.3fs] Building board...", timeMark());
     Board board(boardXSize, boardYSize);
     Player nextPla = P_BLACK;
     BoardHistory history(board, nextPla, g_rules, 0);
@@ -277,52 +295,60 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_analyzePositionNative(
       nextPla = getOpp(move.first);
     }
 
-    LOGI("Position set up, next player: %s", PlayerIO::playerToString(nextPla).c_str());
+    LOGI("[%.3fs] Position set up, next player: %s", timeMark(),
+         PlayerIO::playerToString(nextPla).c_str());
 
     // 3. Create Search (single-threaded)
     SearchParams searchParams = *g_searchParams;
     searchParams.maxVisits = maxVisits;
     searchParams.maxPlayouts = maxVisits;
 
+    LOGI("[%.3fs] Creating Search object...", timeMark());
     Search* search = new Search(searchParams, g_nnEval, g_logger, "androidSearch");
 
     // 4. Set position
+    LOGI("[%.3fs] Setting position...", timeMark());
     search->setPosition(nextPla, board, history);
 
     // 5. Run search (synchronous, single-threaded, no pthread)
-    LOGI("Starting search (%d visits)...", maxVisits);
+    LOGI("[%.3fs] Starting search (%d visits)...", timeMark(), maxVisits);
     search->runWholeSearch(nextPla);
-    LOGI("Search completed");
+    LOGI("[%.3fs] Search completed", timeMark());
 
-    // 6. Extract results from search tree
+    // 6. Extract full analysis results using KataGo's built-in JSON export
+    LOGI("[%.3fs] Extracting JSON...", timeMark());
     json result;
-    result["id"] = "android_analysis";
-    result["turnNumber"] = history.moveHistory.size();
+    bool suc = search->getAnalysisJson(
+      P_BLACK,   // perspective: always report winrates from Black's perspective
+      7,         // analysisPVLen
+      false,     // preventEncore
+      false,     // includePolicy
+      false,     // includeOwnership
+      false,     // includeOwnershipStdev
+      false,     // includeMovesOwnership
+      false,     // includeMovesOwnershipStdev
+      false,     // includePVVisits
+      false,     // includeNoResultValue
+      result
+    );
 
-    // Get move candidates (simplified API)
-    std::vector<Loc> locs;
-    std::vector<double> playSelectionValues;
-    bool suc = search->getPlaySelectionValues(locs, playSelectionValues, 1.0);
-
-    if (suc) {
+    if (!suc) {
+      LOGE("getAnalysisJson failed, falling back to empty result");
       result["moveInfos"] = json::array();
-
-      for (size_t i = 0; i < locs.size() && i < 20; i++) {  // Top 20 moves
-        json moveInfo;
-        moveInfo["move"] = locToGTP(locs[i], boardXSize, boardYSize);
-        moveInfo["order"] = i;
-        moveInfo["utility"] = playSelectionValues[i];
-
-        result["moveInfos"].push_back(moveInfo);
-      }
+      result["rootInfo"] = json::object();
     }
 
+    result["id"] = "android_analysis";
+    result["turnNumber"] = (int)history.moveHistory.size();
+
     // 7. Cleanup
+    LOGI("[%.3fs] Deleting search...", timeMark());
     delete search;
+    LOGI("[%.3fs] Search deleted", timeMark());
 
     // 8. Return JSON
     std::string jsonStr = result.dump();
-    LOGI("Analysis result: %zu bytes", jsonStr.length());
+    LOGI("[%.3fs] Analysis result: %zu bytes", timeMark(), jsonStr.length());
 
     return env->NewStringUTF(jsonStr.c_str());
 
@@ -352,14 +378,10 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_destroyNative(
     g_searchParams = nullptr;
   }
 
-  if (g_logger != nullptr) {
-    delete g_logger;
-    g_logger = nullptr;
-  }
+  // Keep logger and global state alive for reinit
+  // NeuralNet::globalCleanup() is NOT called here to allow reinit
 
-  NeuralNet::globalCleanup();
-
-  LOGI("✓ KataGo destroyed");
+  LOGI("✓ KataGo destroyed (globals preserved for reinit)");
 }
 
 // JNI_OnLoad: Early initialization

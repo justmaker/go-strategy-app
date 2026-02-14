@@ -156,7 +156,7 @@ class GameProvider extends ChangeNotifier {
     if (!kIsWeb && Platform.isAndroid) {
       try {
         _inferenceEngine ??= createInferenceEngine();
-        final success = await _inferenceEngine!.start();
+        final success = await _inferenceEngine!.start(boardSize: _board.size);
         debugPrint(success
             ? 'Android inference engine started: ${_inferenceEngine!.engineName}'
             : 'Android inference engine failed to start');
@@ -454,20 +454,20 @@ class GameProvider extends ChangeNotifier {
         debugPrint('[TEST] === FORCING NATIVE ENGINE (SKIP OPENING BOOK) ===');
       }
 
-      // Step 2: Try local cache
-      if (!forceRefresh) {
-        final cachedResult = await _cache.get(
-          boardHash: boardHash,
-          komi: _board.komi,
-        );
-        if (cachedResult != null) {
-          _lastAnalysis = cachedResult;
-          _lastAnalysisSource = AnalysisSource.localCache;
-          _isAnalyzing = false;
-          notifyListeners();
-          return;
-        }
-      }
+      // Step 2: Cache lookup disabled — only use opening book + live engine
+      // if (!forceRefresh) {
+      //   final cachedResult = await _cache.get(
+      //     boardHash: boardHash,
+      //     komi: _board.komi,
+      //   );
+      //   if (cachedResult != null) {
+      //     _lastAnalysis = cachedResult;
+      //     _lastAnalysisSource = AnalysisSource.localCache;
+      //     _isAnalyzing = false;
+      //     notifyListeners();
+      //     return;
+      //   }
+      // }
 
       // Step 3: Try local engine (Offline-first key principle)
       debugPrint('[GameProvider] Step 3: localEngineEnabled=$_localEngineEnabled, isAndroid=${!kIsWeb && Platform.isAndroid}');
@@ -502,7 +502,8 @@ class GameProvider extends ChangeNotifier {
 
           _lastAnalysis = result;
           _lastAnalysisSource = AnalysisSource.api;
-          await _cache.put(result);
+          // Cache save disabled
+          // await _cache.put(result);
           _isAnalyzing = false;
           notifyListeners();
           return;
@@ -541,6 +542,9 @@ class GameProvider extends ChangeNotifier {
         moves: _board.movesGtp,
         komi: _board.komi,
         maxVisits: _computeVisits,
+      ).timeout(
+        const Duration(seconds: 120),
+        onTimeout: () => throw TimeoutException('Engine analysis timed out after 120s'),
       );
 
       // Convert EngineAnalysisResult to AnalysisResult
@@ -558,8 +562,8 @@ class GameProvider extends ChangeNotifier {
       _lastAnalysisSource = AnalysisSource.localEngine;
       _isAnalyzing = false;
 
-      // Save to cache
-      await _cache.put(_lastAnalysis!);
+      // Cache save disabled
+      // await _cache.put(_lastAnalysis!);
 
       notifyListeners();
       debugPrint('[GameProvider] Inference engine analysis complete');
@@ -590,8 +594,8 @@ class GameProvider extends ChangeNotifier {
         _analysisProgress = null;
         _isAnalyzing = false;
         
-        // AUTO-SAVE to local cache for future offline use
-        _cache.put(result);
+        // Cache save disabled
+        // _cache.put(result);
         
         notifyListeners();
         if (!completer.isCompleted) completer.complete();
@@ -637,7 +641,8 @@ class GameProvider extends ChangeNotifier {
         _lastAnalysisSource = AnalysisSource.localEngine;
         _desktopAnalysisProgress = null;
         _isAnalyzing = false;
-        _cache.put(result);
+        // Cache save disabled
+        // _cache.put(result);
         notifyListeners();
         if (!completer.isCompleted) completer.complete();
       },

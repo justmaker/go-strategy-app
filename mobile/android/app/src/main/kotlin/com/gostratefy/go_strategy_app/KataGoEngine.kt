@@ -16,7 +16,8 @@ class KataGoEngine(private val context: Context) {
     private external fun initializeNative(
         config: String,
         modelBin: String,
-        modelOnnx: String
+        modelOnnx: String,
+        boardSize: Int
     ): Boolean
 
     private external fun analyzePositionNative(
@@ -52,13 +53,21 @@ class KataGoEngine(private val context: Context) {
     }
 
     private var isInitialized = false
-    private var defaultBoardSize = 19
+    private var initializedBoardSize = 0
 
     /**
-     * Initialize KataGo engine (one-time setup, no threads).
+     * Initialize KataGo engine for a specific board size.
      */
-    suspend fun start(): Boolean = withContext(Dispatchers.IO) {
-        if (isInitialized) return@withContext true
+    suspend fun start(boardSize: Int = 19): Boolean = withContext(Dispatchers.IO) {
+        if (isInitialized && initializedBoardSize == boardSize) return@withContext true
+
+        // Re-initialize if board size changed
+        if (isInitialized && initializedBoardSize != boardSize) {
+            Log.i(TAG, "Board size changed: ${initializedBoardSize} -> ${boardSize}, reinitializing...")
+            destroyNative()
+            isInitialized = false
+            initializedBoardSize = 0
+        }
 
         if (!nativeLoaded) {
             Log.e(TAG, "Cannot start: native library not loaded (${nativeLoadError})")
@@ -70,19 +79,20 @@ class KataGoEngine(private val context: Context) {
             val modelBinPath = extractAsset("katago/$MODEL_BIN_FILE")
                 ?: return@withContext false
 
-            // Determine board size for ONNX model selection
-            val modelOnnxPath = extractAsset("katago/model_${defaultBoardSize}x${defaultBoardSize}.onnx")
+            // Load board-size-specific ONNX model
+            val modelOnnxPath = extractAsset("katago/model_${boardSize}x${boardSize}.onnx")
                 ?: extractAsset("katago/model.onnx")
                 ?: return@withContext false
 
             val configPath = createConfigFile()
 
-            Log.i(TAG, "Initializing KataGo (ONNX backend)...")
-            val success = initializeNative(configPath, modelBinPath, modelOnnxPath)
+            Log.i(TAG, "Initializing KataGo (ONNX backend) for ${boardSize}x${boardSize}...")
+            val success = initializeNative(configPath, modelBinPath, modelOnnxPath, boardSize)
 
             if (success) {
                 isInitialized = true
-                Log.i(TAG, "✓ KataGo initialized successfully")
+                initializedBoardSize = boardSize
+                Log.i(TAG, "✓ KataGo initialized for ${boardSize}x${boardSize}")
                 return@withContext true
             } else {
                 Log.e(TAG, "❌ KataGo initialization failed")
@@ -106,7 +116,7 @@ class KataGoEngine(private val context: Context) {
 
     /**
      * Analyze a position (synchronous, blocking call).
-     * Runs on Dispatchers.IO coroutine.
+     * Automatically reinitializes if board size changed.
      */
     suspend fun analyze(
         boardSize: Int,
@@ -114,8 +124,12 @@ class KataGoEngine(private val context: Context) {
         komi: Double,
         maxVisits: Int
     ): String = withContext(Dispatchers.IO) {
-        if (!isInitialized) {
-            return@withContext "{\"error\": \"Engine not initialized\"}"
+        // Ensure engine is initialized for the correct board size
+        if (!isInitialized || initializedBoardSize != boardSize) {
+            val started = start(boardSize)
+            if (!started) {
+                return@withContext "{\"error\": \"Failed to initialize engine for ${boardSize}x${boardSize}\"}"
+            }
         }
 
         try {

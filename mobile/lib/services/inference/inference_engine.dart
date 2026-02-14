@@ -35,8 +35,8 @@ abstract class InferenceEngine {
   /// Check if engine is currently running
   bool get isRunning;
 
-  /// Start the inference engine
-  Future<bool> start();
+  /// Start the inference engine for the given board size
+  Future<bool> start({int boardSize = 19});
 
   /// Stop the inference engine
   Future<void> stop();

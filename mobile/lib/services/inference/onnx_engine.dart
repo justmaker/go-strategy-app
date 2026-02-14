@@ -33,7 +33,7 @@ class OnnxEngine implements InferenceEngine {
   bool get isRunning => _isRunning;
 
   @override
-  Future<bool> start() async {
+  Future<bool> start({int boardSize = 19}) async {
     if (!isAvailable) {
       debugPrint('$_tag Not available on ${Platform.operatingSystem}');
       return false;

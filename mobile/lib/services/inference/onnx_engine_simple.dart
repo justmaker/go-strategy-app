@@ -25,7 +25,7 @@ class OnnxEngine implements InferenceEngine {
   bool get isRunning => _isRunning;
 
   @override
-  Future<bool> start() async {
+  Future<bool> start({int boardSize = 19}) async {
     if (!isAvailable) return false;
 
     debugPrint('$_tag Starting (stub - ONNX Runtime integration pending)');

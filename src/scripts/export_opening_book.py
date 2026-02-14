@@ -369,20 +369,64 @@ def export_opening_book_sqlite(
         )
     """)
 
-    # Build dead-move filter set if needed (canonical sequences only)
+    # Build dead-move filter set if needed (with all 8 symmetry transforms)
     existing_sequences: Set[str] = set()
     if filter_dead_moves:
         print("Collecting existing sequences for dead move filtering...")
+        print("  (including all symmetry transforms)")
         seq_cursor = src_conn.execute(
             "SELECT board_size, komi, moves_sequence FROM analysis_cache WHERE engine_visits >= ?",
             [min_visits]
         )
+
+        all_transforms = [
+            SymmetryTransform.IDENTITY,
+            SymmetryTransform.ROTATE_90,
+            SymmetryTransform.ROTATE_180,
+            SymmetryTransform.ROTATE_270,
+            SymmetryTransform.FLIP_HORIZONTAL,
+            SymmetryTransform.FLIP_VERTICAL,
+            SymmetryTransform.FLIP_DIAGONAL,
+            SymmetryTransform.FLIP_ANTIDIAGONAL,
+        ]
+
         for row in seq_cursor:
             bs = row['board_size']
             k = row['komi']
             seq = row['moves_sequence'] or ''
-            existing_sequences.add(f"{bs}:{k}:{seq}")
-        print(f"  Found {len(existing_sequences)} canonical sequences")
+
+            # Parse moves: "B[E5];W[D4]" -> ["B E5", "W D4"]
+            if seq:
+                raw_parts = seq.split(';')
+                cleaned_moves = []
+                for p in raw_parts:
+                    if not p:
+                        continue
+                    if '[' in p and ']' in p:
+                        cleaned_moves.append(p.replace('[', ' ').replace(']', ''))
+                    else:
+                        cleaned_moves.append(p)
+            else:
+                cleaned_moves = []
+
+            # Generate all 8 symmetry transforms
+            for transform in all_transforms:
+                try:
+                    transformed = []
+                    for m in cleaned_moves:
+                        parts = m.split(' ')
+                        if len(parts) == 2:
+                            color, coord = parts[0], parts[1]
+                            new_coord = transform_gtp_coord(coord, bs, transform)
+                            transformed.append(f"{color}[{new_coord}]")
+                        else:
+                            transformed.append(m)
+                    app_seq = ";".join(transformed)
+                    existing_sequences.add(f"{bs}:{k}:{app_seq}")
+                except Exception:
+                    pass
+
+        print(f"  Found {len(existing_sequences)} unique sequences (with symmetries)")
 
     # Build main query
     query = """

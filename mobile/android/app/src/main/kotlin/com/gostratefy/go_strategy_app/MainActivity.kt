@@ -69,9 +69,9 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "startEngine" -> {
                     scope.launch(Dispatchers.IO) {
-                        // No delay needed - new architecture safe on all devices
+                        val boardSize = call.argument<Int>("boardSize") ?: 19
                         val success = if (ensureKataGoEngine()) {
-                            kataGoEngine?.start() ?: false
+                            kataGoEngine?.start(boardSize) ?: false
                         } else {
                             false
                         }
@@ -92,6 +92,11 @@ class MainActivity : FlutterActivity() {
 
                 "analyze" -> {
                     scope.launch(Dispatchers.IO) {
+                        // Ensure engine instance exists (safety net if startEngine wasn't called)
+                        if (kataGoEngine == null) {
+                            ensureKataGoEngine()
+                        }
+
                         val boardSize = call.argument<Int>("boardSize") ?: 19
                         val moves = call.argument<List<String>>("moves") ?: emptyList()
                         val komi = call.argument<Double>("komi") ?: 7.5

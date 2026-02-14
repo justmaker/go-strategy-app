@@ -511,6 +511,7 @@ void NeuralNet::getOutput(
     // Get raw pointers to output data
     float* policyData = outputTensors[0].GetTensorMutableData<float>();
     float* valueData = outputTensors[1].GetTensorMutableData<float>();
+
     float* scoreValueData = outputTensors.size() > 2
         ? outputTensors[2].GetTensorMutableData<float>()
         : valueData;  // Fallback
@@ -518,8 +519,20 @@ void NeuralNet::getOutput(
         ? outputTensors[3].GetTensorMutableData<float>()
         : nullptr;
 
-    // Policy includes pass as last element
-    float* policyPassData = policyData + (nnXLen * nnYLen);
+    // Determine actual number of policy channels from ONNX output tensor size.
+    // The .bin.gz model descriptor may say numPolicyChannels=2, but the ONNX
+    // export may flatten the policy to a single vector [1, H*W+1].
+    auto policyTensorInfo = outputTensors[0].GetTensorTypeAndShapeInfo();
+    size_t policyTotalElts = policyTensorInfo.GetElementCount() / std::max(batchSize, 1);
+    int onnxPolicyChannels;
+    if ((int)policyTotalElts == nnXLen * nnYLen + 1) {
+      onnxPolicyChannels = 1;  // Flat output: [N, H*W+1]
+    } else {
+      onnxPolicyChannels = numPolicyChannels;  // Multi-channel: [N, C, H, W] + pass
+    }
+
+    // Policy includes pass as last element (per channel)
+    float* policyPassData = policyData + (nnXLen * nnYLen) * onnxPolicyChannels;
 
     // Step 6: Fill NNOutput structs (same logic as Eigen backend)
     float policyProbsTmp[NNPos::MAX_NN_POLICY_SIZE];
@@ -532,24 +545,24 @@ void NeuralNet::getOutput(
       assert(output->nnYLen == nnYLen);
       float policyOptimism = (float)inputBufs[row]->policyOptimism;
 
-      const float* policyPassSrcBuf = policyPassData + row * numPolicyChannels;
-      const float* policySrcBuf = policyData + row * numPolicyChannels * nnXLen * nnYLen;
+      const float* policyPassSrcBuf = policyPassData + row * onnxPolicyChannels;
+      const float* policySrcBuf = policyData + row * onnxPolicyChannels * nnXLen * nnYLen;
       float* policyProbs = output->policyProbs;
 
       // Set policyOptimismUsed
       output->policyOptimismUsed = policyOptimism;
 
       // Policy logits (not probabilities yet - client does softmax)
-      // Handle policy optimism if model has 2 policy channels
-      if (numPolicyChannels == 2 || (numPolicyChannels == 4 && modelVersion >= 16)) {
-        // ONNX output is NCHW: [N, C=2, H, W]
-        // Need to convert to NHWC for SymmetryHelpers
+      // Use onnxPolicyChannels (derived from actual ONNX output shape) instead
+      // of numPolicyChannels (from .bin.gz model descriptor) to avoid reading
+      // out-of-bounds when the ONNX export flattened the policy channels.
+      if (onnxPolicyChannels >= 2) {
+        // Multi-channel ONNX output: [N, C=2, H, W] + pass
         for (int h = 0; h < nnYLen; h++) {
           for (int w = 0; w < nnXLen; w++) {
             int i = h * nnXLen + w;
-            // NCHW index: n*C*H*W + c*H*W + h*W + w
-            float p = policySrcBuf[0 * nnYLen * nnXLen + i];  // channel 0
-            float pOpt = policySrcBuf[1 * nnYLen * nnXLen + i];  // channel 1
+            float p = policySrcBuf[0 * nnYLen * nnXLen + i];
+            float pOpt = policySrcBuf[1 * nnYLen * nnXLen + i];
             policyProbsTmp[i] = p + (pOpt - p) * policyOptimism;
           }
         }
@@ -559,8 +572,7 @@ void NeuralNet::getOutput(
         policyProbs[nnXLen * nnYLen] = policyPassSrcBuf[0] +
                                        (policyPassSrcBuf[1] - policyPassSrcBuf[0]) * policyOptimism;
       } else {
-        assert(numPolicyChannels == 1);
-        // Convert NCHW to flat for SymmetryHelpers
+        // Flat ONNX output: [N, H*W+1] — single policy channel
         for (int i = 0; i < nnXLen * nnYLen; i++) {
           policyProbsTmp[i] = policySrcBuf[i];
         }
@@ -591,14 +603,41 @@ void NeuralNet::getOutput(
         );
       }
 
-      // Score value - use safe defaults that won't cause division by zero
-      // whiteScoreMeanSq must be >= whiteScoreMean^2 to avoid sqrt of negative
-      output->whiteScoreMean = 0.0f;
-      output->whiteScoreMeanSq = 1.0f;  // Small positive value
-      output->whiteLead = 0.0f;
-      output->varTimeLeft = 1.0f;  // Non-zero default
-      output->shorttermWinlossError = 0.1f;  // Small positive
-      output->shorttermScoreError = 0.1f;
+      // Score value from output_miscvalue tensor
+      {
+        int numScoreValueChannels = computeHandle->modelDesc.numScoreValueChannels;
+        int modelVersion = computeHandle->modelDesc.modelVersion;
+        if (modelVersion >= 9 && numScoreValueChannels >= 6) {
+          output->whiteScoreMean = scoreValueData[row * numScoreValueChannels];
+          output->whiteScoreMeanSq = scoreValueData[row * numScoreValueChannels + 1];
+          output->whiteLead = scoreValueData[row * numScoreValueChannels + 2];
+          output->varTimeLeft = scoreValueData[row * numScoreValueChannels + 3];
+          output->shorttermWinlossError = scoreValueData[row * numScoreValueChannels + 4];
+          output->shorttermScoreError = scoreValueData[row * numScoreValueChannels + 5];
+        } else if (modelVersion >= 8 && numScoreValueChannels >= 4) {
+          output->whiteScoreMean = scoreValueData[row * numScoreValueChannels];
+          output->whiteScoreMeanSq = scoreValueData[row * numScoreValueChannels + 1];
+          output->whiteLead = scoreValueData[row * numScoreValueChannels + 2];
+          output->varTimeLeft = scoreValueData[row * numScoreValueChannels + 3];
+          output->shorttermWinlossError = 0;
+          output->shorttermScoreError = 0;
+        } else if (modelVersion >= 4 && numScoreValueChannels >= 2) {
+          output->whiteScoreMean = scoreValueData[row * numScoreValueChannels];
+          output->whiteScoreMeanSq = scoreValueData[row * numScoreValueChannels + 1];
+          output->whiteLead = output->whiteScoreMean;
+          output->varTimeLeft = 0;
+          output->shorttermWinlossError = 0;
+          output->shorttermScoreError = 0;
+        } else {
+          // Fallback for very old models
+          output->whiteScoreMean = 0.0f;
+          output->whiteScoreMeanSq = 1.0f;
+          output->whiteLead = 0.0f;
+          output->varTimeLeft = 1.0f;
+          output->shorttermWinlossError = 0.1f;
+          output->shorttermScoreError = 0.1f;
+        }
+      }
     }
 
     LOGI("ONNX inference completed for batch size %d", batchSize);
