@@ -413,6 +413,16 @@ class _HistoryView extends StatelessWidget {
           );
         }
 
+        // Pre-compute stone numbers (pass moves don't increment)
+        final stoneNumbers = <int>[];
+        int stoneNum = 0;
+        for (final m in moves) {
+          final parts = m.split(' ');
+          final isPass = parts.length > 1 && parts[1].toLowerCase() == 'pass';
+          if (!isPass) stoneNum++;
+          stoneNumbers.add(isPass ? 0 : stoneNum);
+        }
+
         return ListView.builder(
           padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: moves.length,
@@ -422,6 +432,8 @@ class _HistoryView extends StatelessWidget {
             final colorCode = parts[0];
             final coord = parts.length > 1 ? parts[1] : '';
             final isBlack = colorCode == 'B';
+            final isPass = coord.toLowerCase() == 'pass';
+            final displayNum = stoneNumbers[index];
 
             return Container(
               decoration: BoxDecoration(
@@ -437,14 +449,18 @@ class _HistoryView extends StatelessWidget {
                   height: 24,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isBlack ? Colors.black : Colors.white,
-                    border: isBlack ? null : Border.all(color: Colors.black),
+                    color: isPass
+                        ? Colors.grey
+                        : isBlack
+                            ? Colors.black
+                            : Colors.white,
+                    border: (isBlack || isPass) ? null : Border.all(color: Colors.black),
                   ),
                   child: Center(
                     child: Text(
-                      '${index + 1}',
+                      isPass ? 'P' : '$displayNum',
                       style: TextStyle(
-                        color: isBlack ? Colors.white : Colors.black,
+                        color: (isBlack || isPass) ? Colors.white : Colors.black,
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
@@ -452,7 +468,7 @@ class _HistoryView extends StatelessWidget {
                   ),
                 ),
                 title: Text(
-                  coord.toLowerCase() == 'pass'
+                  isPass
                       ? '${isBlack ? "Black" : "White"} passed'
                       : '${isBlack ? "Black" : "White"} placed at $coord',
                   style: const TextStyle(fontWeight: FontWeight.w500),

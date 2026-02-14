@@ -415,15 +415,17 @@ class _BoardPainter extends CustomPainter {
       // We iterate forward, so later moves overwrite earlier ones (which is correct for current state 
       // as long as the stone wasn't captured and the spot is empty).
       // Since we only draw if the board has a stone, mapping the *last* move at a coordinate is correct.
+      int stoneNumber = 0;
       for (int i = 0; i < board.movesGtp.length; i++) {
         final moveStr = board.movesGtp[i];
         final gameMove = GameMove.fromGtp(moveStr, board.size);
         final point = gameMove?.point;
-        
+
         if (point != null) {
+          stoneNumber++;
           final displayPoint = point.toDisplayCoords(board.size);
           final index = displayPoint.y * board.size + displayPoint.x;
-          moveNumbers[index] = i + 1;
+          moveNumbers[index] = stoneNumber;
         }
       }
     }
