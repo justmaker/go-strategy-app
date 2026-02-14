@@ -6,23 +6,32 @@ import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.*
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * KataGo Engine wrapper for Android.
- * Manages the KataGo process and communicates via GTP/Analysis protocol.
+ * KataGo Engine wrapper for Android (ONNX Backend, Single-threaded).
+ * Uses synchronous JNI API - no pthread, no pipe.
  */
 class KataGoEngine(private val context: Context) {
-    // JNI Native Methods
-    private external fun startNative(config: String, model: String): Boolean
-    private external fun writeToProcess(data: String)
-    private external fun readFromProcess(): String
-    private external fun stopNative()
+    // New JNI Native Methods (synchronous)
+    private external fun initializeNative(
+        config: String,
+        modelBin: String,
+        modelOnnx: String
+    ): Boolean
+
+    private external fun analyzePositionNative(
+        boardXSize: Int,
+        boardYSize: Int,
+        komi: Double,
+        maxVisits: Int,
+        moves: Array<Array<String>>  // [["B","Q16"],["W","D4"],...]
+    ): String  // Returns JSON result
+
+    private external fun destroyNative()
 
     companion object {
         private const val TAG = "KataGoEngine"
-        private const val MODEL_FILE = "model.bin.gz"
+        private const val MODEL_BIN_FILE = "model.bin.gz"
 
         var nativeLoaded = false
             private set
@@ -34,7 +43,7 @@ class KataGoEngine(private val context: Context) {
             try {
                 System.loadLibrary("katago_mobile")
                 nativeLoaded = true
-                Log.i(TAG, "Native library loaded successfully")
+                Log.i(TAG, "✓ Native library loaded (ONNX backend)")
             } catch (e: UnsatisfiedLinkError) {
                 nativeLoadError = e.message
                 Log.e(TAG, "Failed to load native library: ${e.message}")
@@ -42,20 +51,14 @@ class KataGoEngine(private val context: Context) {
         }
     }
 
-    private val isRunning = AtomicBoolean(false)
-    private val isReaderActive = AtomicBoolean(false)
-    private val queryId = AtomicInteger(0)
-    private var scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    
-    // Callbacks
-    private var analysisCallback: ((String) -> Unit)? = null
-    private var errorCallback: ((String) -> Unit)? = null
+    private var isInitialized = false
+    private var defaultBoardSize = 19
 
     /**
-     * Initialize and start the KataGo engine via JNI.
+     * Initialize KataGo engine (one-time setup, no threads).
      */
     suspend fun start(): Boolean = withContext(Dispatchers.IO) {
-        if (isRunning.get()) return@withContext true
+        if (isInitialized) return@withContext true
 
         if (!nativeLoaded) {
             Log.e(TAG, "Cannot start: native library not loaded (${nativeLoadError})")
@@ -63,278 +66,159 @@ class KataGoEngine(private val context: Context) {
         }
 
         try {
-            val modelPath = extractModel() ?: return@withContext false
+            // Extract model files
+            val modelBinPath = extractAsset("katago/$MODEL_BIN_FILE")
+                ?: return@withContext false
+
+            // Determine board size for ONNX model selection
+            val modelOnnxPath = extractAsset("katago/model_${defaultBoardSize}x${defaultBoardSize}.onnx")
+                ?: extractAsset("katago/model.onnx")
+                ?: return@withContext false
+
             val configPath = createConfigFile()
 
-            Log.i(TAG, "Starting Native KataGo...")
-            val success = startNative(configPath, modelPath)
+            Log.i(TAG, "Initializing KataGo (ONNX backend)...")
+            val success = initializeNative(configPath, modelBinPath, modelOnnxPath)
 
             if (success) {
-                startOutputReaders()
-
-                val ready = waitForReady(timeoutMs = 30000)
-                if (ready) {
-                    isRunning.set(true)
-                    Log.i(TAG, "Native KataGo started and ready")
-                    return@withContext true
-                } else {
-                    Log.e(TAG, "KataGo readiness probe timed out")
-                    isReaderActive.set(false)
-                    stopNative()
-                    return@withContext false
-                }
+                isInitialized = true
+                Log.i(TAG, "✓ KataGo initialized successfully")
+                return@withContext true
             } else {
-                Log.e(TAG, "Failed to start Native KataGo")
+                Log.e(TAG, "❌ KataGo initialization failed")
                 return@withContext false
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Start Native Error", e)
+            Log.e(TAG, "Initialization error", e)
             return@withContext false
         }
     }
 
-    private suspend fun waitForReady(timeoutMs: Long): Boolean {
-        val deferred = CompletableDeferred<Boolean>()
-        val previousCallback = analysisCallback
-
-        analysisCallback = { line ->
-            if (line.contains("probe_ready")) {
-                deferred.complete(true)
-            }
-        }
-
-        try {
-            val probe = JSONObject().apply {
-                put("id", "probe_ready")
-                put("boardXSize", 9)
-                put("boardYSize", 9)
-                put("komi", 5.5)
-                put("maxVisits", 1)
-                put("moves", JSONArray())
-            }
-            Log.d(TAG, "Sending readiness probe...")
-            writeToProcess(probe.toString())
-
-            return withTimeoutOrNull(timeoutMs) { deferred.await() } ?: false
-        } catch (e: Exception) {
-            Log.e(TAG, "Readiness probe failed", e)
-            return false
-        } finally {
-            analysisCallback = previousCallback
-        }
-    }
-
+    /**
+     * Stop and cleanup KataGo engine.
+     */
     fun stop() {
-        if (!isRunning.get()) return
-        stopNative()
-        isRunning.set(false)
-        isReaderActive.set(false)
-        scope.cancel()
-        scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        if (!isInitialized) return
+        destroyNative()
+        isInitialized = false
+        Log.i(TAG, "✓ KataGo destroyed")
     }
 
-
     /**
-     * Analyze a position.
+     * Analyze a position (synchronous, blocking call).
+     * Runs on Dispatchers.IO coroutine.
      */
-    /**
-     * Analyze a position.
-     */
-    fun analyze(
+    suspend fun analyze(
         boardSize: Int,
         moves: List<String>,
         komi: Double,
-        maxVisits: Int,
-        callback: (String) -> Unit
-    ): String {
-        if (!isRunning.get()) {
-            callback("{\"error\": \"Engine not running\"}")
-            return ""
+        maxVisits: Int
+    ): String = withContext(Dispatchers.IO) {
+        if (!isInitialized) {
+            return@withContext "{\"error\": \"Engine not initialized\"}"
         }
 
-        val id = "q${queryId.incrementAndGet()}"
-        analysisCallback = callback
-
         try {
-            val query = buildAnalysisQuery(id, boardSize, moves, komi, maxVisits)
-            Log.d(TAG, "Sending query: $query")
-            
-            writeToProcess(query)
-            
+            Log.d(TAG, "Analyzing: ${boardSize}x${boardSize}, ${moves.size} moves, komi=$komi, visits=$maxVisits")
+
+            // Convert moves format: ["B Q16", "W D4"] -> [["B","Q16"],["W","D4"]]
+            val movesArray = moves.map { move ->
+                val parts = move.trim().split(" ", limit = 2)
+                if (parts.size == 2) {
+                    arrayOf(parts[0], parts[1])
+                } else {
+                    arrayOf("B", "pass")  // Fallback
+                }
+            }.toTypedArray()
+
+            // Synchronous JNI call (blocks until analysis complete)
+            val result = analyzePositionNative(
+                boardSize, boardSize,
+                komi, maxVisits,
+                movesArray
+            )
+
+            Log.d(TAG, "✓ Analysis completed: ${result.length} bytes")
+            return@withContext result
+
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to send query", e)
-            callback("{\"error\": \"${e.message}\"}")
-        }
-
-        return id
-    }
-
-    /**
-     * Cancel ongoing analysis.
-     */
-    fun cancelAnalysis(queryId: String) {
-        if (!isRunning.get()) return
-
-        try {
-            val cmd = JSONObject().apply {
-                put("id", "cancel_$queryId")
-                put("action", "terminate")
-                put("terminateId", queryId)
-            }
-            writeToProcess(cmd.toString())
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to cancel analysis", e)
+            Log.e(TAG, "Analysis exception", e)
+            return@withContext "{\"error\": \"${e.message}\"}"
         }
     }
 
     /**
      * Check if engine is running.
      */
-    fun isEngineRunning(): Boolean = isRunning.get()
+    fun isEngineRunning(): Boolean = isInitialized
 
-    /**
-     * Set error callback.
-     */
-    fun setErrorCallback(callback: (String) -> Unit) {
-        errorCallback = callback
-    }
+    // Helper methods
 
-    // Private methods
-
-    private fun extractModel(): String? {
-        val modelFile = File(context.cacheDir, MODEL_FILE)
+    private fun extractAsset(assetPath: String): String? {
+        val filename = assetPath.substringAfterLast('/')
+        val outputFile = File(context.cacheDir, filename)
 
         // Check if already extracted
-        if (modelFile.exists() && modelFile.length() > 0) {
-            return modelFile.absolutePath
+        if (outputFile.exists() && outputFile.length() > 0) {
+            Log.d(TAG, "Asset cached: $assetPath")
+            return outputFile.absolutePath
         }
 
-        // Flutter assets are stored under flutter_assets/assets/ in the APK
-        val assetPaths = listOf(
-            "flutter_assets/assets/katago/$MODEL_FILE",
-            "katago/$MODEL_FILE",
+        // Try multiple asset path variants
+        val paths = listOf(
+            "flutter_assets/assets/$assetPath",
+            "flutter_assets/$assetPath",
+            assetPath
         )
 
-        for (assetPath in assetPaths) {
+        for (path in paths) {
             try {
-                context.assets.open(assetPath).use { input ->
-                    FileOutputStream(modelFile).use { output ->
+                context.assets.open(path).use { input ->
+                    FileOutputStream(outputFile).use { output ->
                         input.copyTo(output)
                     }
                 }
-                Log.i(TAG, "Model extracted from $assetPath to ${modelFile.absolutePath}")
-                return modelFile.absolutePath
+                Log.i(TAG, "✓ Asset extracted: $path -> ${outputFile.absolutePath}")
+                return outputFile.absolutePath
             } catch (e: Exception) {
-                Log.d(TAG, "Asset not found at $assetPath, trying next...")
+                // Try next path
             }
         }
 
-        Log.e(TAG, "Failed to extract model from any asset path")
+        Log.e(TAG, "❌ Failed to extract asset: $assetPath")
         return null
     }
 
     private fun createConfigFile(): String {
         val configFile = File(context.cacheDir, "analysis.cfg")
-        
+
         val config = """
-            # KataGo Analysis Config for Android
-            
-            # Limits
+            # KataGo Analysis Config for Android (Single-threaded)
+
+            # Single-threaded configuration (avoid pthread)
+            numSearchThreads = 1
+            numAnalysisThreads = 1
+            numNNServerThreadsPerModel = 1
+
+            # Visits
             maxVisits = 100
-            numSearchThreads = 2
-            
-            # Analysis output
+
+            # Output format
             reportAnalysisWinratesAs = BLACK
-            
-            # Performance tuning for mobile
+
+            # Cache (mutex locks are OK, pthread_create is not)
             nnCacheSizePowerOfTwo = 18
             nnMutexPoolSizePowerOfTwo = 14
-            numNNServerThreadsPerModel = 1
-            
-            # Disable features not needed for analysis
+
+            # Batch size
+            nnMaxBatchSize = 1
+
+            # Logging
             logSearchInfo = false
-            logToStderr = true
+            logToStderr = false
         """.trimIndent()
 
         configFile.writeText(config)
         return configFile.absolutePath
-    }
-
-    private fun buildAnalysisQuery(
-        id: String,
-        boardSize: Int,
-        moves: List<String>,
-        komi: Double,
-        maxVisits: Int
-    ): String {
-        val query = JSONObject().apply {
-            put("id", id)
-            put("boardXSize", boardSize)
-            put("boardYSize", boardSize)
-            put("komi", komi)
-            put("maxVisits", maxVisits)
-            put("reportDuringSearchEvery", 1.0)  // Report progress
-            
-            // Convert moves to array format
-            val movesArray = JSONArray()
-            for (move in moves) {
-                val parts = move.split(" ")
-                if (parts.size == 2) {
-                    val moveArr = JSONArray()
-                    moveArr.put(parts[0])  // Color: B or W
-                    moveArr.put(parts[1])  // Coordinate: e.g., Q16
-                    movesArray.put(moveArr)
-                }
-            }
-            put("moves", movesArray)
-        }
-        
-        return query.toString()
-    }
-
-    private fun startOutputReaders() {
-        isReaderActive.set(true)
-        // Read stdout (analysis results) from Native via JNI
-        scope.launch {
-            Log.i(TAG, "Starting Output Reader Loop")
-            while (isReaderActive.get()) {
-                try {
-                    // Blocking read from native pipe
-                    val line = readFromProcess()
-                    if (line.isNotEmpty()) {
-                        Log.d(TAG, "KataGo stdout: $line")
-                        processOutput(line)
-                    } else {
-                        // Empty line might mean EOF or just empty flush?
-                        // Yield to prevent tight loop if non-blocking (though native is blocking)
-                        yield()
-                    }
-                } catch (e: Exception) {
-                    if (isReaderActive.get()) {
-                        Log.e(TAG, "Error reading from process", e)
-                    }
-                    delay(100) // Backoff on error
-                }
-            }
-            Log.i(TAG, "Output Reader Loop Ended")
-        }
-
-        // Standard error is not captured in current Native impl
-        // If needed, we would add another pipe in native-lib.cpp
-    }
-
-    private fun processOutput(line: String) {
-        try {
-            val json = JSONObject(line)
-            
-            // Check if this is a final result or progress update
-            val isDuringSearch = json.optBoolean("isDuringSearch", false)
-            
-            // Always forward to callback
-            analysisCallback?.invoke(line)
-            
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse output: $line", e)
-        }
     }
 }

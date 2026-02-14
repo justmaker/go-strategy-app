@@ -1,205 +1,361 @@
 #include <android/log.h>
-#include <iostream>
 #include <jni.h>
 #include <memory>
-#include <streambuf>
 #include <string>
-#include <pthread.h>
-#include <unistd.h>
 #include <vector>
+#include <sstream>
 
-// Include KataGo Main Headers
-#include "katago/cpp/main.h"
+// KataGo Headers
+#include "katago/cpp/core/global.h"
+#include "katago/cpp/core/config_parser.h"
+#include "katago/cpp/game/board.h"
+#include "katago/cpp/game/boardhistory.h"
+#include "katago/cpp/game/rules.h"
+#include "katago/cpp/neuralnet/nneval.h"
+#include "katago/cpp/neuralnet/nninputs.h"
+#include "katago/cpp/search/search.h"
+#include "katago/cpp/search/searchparams.h"
+#include "katago/cpp/external/nlohmann_json/json.hpp"
 
 #define TAG "KataGoNative"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
-// Custom streambuf for reading from a file descriptor
-class fdinbuf : public std::streambuf {
-protected:
-  int fd;
-  char buffer[1];
+using json = nlohmann::json;
 
-public:
-  fdinbuf(int _fd) : fd(_fd) { setg(buffer, buffer, buffer); }
+// ============================================================================
+// Global State (no threads, no pipes)
+// ============================================================================
 
-protected:
-  virtual int_type underflow() override {
-    if (gptr() < egptr()) {
-      return traits_type::to_int_type(*gptr());
-    }
-    ssize_t n = read(fd, buffer, 1);
-    if (n <= 0) {
-      return traits_type::eof();
-    }
-    setg(buffer, buffer, buffer + 1);
-    return traits_type::to_int_type(*gptr());
-  }
-};
+static Logger* g_logger = nullptr;
+static NNEvaluator* g_nnEval = nullptr;
+static SearchParams* g_searchParams = nullptr;
+static Rules g_rules;
+static std::string g_modelName = "kata1-b6c96";
 
-// Custom streambuf for writing to a file descriptor
-class fdoutbuf : public std::streambuf {
-protected:
-  int fd;
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
-public:
-  fdoutbuf(int _fd) : fd(_fd) {}
-
-protected:
-  virtual int_type overflow(int_type c) override {
-    if (c != traits_type::eof()) {
-      char z = static_cast<char>(c);
-      if (write(fd, &z, 1) != 1) {
-        return traits_type::eof();
-      }
-    }
-    return c;
-  }
-  virtual std::streamsize xsputn(const char *s, std::streamsize n) override {
-    return (std::streamsize)write(fd, s, (size_t)n);
-  }
-};
-
-// Thread data structure to pass args to pthread
-struct KataGoThreadData {
-  std::vector<std::string> args;
-};
-
-// Global state
-static pthread_t g_kataGoThread;
-static int g_pipeIn[2];  // Java -> KataGo
-static int g_pipeOut[2]; // KataGo -> Java
-
-static std::unique_ptr<fdinbuf> g_bufIn;
-static std::unique_ptr<fdoutbuf> g_bufOut;
-static std::unique_ptr<std::istream> g_kpCin;
-static std::unique_ptr<std::ostream> g_kpCout;
-
-// pthread worker function
-static void* kataGoThreadFunc(void* arg) {
-  KataGoThreadData* data = static_cast<KataGoThreadData*>(arg);
-  LOGI("KataGo pthread started");
-
-  try {
-    MainCmds::analysis(data->args, *g_kpCin, *g_kpCout);
-  } catch (const std::exception &e) {
-    LOGE("KataGo Exception: %s", e.what());
-  } catch (...) {
-    LOGE("KataGo Unknown Exception");
+// Parse GTP coordinate (e.g., "Q16") to Loc
+static Loc parseGTPLoc(const std::string& s, int boardXSize, int boardYSize) {
+  if (s == "pass" || s == "PASS") {
+    return Board::PASS_LOC;
   }
 
-  delete data;
-  LOGI("KataGo pthread ended");
-  return nullptr;
+  if (s.length() < 2) return Board::NULL_LOC;
+
+  char col = s[0];
+  int row;
+  std::istringstream rowStream(s.substr(1));
+  rowStream >> row;
+
+  // GTP format: A-T (skip I), 1-19
+  int x, y;
+  if (col >= 'A' && col <= 'Z') {
+    x = col - 'A';
+    if (col >= 'I') x--;  // Skip 'I'
+  } else if (col >= 'a' && col <= 'z') {
+    x = col - 'a';
+    if (col >= 'i') x--;
+  } else {
+    return Board::NULL_LOC;
+  }
+
+  y = boardYSize - row;  // GTP row 1 = bottom
+
+  if (x < 0 || x >= boardXSize || y < 0 || y >= boardYSize) {
+    return Board::NULL_LOC;
+  }
+
+  return Location::getLoc(x, y, boardXSize);
 }
+
+// Convert Loc to GTP coordinate
+static std::string locToGTP(Loc loc, int boardXSize, int boardYSize) {
+  if (loc == Board::PASS_LOC) {
+    return "pass";
+  }
+  if (loc == Board::NULL_LOC) {
+    return "null";
+  }
+
+  int x = Location::getX(loc, boardXSize);
+  int y = Location::getY(loc, boardXSize);
+
+  char col = 'A' + x;
+  if (col >= 'I') col++;  // Skip 'I'
+
+  int row = boardYSize - y;
+
+  return std::string(1, col) + std::to_string(row);
+}
+
+// ============================================================================
+// JNI Methods
+// ============================================================================
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_gostratefy_go_1strategy_1app_KataGoEngine_startNative(
-    JNIEnv *env, jobject thiz, jstring configPath, jstring modelPath) {
+Java_com_gostratefy_go_1strategy_1app_KataGoEngine_initializeNative(
+    JNIEnv* env,
+    jobject thiz,
+    jstring configPath,
+    jstring modelBinPath,
+    jstring modelOnnxPath) {
 
-  const char *cfg = env->GetStringUTFChars(configPath, nullptr);
-  const char *model = env->GetStringUTFChars(modelPath, nullptr);
+  const char* cfgStr = env->GetStringUTFChars(configPath, nullptr);
+  const char* binStr = env->GetStringUTFChars(modelBinPath, nullptr);
+  const char* onnxStr = env->GetStringUTFChars(modelOnnxPath, nullptr);
 
-  std::string cfgStr(cfg);
-  std::string modelStr(model);
+  std::string configFile(cfgStr);
+  std::string modelBinFile(binStr);
+  std::string modelOnnxFile(onnxStr);
 
-  env->ReleaseStringUTFChars(configPath, cfg);
-  env->ReleaseStringUTFChars(modelPath, model);
+  env->ReleaseStringUTFChars(configPath, cfgStr);
+  env->ReleaseStringUTFChars(modelBinPath, binStr);
+  env->ReleaseStringUTFChars(modelOnnxPath, onnxStr);
 
-  LOGI("Initializing Native KataGo...");
-  LOGI("Config: %s", cfgStr.c_str());
-  LOGI("Model: %s", modelStr.c_str());
+  LOGI("=== Initializing KataGo (ONNX Backend, Single-threaded) ===");
+  LOGI("Config: %s", configFile.c_str());
+  LOGI("Model (bin.gz): %s", modelBinFile.c_str());
+  LOGI("Model (onnx): %s", modelOnnxFile.c_str());
 
-  // Create Pipes
-  if (pipe(g_pipeIn) < 0 || pipe(g_pipeOut) < 0) {
-    LOGE("Failed to create pipes");
+  try {
+    // 1. Initialize logger
+    g_logger = new Logger(nullptr, false, false, false, false);
+    g_logger->addFile("/sdcard/katago_debug.log");
+
+    // 2. Parse config
+    ConfigParser cfg(configFile);
+
+    // Force single-threaded configuration
+    int numSearchThreads = 1;
+    int maxVisits = cfg.getInt("maxVisits", 1, 1000000000);
+    int nnCacheSizePowerOfTwo = cfg.getInt("nnCacheSizePowerOfTwo", 0, 48);
+
+    LOGI("maxVisits: %d", maxVisits);
+    LOGI("numSearchThreads: %d (forced single-threaded)", numSearchThreads);
+
+    // 3. Initialize NeuralNet backend
+    NeuralNet::globalInitialize();
+
+    // 4. Load model (LoadedModel will load both .bin.gz and .onnx)
+    // IMPORTANT: For ONNX backend, loadModelFile expects .bin.gz path
+    // and automatically finds the .onnx file
+    LoadedModel* loadedModel = NeuralNet::loadModelFile(modelBinFile, "");
+
+    const ModelDesc& modelDesc = NeuralNet::getModelDesc(loadedModel);
+    LOGI("Model loaded: %s, version %d", modelDesc.name.c_str(), modelDesc.modelVersion);
+
+    // 5. Get board size (use 19x19 as default, will be overridden per-analysis)
+    int nnXLen = 19;
+    int nnYLen = 19;
+    LOGI("Default board size: %dx%d", nnXLen, nnYLen);
+
+    // 6. Create NNEvaluator (single-threaded mode)
+    std::vector<int> gpuIdxs = {-1};  // Default GPU
+    g_nnEval = new NNEvaluator(
+      g_modelName,
+      modelBinFile,
+      "",  // expectedSha256
+      g_logger,
+      1,   // maxBatchSize = 1 (single-threaded)
+      nnXLen,
+      nnYLen,
+      false, // requireExactNNLen
+      true,  // inputsUseNHWC
+      nnCacheSizePowerOfTwo,
+      17,    // mutexPoolSize
+      false, // debugSkipNeuralNet
+      "",    // openCLTunerFile
+      "",    // homeDataDirOverride
+      false, // openCLReTunePerBoardSize
+      enabled_t::Auto, // useFP16
+      enabled_t::Auto, // useNHWC
+      numSearchThreads,
+      gpuIdxs,
+      "androidSeed", // randSeed
+      false, // doRandomize
+      0      // defaultSymmetry
+    );
+
+    // CRITICAL: Enable single-threaded mode to avoid pthread
+    g_nnEval->setSingleThreadedMode(true);
+    LOGI("✓ Single-threaded mode enabled");
+
+    // DO NOT call spawnServerThreads() - we use single-threaded mode
+
+    // 7. Create SearchParams
+    g_searchParams = new SearchParams();
+    g_searchParams->numThreads = numSearchThreads;
+    g_searchParams->maxVisits = maxVisits;
+    g_searchParams->maxPlayouts = maxVisits;
+    g_searchParams->maxTime = 1e30;  // No time limit
+    g_searchParams->lagBuffer = 0.0;
+    g_searchParams->searchFactorAfterOnePass = 1.0;
+    g_searchParams->searchFactorAfterTwoPass = 1.0;
+
+    // 8. Setup default rules (Chinese rules, 7.5 komi)
+    g_rules = Rules::getTrompTaylorish();
+    g_rules.komi = 7.5f;
+
+    LOGI("✓ KataGo initialized successfully (no pthread created)");
+    return JNI_TRUE;
+
+  } catch (const StringError& e) {
+    LOGE("Initialization failed: %s", e.what());
+    return JNI_FALSE;
+  } catch (const std::exception& e) {
+    LOGE("Initialization exception: %s", e.what());
     return JNI_FALSE;
   }
-
-  // Wrap pipes in streams
-  // g_pipeIn[0] is read end (for KataGo)
-  // g_pipeOut[1] is write end (for KataGo)
-  g_bufIn = std::make_unique<fdinbuf>(g_pipeIn[0]);
-  g_bufOut = std::make_unique<fdoutbuf>(g_pipeOut[1]);
-
-  g_kpCin = std::make_unique<std::istream>(g_bufIn.get());
-  g_kpCout = std::make_unique<std::ostream>(g_bufOut.get());
-
-  // Prepare Args
-  // argv[0] is program name
-  KataGoThreadData* threadData = new KataGoThreadData();
-  threadData->args.push_back("katago");
-  threadData->args.push_back("analysis");
-  threadData->args.push_back("-config");
-  threadData->args.push_back(cfgStr);
-  threadData->args.push_back("-model");
-  threadData->args.push_back(modelStr);
-
-  // Create pthread with increased stack size for KataGo's heavy computation
-  pthread_attr_t attr;
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-
-  // Set large stack size (4MB) to avoid JNI issues on Android
-  // Default stack may be insufficient for KataGo + JNI calls
-  size_t stackSize = 4 * 1024 * 1024; // 4MB
-  pthread_attr_setstacksize(&attr, stackSize);
-  LOGI("Creating pthread with stack size: %zu bytes", stackSize);
-
-  int ret = pthread_create(&g_kataGoThread, &attr, kataGoThreadFunc, threadData);
-  pthread_attr_destroy(&attr);
-
-  if (ret != 0) {
-    LOGE("Failed to create pthread: %d", ret);
-    delete threadData;
-    return JNI_FALSE;
-  }
-
-  LOGI("KataGo pthread created successfully");
-  return JNI_TRUE;
-}
-
-extern "C" JNIEXPORT void JNICALL
-Java_com_gostratefy_go_1strategy_1app_KataGoEngine_writeToProcess(
-    JNIEnv *env, jobject thiz, jstring data) {
-
-  const char *str = env->GetStringUTFChars(data, nullptr);
-  if (!str)
-    return;
-  std::string input(str);
-  env->ReleaseStringUTFChars(data, str);
-
-  // Write to g_pipeIn[1]
-  input += "\n"; // Ensure newline
-  write(g_pipeIn[1], input.c_str(), input.size());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_gostratefy_go_1strategy_1app_KataGoEngine_readFromProcess(
-    JNIEnv *env, jobject thiz) {
+Java_com_gostratefy_go_1strategy_1app_KataGoEngine_analyzePositionNative(
+    JNIEnv* env,
+    jobject thiz,
+    jint boardXSize,
+    jint boardYSize,
+    jdouble komi,
+    jint maxVisits,
+    jobjectArray movesArray) {
 
-  // Read from g_pipeOut[0]
-  std::string line;
-  char c;
-  while (read(g_pipeOut[0], &c, 1) > 0) {
-    if (c == '\n')
-      break;
-    line += c;
+  LOGI("=== analyzePositionNative ===");
+  LOGI("Board: %dx%d, Komi: %.1f, MaxVisits: %d", boardXSize, boardYSize, komi, maxVisits);
+
+  try {
+    // 1. Parse moves array
+    jsize numMoves = env->GetArrayLength(movesArray);
+    LOGI("Number of moves: %d", numMoves);
+
+    std::vector<std::pair<Player, Loc>> moves;
+    for (jsize i = 0; i < numMoves; i++) {
+      jobjectArray moveArray = (jobjectArray)env->GetObjectArrayElement(movesArray, i);
+      jstring colorStr = (jstring)env->GetObjectArrayElement(moveArray, 0);
+      jstring locStr = (jstring)env->GetObjectArrayElement(moveArray, 1);
+
+      const char* colorChars = env->GetStringUTFChars(colorStr, nullptr);
+      const char* locChars = env->GetStringUTFChars(locStr, nullptr);
+
+      Player pla = (colorChars[0] == 'B' || colorChars[0] == 'b') ? P_BLACK : P_WHITE;
+      Loc loc = parseGTPLoc(std::string(locChars), boardXSize, boardYSize);
+
+      env->ReleaseStringUTFChars(colorStr, colorChars);
+      env->ReleaseStringUTFChars(locStr, locChars);
+      env->DeleteLocalRef(colorStr);
+      env->DeleteLocalRef(locStr);
+      env->DeleteLocalRef(moveArray);
+
+      if (loc != Board::NULL_LOC) {
+        moves.push_back({pla, loc});
+      }
+    }
+
+    // 2. Build Board and BoardHistory
+    Board board(boardXSize, boardYSize);
+    Player nextPla = P_BLACK;
+    BoardHistory history(board, nextPla, g_rules, 0);
+    history.setKomi((float)komi);
+
+    for (const auto& move : moves) {
+      if (!history.isLegal(board, move.second, move.first)) {
+        LOGE("Illegal move: %s %s",
+             PlayerIO::playerToString(move.first).c_str(),
+             locToGTP(move.second, boardXSize, boardYSize).c_str());
+        continue;
+      }
+      history.makeBoardMoveAssumeLegal(board, move.second, move.first, nullptr);
+      nextPla = getOpp(move.first);
+    }
+
+    LOGI("Position set up, next player: %s", PlayerIO::playerToString(nextPla).c_str());
+
+    // 3. Create Search (single-threaded)
+    SearchParams searchParams = *g_searchParams;
+    searchParams.maxVisits = maxVisits;
+    searchParams.maxPlayouts = maxVisits;
+
+    Search* search = new Search(searchParams, g_nnEval, g_logger, "androidSearch");
+
+    // 4. Set position
+    search->setPosition(nextPla, board, history);
+
+    // 5. Run search (synchronous, single-threaded, no pthread)
+    LOGI("Starting search (%d visits)...", maxVisits);
+    search->runWholeSearch(nextPla);
+    LOGI("Search completed");
+
+    // 6. Extract results from search tree
+    json result;
+    result["id"] = "android_analysis";
+    result["turnNumber"] = history.moveHistory.size();
+
+    // Get move candidates (simplified API)
+    std::vector<Loc> locs;
+    std::vector<double> playSelectionValues;
+    bool suc = search->getPlaySelectionValues(locs, playSelectionValues, 1.0);
+
+    if (suc) {
+      result["moveInfos"] = json::array();
+
+      for (size_t i = 0; i < locs.size() && i < 20; i++) {  // Top 20 moves
+        json moveInfo;
+        moveInfo["move"] = locToGTP(locs[i], boardXSize, boardYSize);
+        moveInfo["order"] = i;
+        moveInfo["utility"] = playSelectionValues[i];
+
+        result["moveInfos"].push_back(moveInfo);
+      }
+    }
+
+    // 7. Cleanup
+    delete search;
+
+    // 8. Return JSON
+    std::string jsonStr = result.dump();
+    LOGI("Analysis result: %zu bytes", jsonStr.length());
+
+    return env->NewStringUTF(jsonStr.c_str());
+
+  } catch (const StringError& e) {
+    LOGE("Analysis failed: %s", e.what());
+    return env->NewStringUTF("{\"error\": \"Analysis failed\"}");
+  } catch (const std::exception& e) {
+    LOGE("Analysis exception: %s", e.what());
+    return env->NewStringUTF("{\"error\": \"Exception occurred\"}");
   }
-
-  return env->NewStringUTF(line.c_str());
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_gostratefy_go_1strategy_1app_KataGoEngine_stopNative(JNIEnv *env,
-                                                              jobject thiz) {
-  close(g_pipeIn[1]); // Close write end, KataGo sees EOF
+Java_com_gostratefy_go_1strategy_1app_KataGoEngine_destroyNative(
+    JNIEnv* env,
+    jobject thiz) {
+
+  LOGI("=== Destroying KataGo ===");
+
+  if (g_nnEval != nullptr) {
+    delete g_nnEval;
+    g_nnEval = nullptr;
+  }
+
+  if (g_searchParams != nullptr) {
+    delete g_searchParams;
+    g_searchParams = nullptr;
+  }
+
+  if (g_logger != nullptr) {
+    delete g_logger;
+    g_logger = nullptr;
+  }
+
+  NeuralNet::globalCleanup();
+
+  LOGI("✓ KataGo destroyed");
 }
 
-// JNI_OnLoad: Called when library is loaded
-// Initialize resources early to avoid static initialization issues
+// JNI_OnLoad: Early initialization
 JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
-  LOGI("JNI_OnLoad called - early initialization");
+  LOGI("JNI_OnLoad called - ONNX backend, single-threaded mode");
   return JNI_VERSION_1_6;
 }

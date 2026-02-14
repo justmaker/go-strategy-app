@@ -56,14 +56,6 @@ class MainActivity : FlutterActivity() {
         KataGoEngine.loadNativeLibrary()
         if (KataGoEngine.nativeLoaded) {
             kataGoEngine = KataGoEngine(this)
-            kataGoEngine?.setErrorCallback { error ->
-                mainHandler.post {
-                    eventSink?.success(mapOf(
-                        "type" to "error",
-                        "message" to error
-                    ))
-                }
-            }
             return true
         } else {
             Log.w(TAG, "KataGo native library unavailable: ${KataGoEngine.nativeLoadError}")
@@ -108,33 +100,34 @@ class MainActivity : FlutterActivity() {
                 }
 
                 "analyze" -> {
-                    val boardSize = call.argument<Int>("boardSize") ?: 19
-                    val moves = call.argument<List<String>>("moves") ?: emptyList()
-                    val komi = call.argument<Double>("komi") ?: 7.5
-                    val maxVisits = call.argument<Int>("maxVisits") ?: 100
+                    scope.launch(Dispatchers.IO) {
+                        val boardSize = call.argument<Int>("boardSize") ?: 19
+                        val moves = call.argument<List<String>>("moves") ?: emptyList()
+                        val komi = call.argument<Double>("komi") ?: 7.5
+                        val maxVisits = call.argument<Int>("maxVisits") ?: 100
 
-                    val queryId = kataGoEngine?.analyze(
-                        boardSize = boardSize,
-                        moves = moves,
-                        komi = komi,
-                        maxVisits = maxVisits
-                    ) { response ->
+                        val response = kataGoEngine?.analyze(
+                            boardSize = boardSize,
+                            moves = moves,
+                            komi = komi,
+                            maxVisits = maxVisits
+                        ) ?: "{\"error\": \"Engine not available\"}"
+
                         mainHandler.post {
                             eventSink?.success(mapOf(
                                 "type" to "analysis",
                                 "data" to response
                             ))
                         }
-                    }
 
-                    result.success(queryId)
+                        withContext(Dispatchers.Main) {
+                            result.success(response)
+                        }
+                    }
                 }
 
                 "cancelAnalysis" -> {
-                    val queryId = call.argument<String>("queryId")
-                    if (queryId != null) {
-                        kataGoEngine?.cancelAnalysis(queryId)
-                    }
+                    // No-op for synchronous API
                     result.success(true)
                 }
 
