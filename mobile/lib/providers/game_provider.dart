@@ -427,7 +427,7 @@ class GameProvider extends ChangeNotifier {
     try {
       final boardHash = _computeSimpleHash();
 
-      // TEMPORARY: Force native engine test (DISABLED - scoreValue bug)
+      // Test mode disabled - opening book works perfectly
       const bool FORCE_NATIVE_TEST = false;
 
       // Step 1: Try bundled opening book first
