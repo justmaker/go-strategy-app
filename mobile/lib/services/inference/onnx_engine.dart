@@ -508,7 +508,7 @@ class OnnxEngine implements InferenceEngine {
     final topMoves = candidates.take(20).toList();
     debugPrint('$_tag Created ${candidates.length} candidates, returning top ${topMoves.length}');
     if (topMoves.isNotEmpty) {
-      debugPrint('$_tag Top move: ${topMoves[0].move} (${topMoves[0].winrate}%)');
+      debugPrint('$_tag Top move: ${topMoves[0].move} (${(topMoves[0].winrate * 100).toStringAsFixed(1)}%)');
     }
     return topMoves;
   }
@@ -520,40 +520,73 @@ class OnnxEngine implements InferenceEngine {
   }
 
   List<double> _generateCenterBiasedPolicy(int boardSize) {
-    // Generate probabilities based on distance from center with randomization
-    final center = boardSize / 2;
+    // Generate probabilities based on Go opening principles
     final probs = List<double>.filled(boardSize * boardSize + 1, 0.0);
     final random = math.Random();
+
+    // Key positions (star points, 3-3, 3-4 for corners)
+    final starPoint = boardSize >= 13 ? 3 : 2; // 4-4 for 13+, 3-3 for 9
+    final cornerPositions = [
+      (starPoint, starPoint),           // Bottom-left star/3-3
+      (starPoint, boardSize - 1 - starPoint), // Bottom-right
+      (boardSize - 1 - starPoint, starPoint), // Top-left
+      (boardSize - 1 - starPoint, boardSize - 1 - starPoint), // Top-right
+    ];
 
     for (var i = 0; i < boardSize * boardSize; i++) {
       final row = i ~/ boardSize;
       final col = i % boardSize;
 
-      // Distance from center (Euclidean distance for better distribution)
-      final distFromCenter = math.sqrt(
-        math.pow(row - center, 2) + math.pow(col - center, 2)
-      );
-
-      // Closer to center = higher probability
-      final maxDist = math.sqrt(2) * boardSize / 2;
-      var score = 1.0 - (distFromCenter / maxDist);
-
-      // Add small random variation (±10%) to break symmetry
-      score *= (0.95 + random.nextDouble() * 0.10);
-
-      // Prefer 3-4 lines (traditional Go wisdom)
-      final line = math.min(
+      // Line number (0 = edge, 1 = first line, etc.)
+      final minDistToEdge = math.min(
         math.min(row, boardSize - 1 - row),
         math.min(col, boardSize - 1 - col)
       );
-      if (line == 2 || line == 3) {
-        score *= 1.2; // 20% boost for 3rd and 4th lines
+
+      var score = 0.1; // Base score
+
+      // Apply Go principles
+      if (minDistToEdge == 0) {
+        score = 0.01; // First line: almost never (死亡線)
+      } else if (minDistToEdge == 1) {
+        score = 0.3; // Second line: rare (低位)
+      } else if (minDistToEdge == 2) {
+        score = 1.5; // Third line: excellent (實地線)
+      } else if (minDistToEdge == 3) {
+        score = 2.0; // Fourth line: best (勢力線)
+      } else if (minDistToEdge == 4) {
+        score = 1.2; // Fifth line: good but high
+      } else {
+        score = 0.6; // Center: less common in opening
       }
+
+      // Boost for corner star points (最重要)
+      for (final corner in cornerPositions) {
+        if (row == corner.$1 && col == corner.$2) {
+          score *= 3.0; // Corner star points are prime
+          break;
+        }
+      }
+
+      // Boost for positions near corners but not too close
+      final distToNearestCorner = [
+        math.sqrt(math.pow(row - starPoint, 2) + math.pow(col - starPoint, 2)),
+        math.sqrt(math.pow(row - starPoint, 2) + math.pow(col - (boardSize-1-starPoint), 2)),
+        math.sqrt(math.pow(row - (boardSize-1-starPoint), 2) + math.pow(col - starPoint, 2)),
+        math.sqrt(math.pow(row - (boardSize-1-starPoint), 2) + math.pow(col - (boardSize-1-starPoint), 2)),
+      ].reduce(math.min);
+
+      if (distToNearestCorner < 3 && distToNearestCorner > 0) {
+        score *= 1.5; // Near corners is good
+      }
+
+      // Random variation to break symmetry
+      score *= (0.9 + random.nextDouble() * 0.2);
 
       probs[i] = math.max(0.001, score);
     }
 
-    // Normalize to sum = 1
+    // Normalize
     final sum = probs.reduce((a, b) => a + b);
     return probs.map((p) => p / sum).toList();
   }
