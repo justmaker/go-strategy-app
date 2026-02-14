@@ -490,10 +490,10 @@ class OnnxEngine implements InferenceEngine {
 
       final gtp = _indexToGtp(row, col, boardSize);
 
-      // Winrate reflects adjusted probability (with edge penalty)
-      // Scale to reasonable range: top move ~60%, worst ~30%
-      final relativeProb = adjustedProb / maxProb;
-      final moveWinrate = 30 + relativeProb * 40; // Scale to 30-70% range
+      // Winrate: normalize to 40-60% range based on adjusted probability
+      // Don't use ONNX winrate directly as it can be unreliable
+      final relativeProb = adjustedProb / (maxProb + 0.0001);
+      final moveWinrate = 40 + relativeProb * 20; // Scale to 40-60% range
 
       candidates.add(MoveCandidate(
         move: gtp,
@@ -520,21 +520,37 @@ class OnnxEngine implements InferenceEngine {
   }
 
   List<double> _generateCenterBiasedPolicy(int boardSize) {
-    // Generate probabilities based on distance from center
+    // Generate probabilities based on distance from center with randomization
     final center = boardSize / 2;
     final probs = List<double>.filled(boardSize * boardSize + 1, 0.0);
+    final random = math.Random();
 
     for (var i = 0; i < boardSize * boardSize; i++) {
       final row = i ~/ boardSize;
       final col = i % boardSize;
 
-      // Distance from center (Manhattan distance)
-      final distFromCenter = (row - center).abs() + (col - center).abs();
+      // Distance from center (Euclidean distance for better distribution)
+      final distFromCenter = math.sqrt(
+        math.pow(row - center, 2) + math.pow(col - center, 2)
+      );
 
       // Closer to center = higher probability
-      // Max distance ~= boardSize, scale to 0-1
-      final normalized = 1.0 - (distFromCenter / (boardSize * 1.5));
-      probs[i] = math.max(0.01, normalized);
+      final maxDist = math.sqrt(2) * boardSize / 2;
+      var score = 1.0 - (distFromCenter / maxDist);
+
+      // Add small random variation (±10%) to break symmetry
+      score *= (0.95 + random.nextDouble() * 0.10);
+
+      // Prefer 3-4 lines (traditional Go wisdom)
+      final line = math.min(
+        math.min(row, boardSize - 1 - row),
+        math.min(col, boardSize - 1 - col)
+      );
+      if (line == 2 || line == 3) {
+        score *= 1.2; // 20% boost for 3rd and 4th lines
+      }
+
+      probs[i] = math.max(0.001, score);
     }
 
     // Normalize to sum = 1
