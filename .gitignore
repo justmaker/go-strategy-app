@@ -68,3 +68,6 @@ mobile/android/app/.cxx/
 
 # OpenCode
 .opencode/
+
+# Claude Code (local settings only)
+.claude/settings.local.json
