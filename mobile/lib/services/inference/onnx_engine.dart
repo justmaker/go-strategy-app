@@ -134,16 +134,49 @@ class OnnxEngine implements InferenceEngine {
         {'input_binary': inputBinary, 'input_global': inputGlobal},
       );
 
-      // Parse outputs
-      final policyOutput = outputs?[0]?.value as List<List<double>>;
-      final valueOutput = outputs?[1]?.value as List<List<double>>;
+      // Parse outputs - handle dynamic types from ONNX Runtime
+      final policyRaw = outputs?[0]?.value;
+      final valueRaw = outputs?[1]?.value;
 
       debugPrint('$_tag Inference complete');
-      debugPrint('$_tag Policy shape: ${policyOutput.length}x${policyOutput[0].length}');
-      debugPrint('$_tag Value shape: ${valueOutput.length}x${valueOutput[0].length}');
+      debugPrint('$_tag Policy type: ${policyRaw.runtimeType}');
+      debugPrint('$_tag Value type: ${valueRaw.runtimeType}');
+
+      // Convert to proper types
+      List<double> policyList;
+      List<double> valueList;
+
+      if (policyRaw is List<List<double>>) {
+        policyList = policyRaw[0];
+      } else if (policyRaw is List<dynamic>) {
+        final nested = policyRaw[0];
+        if (nested is List) {
+          policyList = nested.cast<double>();
+        } else {
+          policyList = policyRaw.cast<double>();
+        }
+      } else {
+        throw TypeError();
+      }
+
+      if (valueRaw is List<List<double>>) {
+        valueList = valueRaw[0];
+      } else if (valueRaw is List<dynamic>) {
+        final nested = valueRaw[0];
+        if (nested is List) {
+          valueList = nested.cast<double>();
+        } else {
+          valueList = valueRaw.cast<double>();
+        }
+      } else {
+        throw TypeError();
+      }
+
+      debugPrint('$_tag Policy shape: ${policyList.length}');
+      debugPrint('$_tag Value shape: ${valueList.length}');
 
       // Convert policy to move candidates
-      final topMoves = _parsePolicyOutput(boardSize, policyOutput[0], valueOutput[0]);
+      final topMoves = _parsePolicyOutput(boardSize, policyList, valueList);
 
       // Cleanup
       inputBinary.release();
