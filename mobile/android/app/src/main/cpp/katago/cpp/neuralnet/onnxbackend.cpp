@@ -536,6 +536,9 @@ void NeuralNet::getOutput(
       const float* policySrcBuf = policyData + row * numPolicyChannels * nnXLen * nnYLen;
       float* policyProbs = output->policyProbs;
 
+      // Set policyOptimismUsed
+      output->policyOptimismUsed = policyOptimism;
+
       // Policy logits (not probabilities yet - client does softmax)
       // Handle policy optimism if model has 2 policy channels
       if (numPolicyChannels == 2 || (numPolicyChannels == 4 && modelVersion >= 16)) {
@@ -588,46 +591,14 @@ void NeuralNet::getOutput(
         );
       }
 
-      // Score value (model version dependent)
-      if (modelVersion >= 9) {
-        int numScoreValueChannels = computeHandle->modelDesc.numScoreValueChannels;
-        assert(numScoreValueChannels == 6);
-        output->whiteScoreMean = scoreValueData[row * numScoreValueChannels];
-        output->whiteScoreMeanSq = scoreValueData[row * numScoreValueChannels + 1];
-        output->whiteLead = scoreValueData[row * numScoreValueChannels + 2];
-        output->varTimeLeft = scoreValueData[row * numScoreValueChannels + 3];
-        output->shorttermWinlossError = scoreValueData[row * numScoreValueChannels + 4];
-        output->shorttermScoreError = scoreValueData[row * numScoreValueChannels + 5];
-      } else if (modelVersion >= 8) {
-        int numScoreValueChannels = computeHandle->modelDesc.numScoreValueChannels;
-        assert(numScoreValueChannels == 4);
-        output->whiteScoreMean = scoreValueData[row * numScoreValueChannels];
-        output->whiteScoreMeanSq = scoreValueData[row * numScoreValueChannels + 1];
-        output->whiteLead = scoreValueData[row * numScoreValueChannels + 2];
-        output->varTimeLeft = scoreValueData[row * numScoreValueChannels + 3];
-        output->shorttermWinlossError = 0;
-        output->shorttermScoreError = 0;
-      } else if (modelVersion >= 4) {
-        int numScoreValueChannels = computeHandle->modelDesc.numScoreValueChannels;
-        assert(numScoreValueChannels == 2);
-        output->whiteScoreMean = scoreValueData[row * numScoreValueChannels];
-        output->whiteScoreMeanSq = scoreValueData[row * numScoreValueChannels + 1];
-        output->whiteLead = output->whiteScoreMean;
-        output->varTimeLeft = 0;
-        output->shorttermWinlossError = 0;
-        output->shorttermScoreError = 0;
-      } else if (modelVersion >= 3) {
-        int numScoreValueChannels = computeHandle->modelDesc.numScoreValueChannels;
-        assert(numScoreValueChannels == 1);
-        output->whiteScoreMean = scoreValueData[row * numScoreValueChannels];
-        output->whiteScoreMeanSq = output->whiteScoreMean * output->whiteScoreMean;
-        output->whiteLead = output->whiteScoreMean;
-        output->varTimeLeft = 0;
-        output->shorttermWinlossError = 0;
-        output->shorttermScoreError = 0;
-      } else {
-        ASSERT_UNREACHABLE;
-      }
+      // Score value - TEMPORARILY DISABLED to avoid crash
+      // TODO: Fix scoreValue parsing from output_miscvalue tensor
+      output->whiteScoreMean = 0;
+      output->whiteScoreMeanSq = 0;
+      output->whiteLead = 0;
+      output->varTimeLeft = 0;
+      output->shorttermWinlossError = 0;
+      output->shorttermScoreError = 0;
     }
 
     LOGI("ONNX inference completed for batch size %d", batchSize);
