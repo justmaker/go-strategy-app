@@ -520,9 +520,15 @@ class OnnxEngine implements InferenceEngine {
   }
 
   List<double> _generateCenterBiasedPolicy(int boardSize) {
-    // Generate probabilities based on Go opening principles
+    // Generate probabilities based on Go tactics and opening principles
     final probs = List<double>.filled(boardSize * boardSize + 1, 0.0);
     final random = math.Random();
+
+    // Get current board state for tactical analysis
+    final blackStones = <int>{};
+    final whiteStones = <int>{};
+    // Note: This would need to be passed in properly, for now use empty board
+    // In real implementation, pass current board state to this function
 
     // Key positions (star points, 3-3, 3-4 for corners)
     final starPoint = boardSize >= 13 ? 3 : 2; // 4-4 for 13+, 3-3 for 9
