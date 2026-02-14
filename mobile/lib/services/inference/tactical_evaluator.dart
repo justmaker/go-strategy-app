@@ -25,16 +25,16 @@ class TacticalEvaluator {
   double evaluatePosition(int position) {
     var score = 0.0;
 
-    // 1. Check if this move captures opponent stones (CRITICAL)
-    final captureScore = _evaluateCapture(position);
-    if (captureScore > 0) {
-      score += captureScore * 100; // Capturing is very important
-    }
-
-    // 2. Check if this move saves our stones from atari (CRITICAL)
+    // 1. MOST CRITICAL: Save our stones from atari
     final saveScore = _evaluateSave(position);
     if (saveScore > 0) {
-      score += saveScore * 50; // Saving our stones is critical
+      score += saveScore * 200; // Saving is MOST important
+    }
+
+    // 2. Capture opponent stones (but less important than saving)
+    final captureScore = _evaluateCapture(position);
+    if (captureScore > 0) {
+      score += captureScore * 80; // Capturing is important
     }
 
     // 3. Check if this move attacks opponent (puts them in atari)
@@ -48,7 +48,7 @@ class TacticalEvaluator {
     score += territoryScore * 10;
 
     // 5. Position value (opening principles)
-    final positionScore = _evaluatePosition(position);
+    final positionScore = _evaluatePositionValue(position);
     score += positionScore;
 
     return score;
@@ -151,7 +151,7 @@ class TacticalEvaluator {
   }
 
   /// Evaluate position value (opening principles)
-  double _evaluatePosition(int position) {
+  double _evaluatePositionValue(int position) {
     final row = position ~/ boardSize;
     final col = position % boardSize;
 
