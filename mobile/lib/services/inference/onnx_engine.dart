@@ -10,6 +10,7 @@ import 'package:onnxruntime/onnxruntime.dart';
 import '../../models/models.dart';
 import '../katago_service.dart' show AnalysisProgress;
 import 'inference_engine.dart';
+import 'liberty_calculator.dart';
 
 const int kNumBinaryFeatures = 22;
 const int kNumGlobalFeatures = 19;
@@ -246,33 +247,59 @@ class OnnxEngine implements InferenceEngine {
     debugPrint('$_tag Black stones: ${blackStones.length}, White stones: ${whiteStones.length}');
     debugPrint('$_tag Occupied positions: ${_occupiedPositions.length}');
 
-    // Channel 0: Current player's stones (last to move)
-    final currentIsBlack = moves.length % 2 == 1;
-    final currentStones = currentIsBlack ? blackStones : whiteStones;
-    final opponentStones = currentIsBlack ? whiteStones : blackStones;
+    // Determine current player (next to move)
+    // moves.length 偶數 = 黑方下, 奇數 = 白方下
+    final nextPlayerIsBlack = moves.length % 2 == 0;
+    final currentStones = nextPlayerIsBlack ? blackStones : whiteStones;
+    final opponentStones = nextPlayerIsBlack ? whiteStones : blackStones;
 
-    for (final stone in currentStones) {
-      data[stone] = 1.0; // Channel 0
-    }
+    debugPrint('$_tag Next player: ${nextPlayerIsBlack ? "Black" : "White"}');
 
-    // Channel 1: Opponent's stones
-    for (final stone in opponentStones) {
-      data[boardSize * boardSize + stone] = 1.0; // Channel 1
-    }
-
-    // Channel 2: All 1s (indicates valid board positions)
-    final channel2Offset = 2 * boardSize * boardSize;
+    // Channel 0: On board (all 1s) - KataGo feature 0
     for (var i = 0; i < boardSize * boardSize; i++) {
-      data[channel2Offset + i] = 1.0;
+      data[i] = 1.0;
     }
 
-    // Channel 3: Current player color (1 if black to move)
-    if (moves.length % 2 == 0) {
-      // Black to move
-      final channel3Offset = 3 * boardSize * boardSize;
-      for (var i = 0; i < boardSize * boardSize; i++) {
-        data[channel3Offset + i] = 1.0;
+    // Channel 1: Current player (next to move) stones - KataGo feature 1
+    final channel1Offset = 1 * boardSize * boardSize;
+    for (final stone in currentStones) {
+      data[channel1Offset + stone] = 1.0;
+    }
+
+    // Channel 2: Opponent stones - KataGo feature 2
+    final channel2Offset = 2 * boardSize * boardSize;
+    for (final stone in opponentStones) {
+      data[channel2Offset + stone] = 1.0;
+    }
+
+    // Channels 3-5: Liberties (1, 2, 3+) - KataGo features 3-5
+    final libertyCalc = LibertyCalculator(
+      boardSize: boardSize,
+      blackStones: blackStones,
+      whiteStones: whiteStones,
+    );
+    final liberties = libertyCalc.calculateAllLiberties();
+
+    for (final entry in liberties.entries) {
+      final position = entry.key;
+      final libCount = entry.value;
+
+      if (libCount == 1) {
+        data[3 * boardSize * boardSize + position] = 1.0; // Channel 3
+      } else if (libCount == 2) {
+        data[4 * boardSize * boardSize + position] = 1.0; // Channel 4
+      } else if (libCount >= 3) {
+        data[5 * boardSize * boardSize + position] = 1.0; // Channel 5
       }
+    }
+
+    // Channel 6: Ko ban - KataGo feature 6
+    // Simple ko detection: if last move was a capture, mark the capture position
+    if (moves.length >= 2) {
+      // Check if last move might be a ko (would need full game logic)
+      // For now, simple heuristic: if a stone disappeared, that's a capture
+      // Proper implementation would check if it's a single-stone capture
+      // TODO: Implement proper ko detection with game state
     }
 
     // Channels 9-13: Move history (last 5 moves)
