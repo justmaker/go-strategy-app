@@ -129,7 +129,11 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_initializeNative(
     g_logger = new Logger(nullptr, false, false, false, false);
     g_logger->addFile("/sdcard/katago_debug.log");
 
-    // 2. Parse config
+    // 2. Initialize ScoreValue tables (CRITICAL - must be before any Search usage)
+    ScoreValue::initTables();
+    LOGI("✓ ScoreValue tables initialized");
+
+    // 3. Parse config
     ConfigParser cfg(configFile);
 
     // Force single-threaded configuration
@@ -140,7 +144,7 @@ Java_com_gostratefy_go_1strategy_1app_KataGoEngine_initializeNative(
     LOGI("maxVisits: %d", maxVisits);
     LOGI("numSearchThreads: %d (forced single-threaded)", numSearchThreads);
 
-    // 3. Initialize NeuralNet backend
+    // 4. Initialize NeuralNet backend
     NeuralNet::globalInitialize();
 
     // 4. Load model (LoadedModel will load both .bin.gz and .onnx)
