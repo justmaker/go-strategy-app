@@ -53,6 +53,13 @@ android {
             version "3.22.1"
         }
     }
+
+    sourceSets {
+        main {
+            // Package ONNX Runtime shared library in APK
+            jniLibs.srcDirs = ['src/main/cpp/onnxruntime/lib']
+        }
+    }
 }
 
 dependencies {

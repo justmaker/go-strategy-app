@@ -4,7 +4,7 @@ project("katago_mobile")
 
 # --- Flags ---
 add_definitions(-O3)
-add_definitions(-DUSE_BACKEND_EIGEN)
+add_definitions(-DUSE_ONNX_BACKEND)  # Changed from USE_BACKEND_EIGEN
 add_definitions(-D_REENTRANT)
 add_definitions(-DNO_GIT_REVISION)
 
@@ -18,8 +18,11 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# --- Includes ---
-# Eigen (Header-only)
+# --- ONNX Runtime ---
+set(ONNX_RUNTIME_DIR ${CMAKE_CURRENT_SOURCE_DIR}/onnxruntime)
+include_directories(${ONNX_RUNTIME_DIR}/include)
+
+# --- Eigen (still needed for some KataGo utilities) ---
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/eigen)
 
 # KataGo
@@ -44,8 +47,8 @@ list(FILTER KATAGO_SRCS EXCLUDE REGEX "main\\.cpp$")
 # Exclude Tests
 list(FILTER KATAGO_SRCS EXCLUDE REGEX "tests/")
 
-# Exclude OpenCL/CUDA backends (Since we use Eigen)
-list(FILTER KATAGO_SRCS EXCLUDE REGEX "neuralnet/(opencl|cuda|tensorrt)")
+# Exclude OpenCL/CUDA/Eigen/Dummy backends (we use ONNX)
+list(FILTER KATAGO_SRCS EXCLUDE REGEX "neuralnet/(opencl|cuda|tensorrt|eigen|dummy)")
 
 # Exclude Distributed features (not needed for local analysis, has complex dependencies)
 list(FILTER KATAGO_SRCS EXCLUDE REGEX "distributed/")
@@ -54,10 +57,19 @@ list(FILTER KATAGO_SRCS EXCLUDE REGEX "distributed/")
 list(FILTER KATAGO_SRCS EXCLUDE REGEX "command/(benchmark|contribute|evalsgf|gatekeeper|genconfig|tuner|match|selfplay|demoplay|gputest|sampleinits|sandbox|startposes|viewstartposes|checksgf|genposes|comparebooks|findbookbottlenecks|runtests|runnnlayertests|runsearchtests|runsearchtestsv3|runsearchtestsv8|runsearchtestsv9|runnnontinyboardtest|runnnsymmetriestest|runoutputtests|runselfplayinittests|runselfplayinitstattests|runsekitrainwritetests|runnnonmanyposestest|runnnbatchingtest|runownershiptests|runtinynntests|runnnevalcanarytests|runbeginsearchspeedtest|runownershipspeedtest|runsleeptest|runconfigtests|misc|writetrainingdata|genbook)")
 
 # --- Target ---
-add_library(katago_mobile SHARED native-lib.cpp stubs.cpp ${KATAGO_SRCS})
+add_library(katago_mobile SHARED
+    native-lib.cpp
+    stubs.cpp
+    ${KATAGO_ROOT}/neuralnet/onnxbackend.cpp  # Explicitly include ONNX backend
+    ${KATAGO_SRCS}
+)
 
 # --- Linking ---
 find_library(log-lib log)
 
-# Link
-target_link_libraries(katago_mobile ${log-lib} z)
+# Link ONNX Runtime
+target_link_libraries(katago_mobile
+    ${log-lib}
+    z
+    ${ONNX_RUNTIME_DIR}/lib/${ANDROID_ABI}/libonnxruntime.so
+)
