@@ -126,6 +126,7 @@ class GameProvider extends ChangeNotifier {
   bool get _isDesktop =>
       !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
 
+
   /// Initialize the provider
   Future<void> init() async {
     // Load opening book first (for instant offline access)

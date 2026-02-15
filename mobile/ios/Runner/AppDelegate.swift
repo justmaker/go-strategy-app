@@ -58,11 +58,18 @@ import KataGoMobile
   }
   
   private func startEngine(result: @escaping FlutterResult) {
+      #if targetEnvironment(simulator)
+      // KataGo native binary crashes on iOS Simulator
+      NSLog("[KataGo] Simulator detected, skipping native engine")
+      result(false)
+      return
+      #endif
+
       if isRunning {
           result(true)
           return
       }
-      
+
       DispatchQueue.global(qos: .userInitiated).async {
           // Prepare Files
           let (configPath, modelPath) = self.prepareResources()
