@@ -32,6 +32,18 @@ Google Sign-In 基本配置已完成（不再崩潰、瀏覽器正確開啟登�
 
 ## 已完成
 
+### iOS Simulator 崩潰修復 (2026-02-15)
+
+Opening Book MISS 後嘗試啟動 native KataGo 導致模擬器崩潰。在 `AppDelegate.swift` 加入 `#if targetEnvironment(simulator)` 編譯期檢查，跳過引擎啟動，App 改為顯示錯誤訊息而非崩潰。
+
+### 棋盤建議顯示修正: Top 3 一致 (2026-02-15)
+
+棋盤上只畫 Rank 1 建議，但分析清單顯示 Top 3。修正 `go_board_widget.dart`，移除勝率過濾並限制顯示前 3 個 rank，與清單一致。
+
+### Repo 清理: 刪除 22 個過時 MD 檔案 (2026-02-15)
+
+刪除開發過程中的中間文件（APPROACHES_TRIED.md、CRASH_ROOT_CAUSE.md 等），保留 CLAUDE.md、TASKS.md 和 docs/spec/ 下的規範文件。
+
 ### UI 改善: Pass 按鈕 / Clear 確認 / 棋盤加大 (2026-02-14)
 
 - Pass 按鈕：支援圍棋虛手，手數編號不跳號
