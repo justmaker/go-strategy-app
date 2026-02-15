@@ -93,12 +93,13 @@ class AnalysisScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth > 700;
+      body: Builder(
+        builder: (context) {
+          // Adapt layout based on device orientation
+          final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 
-          if (isWide) {
-            // Landscape layout for tablets/desktop
+          if (isLandscape) {
+            // Landscape: Board on left, analysis panel on right (horizontal)
             return Row(
               children: [
                 // Logic: Board on the left (Square if possible)
@@ -133,7 +134,7 @@ class AnalysisScreen extends StatelessWidget {
               ],
             );
           } else {
-            // Portrait layout (Standard Mobile)
+            // Portrait: Board on top, analysis panel below (vertical)
             return Column(
               children: [
                 // Board
