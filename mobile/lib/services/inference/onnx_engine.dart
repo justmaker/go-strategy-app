@@ -27,7 +27,7 @@ class OnnxEngine implements InferenceEngine {
   String get engineName => 'ONNX Runtime + NNAPI';
 
   @override
-  bool get isAvailable => !kIsWeb && Platform.isAndroid;
+  bool get isAvailable => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
   @override
   bool get isRunning => _isRunning;

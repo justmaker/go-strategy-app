@@ -16,6 +16,7 @@ import '../models/models.dart';
 import '../services/services.dart';
 import '../services/inference/inference_engine.dart';
 import '../services/inference/inference_factory.dart';
+import '../services/inference/onnx_engine.dart';
 
 /// Connection status
 enum ConnectionStatus { online, offline, checking }
@@ -103,9 +104,9 @@ class GameProvider extends ChangeNotifier {
   // Local engine getters
   bool get localEngineEnabled => _localEngineEnabled;
   bool get localEngineRunning {
-    // Android: check inference engine
-    if (!kIsWeb && Platform.isAndroid && _inferenceEngine != null) {
-      return _inferenceEngine!.isRunning;
+    // Check inference engine (Android ONNX, or iOS ONNX fallback)
+    if (_inferenceEngine != null && _inferenceEngine!.isRunning) {
+      return true;
     }
     // Desktop/iOS: check KataGo services
     return _isDesktop ? _kataGoDesktop.isRunning : _kataGo.isRunning;
@@ -204,10 +205,18 @@ class GameProvider extends ChangeNotifier {
       } else {
         success = await _kataGo.start();
         debugPrint(success ? 'Mobile KataGo started' : 'Mobile KataGo failed');
-        if (!success) {
-          // Engine unavailable (e.g. iOS Simulator) — disable to avoid
-          // confusing "enabled but not running" message
-          _localEngineEnabled = false;
+        if (!success && !kIsWeb && Platform.isIOS) {
+          // Native KataGo failed (e.g. iOS Simulator) — fallback to ONNX
+          debugPrint('iOS native KataGo failed, trying ONNX fallback...');
+          try {
+            _inferenceEngine ??= OnnxEngine();
+            success = await _inferenceEngine!.start(boardSize: _board.size);
+            debugPrint(success
+                ? 'iOS ONNX fallback started: ${_inferenceEngine!.engineName}'
+                : 'iOS ONNX fallback also failed');
+          } catch (e) {
+            debugPrint('iOS ONNX fallback error: $e');
+          }
         }
       }
       if (success) {
@@ -494,8 +503,8 @@ class GameProvider extends ChangeNotifier {
         debugPrint('[GameProvider] Engine ready: $engineReady, inferenceEngine=$_inferenceEngine, isRunning=${_inferenceEngine?.isRunning}');
         if (engineReady) {
           debugPrint('[GameProvider] Engine is ready, choosing analysis method...');
-          // Android: use inference engine
-          if (!kIsWeb && Platform.isAndroid && _inferenceEngine != null) {
+          // Use inference engine if available (Android ONNX, iOS ONNX fallback)
+          if (_inferenceEngine != null && _inferenceEngine!.isRunning) {
             await _analyzeWithInferenceEngine();
           } else if (_isDesktop) {
             await _analyzeWithDesktopEngine();
