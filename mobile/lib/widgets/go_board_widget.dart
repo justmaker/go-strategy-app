@@ -311,8 +311,6 @@ class _BoardPainter extends CustomPainter {
   void _drawSuggestions(Canvas canvas, double padding, double cellSize) {
     if (suggestions == null || suggestions!.isEmpty) return;
 
-    final bestWinrate = suggestions!.first.winrate;
-
     // Pre-calculate display ranks to group equivalent moves
     final moveRanks = <int, int>{}; // index -> displayRank
     int currentRank = 0;
@@ -340,27 +338,15 @@ class _BoardPainter extends CustomPainter {
 
       final displayRank = moveRanks[i]!;
 
-      // Filter out moves that are too bad
-      // Use relative drop (10% of best) to handle small absolute differences
-      final winrateDrop = bestWinrate - suggestion.winrate;
-      final relativeThreshold = bestWinrate * 0.1; // 10% of best winrate
-      if (winrateDrop > relativeThreshold && winrateDrop > 0.10) {
-        continue;
-      }
+      // Only show top 3 ranks on the board to avoid clutter
+      if (displayRank > 3) continue;
 
-      // Determine color based on rank with extended color palette
-      // Rank 1: Blue (Best), Rank 2: Green (Good), Rank 3: Orange,
-      // Rank 4: Yellow, Rank 5: Purple, Rank 6+: Grey
+      // Determine color based on rank
+      // Rank 1: Blue (Best), Rank 2: Green (Good), Rank 3: Orange
       final rankColors = [
         Colors.blue,        // Rank 1
         Colors.green,       // Rank 2
         Colors.orange,      // Rank 3
-        Colors.yellow,      // Rank 4
-        Colors.purple,      // Rank 5
-        Colors.pink,        // Rank 6
-        Colors.cyan,        // Rank 7
-        Colors.lime,        // Rank 8
-        Colors.grey,        // Rank 9+
       ];
 
       final colorIndex = (displayRank - 1).clamp(0, rankColors.length - 1);
