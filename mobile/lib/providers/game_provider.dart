@@ -204,6 +204,11 @@ class GameProvider extends ChangeNotifier {
       } else {
         success = await _kataGo.start();
         debugPrint(success ? 'Mobile KataGo started' : 'Mobile KataGo failed');
+        if (!success) {
+          // Engine unavailable (e.g. iOS Simulator) — disable to avoid
+          // confusing "enabled but not running" message
+          _localEngineEnabled = false;
+        }
       }
       if (success) {
         _engineError = null;
@@ -529,7 +534,7 @@ class GameProvider extends ChangeNotifier {
       if (_localEngineEnabled && !localEngineRunning) {
         parts.add('local engine enabled but not running${_engineError != null ? ' ($_engineError)' : ''}');
       } else if (!_localEngineEnabled) {
-        parts.add('local engine disabled');
+        parts.add('local engine not available');
       }
       if (_connectionStatus != ConnectionStatus.online) {
         parts.add('API offline');
