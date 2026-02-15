@@ -74,7 +74,7 @@ static std::unique_ptr<std::ostream> g_kpCout;
 
   std::vector<std::string> args;
   args.push_back("katago");
-  args.push_back("analysis");
+  // Note: "analysis" subcommand not needed when calling MainCmds::analysis() directly
   args.push_back("-config");
   args.push_back(cfgStr);
   args.push_back("-model");

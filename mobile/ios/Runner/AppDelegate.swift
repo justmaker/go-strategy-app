@@ -219,7 +219,8 @@ import KataGoMobile
       // Let's assume user handled assets.
       
       // Correct Logic:
-      let assetKeyModel = FlutterDartProject.lookupKey(forAsset: "assets/katago/model.bin.gz")
+      // Use uncompressed model for better iOS compatibility
+      let assetKeyModel = FlutterDartProject.lookupKey(forAsset: "assets/katago/model.bin")
       let modelPath = Bundle.main.path(forResource: assetKeyModel, ofType: nil)
       
       // Config: create file in Docs
