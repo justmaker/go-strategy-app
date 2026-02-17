@@ -1083,9 +1083,13 @@ class _ControlsPanel extends StatelessWidget {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('棋譜已儲存：${savedRecord.name}'),
+                      duration: const Duration(seconds: 4),
                       action: SnackBarAction(
                         label: '查看',
                         onPressed: () {
+                          // Close SnackBar before navigation
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
                           // Navigate to settings > records list
                           final authService =
                               Provider.of<AuthService>(context, listen: false);
