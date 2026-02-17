@@ -1,7 +1,7 @@
 # Architecture Specification
 
-**Version**: 1.2
-**Last Updated**: 2026-02-14
+**Version**: 1.3
+**Last Updated**: 2026-02-17
 
 ## 1. 系統概述 (System Overview)
 
@@ -238,21 +238,60 @@ flowchart LR
 
 由 `InferenceFactory` 根據平台建立對應的 `InferenceEngine` 實例：
 
-| 平台 | Engine | Backend | 模型 |
-|------|--------|---------|------|
-| **Desktop** (macOS/Windows/Linux) | KataGoEngine → KataGoDesktopService | `dart:io Process` subprocess | kata1-b18c384 |
-| **iOS** | KataGoEngine → KataGoService | Platform Channel / FFI | kata1-b18c384 |
-| **Android** | OnnxEngine | ONNX Runtime + NNAPI (Dart FFI) | kata1-b6c96 ONNX (3.9MB) |
-| **Web** | 不支援 | — | 僅依賴 Opening Book |
+| 平台 | Engine | Backend | 模型 | 說明 |
+|------|--------|---------|------|------|
+| **Desktop** (macOS/Windows/Linux) | KataGoEngine → KataGoDesktopService | `dart:io Process` subprocess, Eigen | kata1-b18c384 (18b-384ch) | 多執行緒，桌面效能最佳 |
+| **iOS** | KataGoEngine → KataGoOnnxBridge | Platform Channel + ONNX Runtime C++ | kata1-b6c96 (6b-96ch, 3.9MB) | 單執行緒，輕量化行動模型 |
+| **Android** | KataGoEngine → ONNX JNI | JNI + ONNX Runtime C++ | kata1-b6c96 (6b-96ch, 3.9MB) | 單執行緒，避免 pthread 問題 |
+| **Web** | 不支援 | — | — | 僅依賴 Opening Book |
 
-#### Android 採用 ONNX Runtime 的原因
+#### 行動平台採用 ONNX Runtime 的原因
 
+**Android 平台問題**：
 Android 16 + Qualcomm Snapdragon 8 Gen 3 (Adreno 750) 存在系統層級 bug：任何從 native code 建立的 pthread 會在 50ms 內觸發 `FORTIFY: pthread_mutex_lock called on a destroyed mutex` crash。所有 native KataGo 的 workaround（延遲載入、shared runtime、stack size 調整等）均失敗。
 
-解決方案：改用 ONNX Runtime Mobile，透過 Dart FFI 呼叫（非 native pthread），搭配 NNAPI 硬體加速。OnnxEngine 在 Dart 端實作完整的 22-channel KataGo feature encoding（包含 liberty calculation、territory estimation、ladder detection 等），直接輸入 ONNX 模型進行推論。
+**iOS 平台策略**：
+為保持平台一致性與最佳效能，iOS 也採用 ONNX Runtime，但實現方式不同：
 
-相關檔案：
-- `mobile/android/app/src/main/cpp/CMakeLists.txt` — 編譯 ONNX Runtime native library
-- `mobile/android/app/src/main/cpp/onnxruntime/` — ONNX Runtime headers 與 prebuilt .so
-- `mobile/assets/katago/model.bin` — ONNX 模型檔案
-- `.github/workflows/release.yml` — CI 中自動從 Maven Central 下載 ONNX Runtime AAR
+| 項目 | Android 實現 | iOS 實現 |
+|------|-------------|----------|
+| **架構** | JNI → C++ (native-lib.cpp) → ONNX Runtime | Swift → Objective-C++ (KataGoOnnxBridge.mm) → ONNX Runtime |
+| **特徵編碼** | C++ (onnxbackend.cpp) | C++ (onnxbackend.cpp，共用) |
+| **ONNX 來源** | Maven Central AAR | CocoaPods (`onnxruntime-objc` v1.15.1) |
+| **執行緒** | 單執行緒 (numSearchThreads=1) | 單執行緒 (numSearchThreads=1) |
+| **完整 KataGo** | ✓ MCTS search, policy/value 解析 | ✓ MCTS search, policy/value 解析 |
+
+**技術限制**：
+- **ONNX Runtime CocoaPods 只支援 iOS**：`onnxruntime-objc` 官方 pod 不支援 macOS
+- **macOS 繼續使用 Eigen backend**：多執行緒效能更好，不受 ONNX Runtime 限制
+
+**實現決策 (2026-02-17)**：
+- **行動裝置 (Android/iOS)**：使用 KataGo + ONNX Runtime（單執行緒，避免行動裝置特定問題）
+- **桌面系統 (Windows/macOS/Linux)**：使用 KataGo + Eigen backend（多執行緒，桌面效能最佳）
+
+這種分層策略確保：
+1. 行動裝置穩定性（避免 pthread crash）
+2. 桌面系統最佳效能（多執行緒 Eigen）
+3. 程式碼重用（Android/iOS 共用 90%+ ONNX 實現）
+
+#### 相關檔案
+
+**Android ONNX 實現**：
+- `mobile/android/app/src/main/cpp/native-lib.cpp` — JNI 橋接層
+- `mobile/android/app/src/main/cpp/katago/cpp/neuralnet/onnxbackend.cpp` — ONNX 後端實現
+- `mobile/android/app/src/main/cpp/CMakeLists.txt` — 編譯配置
+- `mobile/android/app/src/main/kotlin/com/gostratefy/go_strategy_app/KataGoEngine.kt` — Kotlin 橋接
+
+**iOS ONNX 實現**：
+- `mobile/ios/KataGoMobile/Sources/KataGoOnnxBridge.h` — Objective-C header
+- `mobile/ios/KataGoMobile/Sources/KataGoOnnxBridge.mm` — Objective-C++ 實現
+- `mobile/ios/KataGoMobile/Sources/katago/cpp/neuralnet/onnxbackend.cpp` — ONNX 後端（與 Android 共用）
+- `mobile/ios/KataGoMobile/KataGoMobile.podspec` — CocoaPods 配置
+- `mobile/ios/Runner/AppDelegate.swift` — Swift MethodChannel handler
+
+**共用資源**：
+- `mobile/assets/katago/model.bin` — KataGo 模型 metadata
+- `mobile/assets/katago/model_9x9.onnx` — 9x9 棋盤 ONNX 模型
+- `mobile/assets/katago/model_13x13.onnx` — 13x13 棋盤 ONNX 模型
+- `mobile/assets/katago/model_19x19.onnx` — 19x19 棋盤 ONNX 模型
+- `mobile/lib/services/inference/katago_engine.dart` — Dart 層級統一介面

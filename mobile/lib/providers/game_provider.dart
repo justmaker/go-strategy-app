@@ -154,26 +154,26 @@ class GameProvider extends ChangeNotifier {
   Future<void> _initLocalEngine() async {
     if (!_localEngineEnabled) return;
 
-    // On Android, use new inference engine (ONNX Runtime)
-    if (!kIsWeb && Platform.isAndroid) {
+    // On Android and iOS, use new inference engine (ONNX Runtime)
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
       try {
         _inferenceEngine ??= createInferenceEngine();
         var success = await _inferenceEngine!.start(boardSize: _board.size);
         debugPrint(success
-            ? 'Android inference engine started: ${_inferenceEngine!.engineName}'
-            : 'Android inference engine failed to start');
+            ? 'Mobile inference engine started: ${_inferenceEngine!.engineName}'
+            : 'Mobile inference engine failed to start');
 
-        // If native KataGo failed (e.g., emulator), fallback to ONNX
+        // If native ONNX failed, fallback to Dart ONNX
         if (!success) {
-          debugPrint('Android native engine failed, trying ONNX fallback...');
+          debugPrint('Native engine failed, trying Dart ONNX fallback...');
           try {
             _inferenceEngine = OnnxEngine();
             success = await _inferenceEngine!.start(boardSize: _board.size);
             debugPrint(success
-                ? 'Android ONNX fallback started: ${_inferenceEngine!.engineName}'
-                : 'Android ONNX fallback also failed');
+                ? 'Dart ONNX fallback started: ${_inferenceEngine!.engineName}'
+                : 'Dart ONNX fallback also failed');
           } catch (e) {
-            debugPrint('Android ONNX fallback error: $e');
+            debugPrint('Dart ONNX fallback error: $e');
           }
         }
 
@@ -184,12 +184,12 @@ class GameProvider extends ChangeNotifier {
         return;
       } catch (e) {
         _engineError = e.toString();
-        debugPrint('Error starting Android inference engine: $e');
+        debugPrint('Error starting mobile inference engine: $e');
         return;
       }
     }
 
-    // Desktop/iOS: use original KataGo
+    // Desktop: use original KataGo
     try {
       bool success;
       if (_isDesktop) {
@@ -218,21 +218,9 @@ class GameProvider extends ChangeNotifier {
           success ? 'Desktop KataGo started' : 'Desktop KataGo failed',
         );
       } else {
-        success = await _kataGo.start();
-        debugPrint(success ? 'Mobile KataGo started' : 'Mobile KataGo failed');
-        if (!success && !kIsWeb && Platform.isIOS) {
-          // Native KataGo failed (e.g. iOS Simulator) — fallback to ONNX
-          debugPrint('iOS native KataGo failed, trying ONNX fallback...');
-          try {
-            _inferenceEngine ??= OnnxEngine();
-            success = await _inferenceEngine!.start(boardSize: _board.size);
-            debugPrint(success
-                ? 'iOS ONNX fallback started: ${_inferenceEngine!.engineName}'
-                : 'iOS ONNX fallback also failed');
-          } catch (e) {
-            debugPrint('iOS ONNX fallback error: $e');
-          }
-        }
+        // Desktop only (iOS now uses inference engine above)
+        success = false;
+        debugPrint('Non-desktop, non-mobile platform detected');
       }
       if (success) {
         _engineError = null;
@@ -786,6 +774,55 @@ class GameProvider extends ChangeNotifier {
   /// Get opening book statistics
   Map<String, dynamic> getOpeningBookStats() {
     return _openingBook.getStats();
+  }
+
+  /// Test ONNX engine directly (for debugging)
+  Future<void> testOnnxEngine() async {
+    debugPrint('[GameProvider] === Testing ONNX Engine ===');
+
+    try {
+      // Ensure engine is started
+      final engine = _inferenceEngine;
+      if (engine == null) {
+        debugPrint('[GameProvider] Creating inference engine...');
+        _inferenceEngine = createInferenceEngine();
+      }
+
+      // Start engine
+      debugPrint('[GameProvider] Starting engine...');
+      final started = await _inferenceEngine!.start(boardSize: _board.size);
+      if (!started) {
+        throw Exception('Failed to start ONNX engine');
+      }
+      debugPrint('[GameProvider] ✓ Engine started successfully');
+
+      // Test with current position (or empty board)
+      final testMoves = _board.movesGtp.isEmpty
+          ? ['B A1', 'W A2', 'B B1']  // Simple test moves
+          : _board.movesGtp;
+
+      debugPrint('[GameProvider] Analyzing position: $testMoves');
+      final result = await _inferenceEngine!.analyze(
+        boardSize: _board.size,
+        moves: testMoves,
+        komi: _board.komi,
+        maxVisits: 50,  // Quick test
+      );
+
+      debugPrint('[GameProvider] ✓ Analysis complete!');
+      debugPrint('[GameProvider]   Top moves: ${result.topMoves.take(3).map((m) => '${m.move} (${(m.winrate * 100).toStringAsFixed(1)}%)').join(', ')}');
+      debugPrint('[GameProvider]   Visits: ${result.visits}');
+      debugPrint('[GameProvider]   Model: ${result.modelName}');
+
+      _error = 'ONNX 測試成功！Top move: ${result.topMoves.first.move}';
+      notifyListeners();
+
+    } catch (e, stack) {
+      debugPrint('[GameProvider] ❌ ONNX test failed: $e');
+      debugPrint('[GameProvider] Stack: $stack');
+      _error = 'ONNX 測試失敗: $e';
+      notifyListeners();
+    }
   }
 
   @override

@@ -74,7 +74,8 @@ PODS:
   - GTMSessionFetcher/Core (3.5.0)
   - GTMSessionFetcher/Full (3.5.0):
     - GTMSessionFetcher/Core
-  - KataGoMobile (0.0.1)
+  - KataGoMobile (0.0.1):
+    - onnxruntime-objc (~> 1.15.1)
   - onnxruntime (0.0.1):
     - Flutter
     - onnxruntime-objc (= 1.15.1)
@@ -179,7 +180,7 @@ SPEC CHECKSUMS:
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
   GTMAppAuth: f69bd07d68cd3b766125f7e072c45d7340dea0de
   GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
-  KataGoMobile: ad02d62373e00997d0ea308689fa223ffdf208b8
+  KataGoMobile: 5ce5a3d16da0d7f6c9aa062454259e931bbb9fd9
   onnxruntime: 2ab1957eb029c71d47f7bb35cc4efc9f0d297828
   onnxruntime-c: ebdcfd8650bcbd10121c125262f99dea681b92a3
   onnxruntime-objc: ae7acec7a3d03eaf072d340afed7a35635c1c2a6
@@ -194,6 +195,6 @@ SPEC CHECKSUMS:
   SwiftyGif: 706c60cf65fa2bc5ee0313beece843c8eb8194d4
   webview_flutter_wkwebview: 1821ceac936eba6f7984d89a9f3bcb4dea99ebb2
 
-PODFILE CHECKSUM: 73a14372defad43f573f0b3b106d1732224257b3
+PODFILE CHECKSUM: e18296d08d8afbf7ce62bb1cdf760d56e7c0cae2
 
 COCOAPODS: 1.16.2

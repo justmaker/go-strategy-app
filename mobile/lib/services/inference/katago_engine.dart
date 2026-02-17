@@ -57,17 +57,32 @@ class KataGoEngine implements InferenceEngine {
     }
 
     try {
-      // On Android, pass boardSize via MethodChannel so the native engine
+      // On Android and iOS, pass boardSize via MethodChannel so the native engine
       // initialises with the correct ONNX model (model_9x9.onnx, etc.)
       if (!_isDesktop && _engine is KataGoService) {
-        final success = await _methodChannel
-                .invokeMethod<bool>('startEngine', {'boardSize': boardSize}) ??
-            false;
-        _nativeRunning = success;
-        if (success) {
-          debugPrint('$_tag Native KataGo started for ${boardSize}x$boardSize');
+        // Try ONNX engine first (iOS and Android support)
+        final methodName = Platform.isIOS ? 'startEngineOnnx' : 'startEngine';
+        debugPrint('$_tag 🔍 Platform: ${Platform.operatingSystem}, isIOS: ${Platform.isIOS}, methodName: $methodName');
+
+        try {
+          debugPrint('$_tag 🔍 Calling MethodChannel.$methodName with boardSize=$boardSize');
+          final success = await _methodChannel
+                  .invokeMethod<bool>(methodName, {'boardSize': boardSize}) ??
+              false;
+          _nativeRunning = success;
+          debugPrint('$_tag 🔍 MethodChannel returned: $success');
+          if (success) {
+            debugPrint('$_tag Native KataGo ($methodName) started for ${boardSize}x$boardSize');
+          }
+          return success;
+        } catch (e) {
+          debugPrint('$_tag Failed to start $methodName: $e');
+          // On iOS, fallback is not available (ONNX only)
+          if (Platform.isIOS) {
+            rethrow;
+          }
+          return false;
         }
-        return success;
       }
 
       final success = await _engine.start();
@@ -98,12 +113,16 @@ class KataGoEngine implements InferenceEngine {
     try {
       debugPrint('$_tag analyze() called: ${moves.length} moves, $maxVisits visits');
 
-      // On Android, use direct MethodChannel call which returns the JSON result
+      // On Android and iOS, use direct MethodChannel call which returns the JSON result
       // The EventChannel approach has reliability issues, so we use the
       // synchronous MethodChannel result directly.
       if (!_isDesktop && _engine is KataGoService) {
-        final response = await _methodChannel.invokeMethod<String>('analyze', {
-          'boardSize': boardSize,
+        // Use platform-specific method name
+        final methodName = Platform.isIOS ? 'analyzeOnnx' : 'analyze';
+
+        final response = await _methodChannel.invokeMethod<String>(methodName, {
+          'boardXSize': boardSize,
+          'boardYSize': boardSize,
           'moves': moves,
           'komi': komi,
           'maxVisits': maxVisits,

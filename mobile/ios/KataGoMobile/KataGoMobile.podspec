@@ -11,11 +11,15 @@ This pod encapsulates the KataGo Go engine code for local execution on iOS devic
   s.source           = { :path => '.' }
   s.source_files = [
     'Sources/*.{h,mm,cpp}',
-    'Sources/katago/cpp/**/*.{h,cpp}'
+    'Sources/katago/cpp/**/*.{h,cpp}',
+    'Sources/katago/cpp/neuralnet/onnxbackend.cpp'
   ]
-  s.public_header_files = 'Sources/KataGoWrapper.h'
+  s.public_header_files = 'Sources/KataGoWrapper.h', 'Sources/KataGoOnnxBridge.h'
   s.libraries = 'z'
-  
+
+  # ONNX Runtime dependency
+  s.dependency 'onnxruntime-objc', '~> 1.15.1'
+
   # Exclude non-ios backends and tests
   s.exclude_files = [
     'Sources/katago/cpp/main.cpp',
@@ -23,6 +27,8 @@ This pod encapsulates the KataGo Go engine code for local execution on iOS devic
     'Sources/katago/cpp/neuralnet/opencl*',
     'Sources/katago/cpp/neuralnet/cuda*',
     'Sources/katago/cpp/neuralnet/tensorrt*',
+    'Sources/katago/cpp/neuralnet/eigenbackend*',
+    'Sources/katago/cpp/neuralnet/dummybackend*',
     'Sources/katago/cpp/distributed/**/*',
     'Sources/katago/cpp/command/benchmark.cpp',
     'Sources/katago/cpp/command/contribute.cpp',
@@ -42,12 +48,13 @@ This pod encapsulates the KataGo Go engine code for local execution on iOS devic
   ]
 
   s.ios.deployment_target = '13.0'
+  s.osx.deployment_target = '10.15'
   
 
   s.pod_target_xcconfig = {
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'CLANG_CXX_LIBRARY' => 'libc++',
-    'GCC_PREPROCESSOR_DEFINITIONS' => 'USE_BACKEND_EIGEN=1 NO_GIT_REVISION=1',
-    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/Sources/eigen" "$(PODS_TARGET_SRCROOT)/Sources/katago/cpp" "$(PODS_TARGET_SRCROOT)/Sources/katago/cpp/external" "$(PODS_TARGET_SRCROOT)/Sources/katago/cpp/external/tclap-1.2.5/include" "$(PODS_TARGET_SRCROOT)/Sources/katago/cpp/external/nlohmann_json" "$(PODS_TARGET_SRCROOT)/Sources/katago/cpp/external/filesystem-1.5.8/include" "$(PODS_TARGET_SRCROOT)/Sources/fake_zip"'
+    'GCC_PREPROCESSOR_DEFINITIONS' => 'USE_ONNX_BACKEND=1 NO_GIT_REVISION=1',
+    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/Sources/eigen" "$(PODS_TARGET_SRCROOT)/Sources/katago/cpp" "$(PODS_TARGET_SRCROOT)/Sources/katago/cpp/external" "$(PODS_TARGET_SRCROOT)/Sources/katago/cpp/external/tclap-1.2.5/include" "$(PODS_TARGET_SRCROOT)/Sources/katago/cpp/external/nlohmann_json" "$(PODS_TARGET_SRCROOT)/Sources/katago/cpp/external/filesystem-1.5.8/include" "$(PODS_TARGET_SRCROOT)/Sources/fake_zip" "$(PODS_ROOT)/onnxruntime-c/onnxruntime.xcframework/ios-arm64/onnxruntime.framework/Headers" "$(PODS_ROOT)/onnxruntime-c/onnxruntime.xcframework/ios-arm64_x86_64-simulator/onnxruntime.framework/Headers"'
   }
 end

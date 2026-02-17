@@ -59,6 +59,9 @@ class AnalysisScreen extends StatelessWidget {
                 case 'export_sgf':
                   _exportSgf(context);
                   break;
+                case 'test_onnx':
+                  _testOnnx(context);
+                  break;
               }
             },
             itemBuilder: (context) => [
@@ -80,6 +83,15 @@ class AnalysisScreen extends StatelessWidget {
                 child: const ListTile(
                   leading: Icon(Icons.file_download),
                   title: Text('匯出 SGF'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'test_onnx',
+                child: ListTile(
+                  leading: Icon(Icons.bug_report, color: Colors.orange),
+                  title: Text('測試 ONNX 引擎'),
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -265,6 +277,48 @@ class AnalysisScreen extends StatelessWidget {
   }
 
   /// Export the current game as SGF
+  /// Test ONNX engine directly
+  Future<void> _testOnnx(BuildContext context) async {
+    final game = Provider.of<GameProvider>(context, listen: false);
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text('測試 ONNX 引擎...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      await game.testOnnxEngine();
+      if (context.mounted) {
+        Navigator.of(context).pop();  // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(game.error ?? 'ONNX 測試完成'),
+            backgroundColor: game.error != null && game.error!.contains('成功')
+                ? Colors.green
+                : Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context).pop();  // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('測試失敗: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _exportSgf(BuildContext context) async {
     final game = Provider.of<GameProvider>(context, listen: false);
     if (game.board.moveCount == 0) return;

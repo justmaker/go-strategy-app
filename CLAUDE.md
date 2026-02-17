@@ -6,6 +6,21 @@
 
 Go Strategy App 是一個基於 KataGo AI 的圍棋策略分析工具，採用純離線架構，支援跨平台（Web、iOS、Android、macOS、Windows、Linux）。App 不依賴遠端 API Server，所有分析在本地完成。
 
+### 平台策略
+
+本專案根據裝置特性採用不同的引擎策略：
+
+| 平台 | 引擎 | 原因 |
+|------|------|------|
+| **Android / iOS** | KataGo ONNX | 單執行緒，避免 pthread 問題，適合行動裝置 |
+| **Windows / macOS / Linux** | KataGo Eigen | 多執行緒，桌面效能最佳 |
+| **Web** | Opening Book Only | 瀏覽器環境限制 |
+
+**技術限制**：
+- ONNX Runtime CocoaPods (`onnxruntime-objc`) 只支援 iOS，不支援 macOS
+- macOS 使用 Eigen backend 效能更好（多執行緒）
+- 行動裝置使用 ONNX 單執行緒避免裝置特定問題
+
 ## 測試優先順序
 
 ### macOS 開發環境測試原則

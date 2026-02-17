@@ -2,6 +2,9 @@ import Flutter
 import UIKit
 import KataGoMobile
 
+// MARK: - ONNX Engine State
+private var isOnnxInitialized = false
+
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   
@@ -44,6 +47,14 @@ import KataGoMobile
                self.cancelAnalysis(queryId: queryId)
            }
            result(true)
+      } else if call.method == "startEngineOnnx" {
+          self.startEngineOnnx(args: call.arguments as? [String: Any], result: result)
+      } else if call.method == "analyzeOnnx" {
+          self.analyzeOnnx(args: call.arguments as? [String: Any], result: result)
+      } else if call.method == "stopEngineOnnx" {
+          self.stopEngineOnnx(result: result)
+      } else if call.method == "isEngineOnnxRunning" {
+          result(isOnnxInitialized)
       } else {
           result(FlutterMethodNotImplemented)
       }
@@ -249,6 +260,148 @@ import KataGoMobile
       try? configContent.write(to: configURL, atomically: true, encoding: .utf8)
       
       return (configURL.path, modelPath)
+  }
+
+  // MARK: - ONNX Engine Methods
+
+  private func startEngineOnnx(args: [String: Any]?, result: @escaping FlutterResult) {
+      #if targetEnvironment(simulator)
+      // ONNX may not work well on iOS Simulator
+      NSLog("[KataGoONNX] Simulator detected, skipping ONNX engine")
+      result(false)
+      return
+      #endif
+
+      guard let args = args else {
+          result(FlutterError(code: "INVALID_ARGS", message: "Missing arguments", details: nil))
+          return
+      }
+
+      let boardSize = args["boardSize"] as? Int ?? 19
+
+      if isOnnxInitialized {
+          NSLog("[KataGoONNX] Engine already initialized")
+          result(true)
+          return
+      }
+
+      DispatchQueue.global(qos: .userInitiated).async {
+          // Prepare resources
+          let (configPath, modelBinPath, modelOnnxPath) = self.prepareOnnxResources(boardSize: boardSize)
+
+          guard let config = configPath,
+                let modelBin = modelBinPath,
+                let modelOnnx = modelOnnxPath else {
+              DispatchQueue.main.async {
+                  result(FlutterError(code: "RESOURCE_ERROR", message: "Failed to prepare resources", details: nil))
+              }
+              return
+          }
+
+          // Initialize ONNX engine
+          let success = KataGoOnnxBridge.initialize(
+              withConfig: config,
+              modelBin: modelBin,
+              modelOnnx: modelOnnx,
+              boardSize: Int32(boardSize)
+          )
+
+          isOnnxInitialized = success
+          DispatchQueue.main.async {
+              result(success)
+          }
+      }
+  }
+
+  private func analyzeOnnx(args: [String: Any]?, result: @escaping FlutterResult) {
+      guard isOnnxInitialized else {
+          result(FlutterError(code: "NOT_INITIALIZED", message: "ONNX engine not initialized", details: nil))
+          return
+      }
+
+      guard let args = args else {
+          result(FlutterError(code: "INVALID_ARGS", message: "Missing arguments", details: nil))
+          return
+      }
+
+      DispatchQueue.global(qos: .userInitiated).async {
+          // Call ONNX bridge (synchronous)
+          if let jsonResult = KataGoOnnxBridge.analyzePosition(args) {
+              DispatchQueue.main.async {
+                  result(jsonResult)
+              }
+          } else {
+              DispatchQueue.main.async {
+                  result(FlutterError(code: "ANALYSIS_FAILED", message: "ONNX analysis failed", details: nil))
+              }
+          }
+      }
+  }
+
+  private func stopEngineOnnx(result: FlutterResult) {
+      if !isOnnxInitialized {
+          result(true)
+          return
+      }
+
+      KataGoOnnxBridge.destroy()
+      isOnnxInitialized = false
+      result(true)
+  }
+
+  private func prepareOnnxResources(boardSize: Int) -> (String?, String?, String?) {
+      // 1. Model.bin.gz path
+      let modelBinKey = FlutterDartProject.lookupKey(forAsset: "assets/katago/model.bin")
+      guard let modelBinPath = Bundle.main.path(forResource: modelBinKey, ofType: nil) else {
+          NSLog("[KataGoONNX] Failed to find model.bin")
+          return (nil, nil, nil)
+      }
+
+      // 2. Board-size-specific ONNX model
+      let modelOnnxKey = FlutterDartProject.lookupKey(forAsset: "assets/katago/model_\(boardSize)x\(boardSize).onnx")
+      var modelOnnxPath = Bundle.main.path(forResource: modelOnnxKey, ofType: nil)
+
+      if modelOnnxPath == nil {
+          NSLog("[KataGoONNX] Failed to find model_\(boardSize)x\(boardSize).onnx")
+          // Fallback to generic model
+          let fallbackKey = FlutterDartProject.lookupKey(forAsset: "assets/katago/model.onnx")
+          if let fallbackPath = Bundle.main.path(forResource: fallbackKey, ofType: nil) {
+              modelOnnxPath = fallbackPath
+              NSLog("[KataGoONNX] Using fallback model.onnx")
+          } else {
+              NSLog("[KataGoONNX] Fallback model.onnx also not found")
+              return (nil, nil, nil)
+          }
+      }
+
+      // 3. Config file (create in Documents directory)
+      let docDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+      let configURL = docDir.appendingPathComponent("analysis_onnx.cfg")
+
+      let configContent = """
+          # KataGo Analysis Config for iOS ONNX
+
+          # Limits
+          maxVisits = 500
+          numSearchThreads = 1
+
+          # Analysis output
+          reportAnalysisWinratesAs = BLACK
+
+          # Performance tuning for mobile (single-threaded)
+          nnCacheSizePowerOfTwo = 18
+          nnMutexPoolSizePowerOfTwo = 14
+          numNNServerThreadsPerModel = 1
+          nnMaxBatchSize = 1
+
+          # Disable features not needed for analysis
+          logSearchInfo = false
+          logToStderr = true
+          """
+
+      try? configContent.write(to: configURL, atomically: true, encoding: .utf8)
+
+      return (configURL.path, modelBinPath, modelOnnxPath)
   }
 }
 
