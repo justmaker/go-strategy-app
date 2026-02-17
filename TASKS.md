@@ -16,21 +16,49 @@ Google Sign-In 基本配置已完成（不再崩潰、瀏覽器正確開啟登�
 
 ### Opening Book: 13x13 / 19x19 擴充
 
-**狀態**: 🟡 暫停
+**狀態**: 🟡 可繼續擴充
 
 目前 Opening Book 資料量：
 
-| Board Size | Entries | Visits | 說明 |
-|------------|---------|--------|------|
-| 9x9 | 1,519,000 | 205M avg | KataGo 官方 book，已完成 |
-| 13x13 | ~8,500 | 500 | 待擴充 depth 12 |
-| 19x19 | ~17,000 | 500 | 待擴充 depth 12 |
+| Board Size | Entries | Depth | Visits | 說明 |
+|------------|---------|-------|--------|------|
+| 9x9 | 1,519,000 | 0-18 | 90K+ avg | KataGo 官方 book，已完成 |
+| 13x13 | 139,235 | 0-14 | 500 | b18c384 模型 |
+| 19x19 | 404,448 | 0-14 | 500 | b18c384 模型 |
 
-擴充需在 GPU server 上執行 `python3 -m src.scripts.build_opening_book`。
+可繼續擴充 depth 15+，需在 GPU server 上執行 `python3 -m src.scripts.build_opening_book_parallel`。
 
 ---
 
 ## 已完成
+
+### 9x9 Opening Book 勝率修正 (2026-02-17)
+
+**問題**: 9x9 opening book 的勝率顯示反轉 — 邊角 99.8%、中央 3.5%。
+
+**根本原因**: `import_katago_book.py` 誤將 `wl` 當作對手勝率做 `1.0 - wl` 轉換，但 KataGo book 的 `wl` 本身就是當前玩家勝率。同時 `ssM` 是對手的 score lead，需要取反。
+
+**修正**:
+1. `import_katago_book.py`: `winrate = wl`（不再反轉）、`score_lead = -ssM`
+2. `opening_book.db.gz`: 修正 1,519,000 筆 9x9 資料
+3. `opening_book_service.dart`: 版本號 1→2，強制 app 重新解壓
+
+### iOS KataGo ONNX 即時進度更新 (2026-02-17)
+
+使用大型模型（20b+）時 ONNX 推論耗時較長，新增即時進度回報和取消功能：
+- `KataGoOnnxBridge.mm`: 透過 atomic `getRootVisits()` 讀取搜尋進度，支援 `requestStop()` 取消
+- `AppDelegate.swift`: GCD timer 每 0.3 秒輪詢進度，透過 EventChannel 串流到 Dart
+- `katago_engine.dart`: 監聽 EventChannel 的 `onnx_progress` 事件
+- `game_provider.dart`: 傳遞 `onProgress` callback 更新 UI
+
+**待驗證**: 需要大型模型實機測試（目前小模型推論太快，看不到進度變化）
+
+### iOS Native KataGo-ONNX 整合 (2026-02-17)
+
+在 iOS 上整合 native KataGo C++ 引擎搭配 ONNX Runtime，支援完整 MCTS 搜尋。
+- 編譯 KataGo search/core/game 模組為 Objective-C++ bridge
+- 透過 MethodChannel 呼叫 `analyzeOnnx`、EventChannel 回傳結果
+- 支援可配置的 visits 數和模型路徑
 
 ### ONNX Engine Input Features Fix (2026-02-17)
 
