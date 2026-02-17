@@ -1092,6 +1092,8 @@ class _ControlsPanel extends StatelessWidget {
                           final cloudStorage = Provider.of<CloudStorageManager>(
                               context,
                               listen: false);
+                          final gameProvider =
+                              Provider.of<GameProvider>(context, listen: false);
 
                           Navigator.of(context).push(
                             MaterialPageRoute(
@@ -1103,6 +1105,8 @@ class _ControlsPanel extends StatelessWidget {
                                       value: cloudStorage),
                                   ChangeNotifierProvider.value(
                                       value: recordService),
+                                  ChangeNotifierProvider.value(
+                                      value: gameProvider),
                                 ],
                                 child: const SettingsScreen(),
                               ),
@@ -1310,6 +1314,7 @@ class _SettingsSheet extends StatelessWidget {
                       final authService = Provider.of<AuthService>(parentContext, listen: false);
                       final cloudStorage = Provider.of<CloudStorageManager>(parentContext, listen: false);
                       final gameRecordService = Provider.of<GameRecordService>(parentContext, listen: false);
+                      final gameProvider = Provider.of<GameProvider>(parentContext, listen: false);
 
                       // Navigate with providers
                       Navigator.of(parentContext).push(
@@ -1319,6 +1324,7 @@ class _SettingsSheet extends StatelessWidget {
                               ChangeNotifierProvider.value(value: authService),
                               ChangeNotifierProvider.value(value: cloudStorage),
                               ChangeNotifierProvider.value(value: gameRecordService),
+                              ChangeNotifierProvider.value(value: gameProvider),
                             ],
                             child: const SettingsScreen(),
                           ),

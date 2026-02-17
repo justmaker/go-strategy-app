@@ -158,10 +158,25 @@ class GameProvider extends ChangeNotifier {
     if (!kIsWeb && Platform.isAndroid) {
       try {
         _inferenceEngine ??= createInferenceEngine();
-        final success = await _inferenceEngine!.start(boardSize: _board.size);
+        var success = await _inferenceEngine!.start(boardSize: _board.size);
         debugPrint(success
             ? 'Android inference engine started: ${_inferenceEngine!.engineName}'
             : 'Android inference engine failed to start');
+
+        // If native KataGo failed (e.g., emulator), fallback to ONNX
+        if (!success) {
+          debugPrint('Android native engine failed, trying ONNX fallback...');
+          try {
+            _inferenceEngine = OnnxEngine();
+            success = await _inferenceEngine!.start(boardSize: _board.size);
+            debugPrint(success
+                ? 'Android ONNX fallback started: ${_inferenceEngine!.engineName}'
+                : 'Android ONNX fallback also failed');
+          } catch (e) {
+            debugPrint('Android ONNX fallback error: $e');
+          }
+        }
+
         if (success) {
           _engineError = null;
         }
@@ -463,7 +478,9 @@ class GameProvider extends ChangeNotifier {
           _board.komi,
           _board.movesGtp,
         );
-        if (bookResult != null) {
+        // Use book result only if it has moves (book is more accurate than ONNX)
+        // If book has 0 moves, fallback to engine
+        if (bookResult != null && bookResult.topMoves.isNotEmpty) {
           debugPrint('[GameProvider] Opening book returned ${bookResult.topMoves.length} moves:');
           for (final move in bookResult.topMoves) {
             debugPrint('  ${move.move}: Win=${move.winratePercent} Lead=${move.scoreLeadFormatted}');
@@ -473,6 +490,8 @@ class GameProvider extends ChangeNotifier {
           _isAnalyzing = false;
           notifyListeners();
           return;
+        } else if (bookResult != null && bookResult.topMoves.isEmpty) {
+          debugPrint('[GameProvider] Opening book has 0 moves, falling back to engine');
         }
       }
 

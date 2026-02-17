@@ -10,6 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/game_record.dart';
+import '../models/models.dart';
+import '../providers/game_provider.dart';
 import '../services/auth_service.dart';
 import '../services/cloud_storage_service.dart';
 import '../services/game_record_service.dart';
@@ -23,8 +25,8 @@ class SettingsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('設定'),
       ),
-      body: Consumer3<AuthService, CloudStorageManager, GameRecordService>(
-        builder: (context, auth, cloud, records, _) {
+      body: Consumer4<AuthService, CloudStorageManager, GameRecordService, GameProvider>(
+        builder: (context, auth, cloud, records, gameProvider, _) {
           return ListView(
             children: [
               // Account & Sync Section (unified)
@@ -45,7 +47,7 @@ class SettingsScreen extends StatelessWidget {
                 title: const Text('本機棋譜'),
                 subtitle: Text('${records.records.length} 個棋譜'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => _showRecordsList(context, records),
+                onTap: () => _showRecordsList(context, records, gameProvider),
               ),
 
               const Divider(height: 32),
@@ -71,10 +73,20 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  void _showRecordsList(BuildContext context, GameRecordService records) {
+  void _showRecordsList(
+    BuildContext context,
+    GameRecordService records,
+    GameProvider gameProvider,
+  ) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => _RecordsListScreen(records: records),
+        builder: (context) => ChangeNotifierProvider.value(
+          value: records,
+          child: _RecordsListScreen(
+            records: records,
+            gameProvider: gameProvider,
+          ),
+        ),
       ),
     );
   }
@@ -380,8 +392,12 @@ class _SyncNowTileState extends State<_SyncNowTile> {
 
 class _RecordsListScreen extends StatelessWidget {
   final GameRecordService records;
+  final GameProvider gameProvider;
 
-  const _RecordsListScreen({required this.records});
+  const _RecordsListScreen({
+    required this.records,
+    required this.gameProvider,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -389,13 +405,15 @@ class _RecordsListScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('棋譜列表'),
       ),
-      body: records.records.isEmpty
-          ? const Center(child: Text('尚無棋譜'))
-          : ListView.builder(
-              itemCount: records.records.length,
-              itemBuilder: (context, index) {
-                final record = records.records[index];
-                return ListTile(
+      body: Consumer<GameRecordService>(
+        builder: (context, records, _) {
+          return records.records.isEmpty
+              ? const Center(child: Text('尚無棋譜'))
+              : ListView.builder(
+                  itemCount: records.records.length,
+                  itemBuilder: (context, index) {
+                    final record = records.records[index];
+                    return ListTile(
                   leading: _buildStatusIcon(record.status),
                   title: Text(record.name),
                   subtitle: Text(
@@ -405,6 +423,15 @@ class _RecordsListScreen extends StatelessWidget {
                     onSelected: (action) =>
                         _handleAction(context, action, record),
                     itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'load',
+                        child: ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.play_arrow, color: Colors.green),
+                          title: Text('載入繼續'),
+                        ),
+                      ),
                       const PopupMenuItem(
                         value: 'export_sgf',
                         child: Text('匯出 SGF'),
@@ -419,9 +446,11 @@ class _RecordsListScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+                    );
+                  },
                 );
-              },
-            ),
+        },
+      ),
     );
   }
 
@@ -447,6 +476,9 @@ class _RecordsListScreen extends StatelessWidget {
 
   void _handleAction(BuildContext context, String action, GameRecord record) {
     switch (action) {
+      case 'load':
+        _loadRecord(context, record);
+        break;
       case 'export_sgf':
         final sgf = records.exportSgf(record);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -463,6 +495,42 @@ class _RecordsListScreen extends StatelessWidget {
         _confirmDelete(context, record);
         break;
     }
+  }
+
+  void _loadRecord(BuildContext context, GameRecord record) {
+    // Set board size and komi first
+    gameProvider.setBoardSize(record.boardSize);
+    gameProvider.setKomi(record.komi);
+    gameProvider.clear();
+
+    // Replay all moves
+    for (final move in record.moves) {
+      if (move.coordinate.toLowerCase() != 'pass') {
+        final coord = move.coordinate;
+        // Parse GTP coordinate to BoardPoint
+        final col = coord[0].toUpperCase();
+        final row = int.tryParse(coord.substring(1));
+        if (row == null) continue;
+
+        int colIndex = col.codeUnitAt(0) - 'A'.codeUnitAt(0);
+        if (col.codeUnitAt(0) > 'I'.codeUnitAt(0)) colIndex--;
+
+        final y = record.boardSize - row;
+        final point = BoardPoint(colIndex, y);
+        gameProvider.board.placeStone(point);
+      }
+    }
+
+    // Trigger analysis
+    gameProvider.analyze();
+
+    // Close all settings screens and go back to main screen
+    Navigator.of(context).popUntil((route) => route.isFirst);
+
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已載入：${record.name} (${record.moves.length} 手)')),
+    );
   }
 
   void _confirmDelete(BuildContext context, GameRecord record) {
