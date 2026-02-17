@@ -55,10 +55,10 @@ analysis:
   visits_small: 500
 ```
 
-資料庫狀態：
-- 9x9: 10,230 筆 (500v)
-- 13x13: 8,543 筆 (500v)
-- 19x19: 12,817 筆 (500v)
+資料庫狀態（2026-02-17 更新）：
+- 9x9: 1,519,000 筆 (depth 0-18, KataGo 官方 book, 90K+ visits)
+- 13x13: 139,235 筆 (depth 0-14, b18c384 模型, 500v)
+- 19x19: 404,448 筆 (depth 0-14, b18c384 模型, 500v)
 
 ## 資料匯入注意事項
 
@@ -67,18 +67,23 @@ analysis:
 | 資料來源 | 位置 | 用途 |
 |---------|------|------|
 | **SQLite 資料庫** | `data/analysis.db` | 資料生成工具源資料 |
-| **Opening Book JSON** | `mobile/assets/opening_book.json.gz` | App 打包資產、離線使用 |
+| **Opening Book DB** | `mobile/assets/data/opening_book.db.gz` | App 打包資產、離線使用（Git LFS） |
 
 ### 匯入流程
 
 ```bash
-# 1. 匯入到 SQLite
-python -m src.scripts.import_katago_book --book-path katago/books/xxx.tar.gz
+# 1. 生成新 depth 資料到 analysis.db
+python3 -m src.scripts.build_opening_book_parallel \
+    --board-size 19 --depth 15 --visits 500 --batch-size 64
 
-# 2. 導出到 Opening Book JSON（需要有導出腳本）
-python -m src.scripts.export_opening_book
+# 2. 導出到 Opening Book DB（供 App 使用）
+python3 -c "
+# 見 scripts/ 目錄下的導出腳本，或直接從 analysis.db 轉換為
+# opening_book 表格式（board_size, komi, moves_sequence, top_moves, visits）
+"
 
-# 3. 驗證兩邊資料一致
+# 3. 提交（opening_book.db.gz 使用 Git LFS 管理）
+git add mobile/assets/data/opening_book.db.gz && git push
 ```
 
 ### KataGo Book winrate 轉換
@@ -104,9 +109,9 @@ cd mobile && flutter test
 # 建置所有平台
 cd mobile && ./build_all.sh
 
-# 資料生成工具（非 App 運行時）
-python -m src.scripts.build_opening_book --visits 500 --depth 10
-python -m src.scripts.export_opening_book --compress
+# 資料生成工具（非 App 運行時，需 GPU + KataGo）
+python3 -m src.scripts.build_opening_book_parallel \
+    --board-size 19 --depth 14 --visits 500 --batch-size 64
 ```
 
 ## 開發規範
