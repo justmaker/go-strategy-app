@@ -49,6 +49,23 @@ NS_ASSUME_NONNULL_BEGIN
  */
 + (BOOL)isInitialized;
 
+/**
+ * Get current search visits (thread-safe, atomic read)
+ * Returns 0 if no search is in progress
+ */
++ (int64_t)getCurrentVisits;
+
+/**
+ * Get max visits for the current analysis
+ */
++ (int64_t)getMaxVisits;
+
+/**
+ * Request the current search to stop early
+ * Search will stop after the next playout iteration
+ */
++ (void)requestStop;
+
 @end
 
 NS_ASSUME_NONNULL_END

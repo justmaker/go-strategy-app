@@ -575,6 +575,10 @@ class GameProvider extends ChangeNotifier {
         moves: _board.movesGtp,
         komi: _board.komi,
         maxVisits: _computeVisits,
+        onProgress: (progress) {
+          _analysisProgress = progress;
+          notifyListeners();
+        },
       ).timeout(
         const Duration(seconds: 120),
         onTimeout: () => throw TimeoutException('Engine analysis timed out after 120s'),
@@ -706,7 +710,10 @@ class GameProvider extends ChangeNotifier {
   Future<void> cancelAnalysis() async {
     if (!_isAnalyzing) return;
 
-    if (_isDesktop) {
+    // Cancel inference engine (iOS ONNX / Android ONNX)
+    if (_inferenceEngine != null && _inferenceEngine!.isRunning) {
+      _inferenceEngine!.cancelAnalysis();
+    } else if (_isDesktop) {
       await _kataGoDesktop.cancelAnalysis();
     } else {
       await _kataGo.cancelAnalysis();

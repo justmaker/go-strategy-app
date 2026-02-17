@@ -26,6 +26,7 @@
 #include "katago/cpp/neuralnet/nninputs.h"
 #include "katago/cpp/search/search.h"
 #include "katago/cpp/search/searchparams.h"
+#include "katago/cpp/search/timecontrols.h"
 #include "katago/cpp/external/nlohmann_json/json.hpp"
 
 using json = nlohmann::json;
@@ -42,6 +43,11 @@ static std::string g_modelName = "kata1-b6c96";
 std::string g_onnxModelPath;  // Global for onnxbackend.cpp
 static bool g_globalsInitialized = false;
 static bool g_engineInitialized = false;
+
+// Progress tracking state (thread-safe reads via atomic/pointer)
+static Search* g_activeSearch = nullptr;       // Points to Search during analysis
+static int g_currentMaxVisits = 0;             // maxVisits for current analysis
+static std::atomic<bool> g_shouldStop(false);  // Atomic stop flag
 
 // Logging macros
 #define LOG_INFO(fmt, ...) NSLog(@"[KataGoONNX] " fmt, ##__VA_ARGS__)
@@ -319,9 +325,23 @@ static std::string locToGTP(Loc loc, int boardXSize, int boardYSize) {
             LOG_INFO(@"[%.3fs] Setting position...", timeMark());
             search->setPosition(nextPla, board, history);
 
-            // 5. Run search (synchronous, single-threaded, no pthread)
+            // 5. Run search with progress tracking callbacks
+            g_currentMaxVisits = maxVisits;
+            g_shouldStop.store(false, std::memory_order_release);
+            g_activeSearch = nullptr;  // Will be set in searchBegun
+
+            std::function<void()> searchBegun = [&search]() {
+                g_activeSearch = search;
+                LOG_INFO(@"Search begun, progress tracking active");
+            };
+            std::function<bool()> shouldStopEarly = []() -> bool {
+                return g_shouldStop.load(std::memory_order_acquire);
+            };
+
             LOG_INFO(@"[%.3fs] Starting search (%d visits)...", timeMark(), maxVisits);
-            search->runWholeSearch(nextPla);
+            TimeControls tc;
+            search->runWholeSearch(&searchBegun, &shouldStopEarly, false, tc, 1.0);
+            g_activeSearch = nullptr;  // Search done, clear pointer
             LOG_INFO(@"[%.3fs] Search completed", timeMark());
 
             // 6. Extract JSON results
@@ -392,6 +412,23 @@ static std::string locToGTP(Loc loc, int boardXSize, int boardYSize) {
 
 + (BOOL)isInitialized {
     return g_engineInitialized;
+}
+
++ (int64_t)getCurrentVisits {
+    Search* search = g_activeSearch;
+    if (search != nullptr) {
+        return search->getRootVisits();
+    }
+    return 0;
+}
+
++ (int64_t)getMaxVisits {
+    return g_currentMaxVisits;
+}
+
++ (void)requestStop {
+    g_shouldStop.store(true, std::memory_order_release);
+    LOG_INFO(@"Stop requested");
 }
 
 @end

@@ -7,7 +7,7 @@ private var isOnnxInitialized = false
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-  
+
   // Flag to track engine state (thread-safe via serial queue)
   private let engineQueue = DispatchQueue(label: "com.gostratefy.katago.engine")
   private var _isRunning = false
@@ -15,6 +15,9 @@ private var isOnnxInitialized = false
       get { engineQueue.sync { _isRunning } }
       set { engineQueue.sync { _isRunning = newValue } }
   }
+
+  // ONNX progress timer
+  private var progressTimer: DispatchSourceTimer?
   
   override func application(
     _ application: UIApplication,
@@ -53,6 +56,8 @@ private var isOnnxInitialized = false
           self.analyzeOnnx(args: call.arguments as? [String: Any], result: result)
       } else if call.method == "stopEngineOnnx" {
           self.stopEngineOnnx(result: result)
+      } else if call.method == "cancelAnalysisOnnx" {
+          self.cancelAnalysisOnnx(result: result)
       } else if call.method == "isEngineOnnxRunning" {
           result(isOnnxInitialized)
       } else {
@@ -324,18 +329,71 @@ private var isOnnxInitialized = false
           return
       }
 
+      let maxVisits = args["maxVisits"] as? Int ?? 500
+
+      // Start progress timer before analysis
+      startProgressTimer(maxVisits: maxVisits)
+
       DispatchQueue.global(qos: .userInitiated).async {
-          // Call ONNX bridge (synchronous)
-          if let jsonResult = KataGoOnnxBridge.analyzePosition(args) {
-              DispatchQueue.main.async {
-                  result(jsonResult)
+          // Call ONNX bridge (synchronous, blocks until search completes)
+          let jsonResult = KataGoOnnxBridge.analyzePosition(args)
+
+          // Stop timer and send final progress
+          DispatchQueue.main.async {
+              self.stopProgressTimer()
+
+              // Send completion event
+              if let sink = self.eventSink {
+                  let event: [String: Any] = [
+                      "type": "onnx_progress",
+                      "currentVisits": maxVisits,
+                      "maxVisits": maxVisits,
+                      "isComplete": true
+                  ]
+                  sink(event)
               }
-          } else {
-              DispatchQueue.main.async {
+
+              if let jsonResult = jsonResult {
+                  result(jsonResult)
+              } else {
                   result(FlutterError(code: "ANALYSIS_FAILED", message: "ONNX analysis failed", details: nil))
               }
           }
       }
+  }
+
+  private func cancelAnalysisOnnx(result: @escaping FlutterResult) {
+      KataGoOnnxBridge.requestStop()
+      stopProgressTimer()
+      result(true)
+  }
+
+  private func startProgressTimer(maxVisits: Int) {
+      stopProgressTimer()  // Cancel any existing timer
+
+      let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+      timer.schedule(deadline: .now() + 0.3, repeating: 0.3)
+      timer.setEventHandler { [weak self] in
+          let currentVisits = KataGoOnnxBridge.getCurrentVisits()
+          let max = KataGoOnnxBridge.getMaxVisits()
+          DispatchQueue.main.async {
+              guard let sink = self?.eventSink else { return }
+              let event: [String: Any] = [
+                  "type": "onnx_progress",
+                  "currentVisits": currentVisits,
+                  "maxVisits": max,
+                  "isComplete": false
+              ]
+              sink(event)
+          }
+      }
+      timer.resume()
+      progressTimer = timer
+  }
+
+  private func stopProgressTimer() {
+      progressTimer?.cancel()
+      progressTimer = nil
   }
 
   private func stopEngineOnnx(result: FlutterResult) {

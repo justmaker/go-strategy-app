@@ -19,6 +19,10 @@ class KataGoEngine implements InferenceEngine {
   static const String _tag = '[KataGoEngine]';
   static const _methodChannel =
       MethodChannel('com.gostratefy.go_strategy_app/katago');
+  static const _eventChannel =
+      EventChannel('com.gostratefy.go_strategy_app/katago_events');
+
+  StreamSubscription? _progressSubscription;
 
   final bool _isDesktop = !kIsWeb &&
       (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
@@ -120,21 +124,48 @@ class KataGoEngine implements InferenceEngine {
         // Use platform-specific method name
         final methodName = Platform.isIOS ? 'analyzeOnnx' : 'analyze';
 
-        final response = await _methodChannel.invokeMethod<String>(methodName, {
-          'boardXSize': boardSize,
-          'boardYSize': boardSize,
-          'moves': moves,
-          'komi': komi,
-          'maxVisits': maxVisits,
-        });
-
-        if (response == null || response.isEmpty) {
-          throw Exception('Empty response from native engine');
+        // On iOS, subscribe to EventChannel for progress updates before starting analysis
+        if (Platform.isIOS && onProgress != null) {
+          _progressSubscription?.cancel();
+          _progressSubscription = _eventChannel.receiveBroadcastStream().listen((event) {
+            if (event is Map) {
+              final type = event['type'];
+              if (type == 'onnx_progress') {
+                final currentVisits = (event['currentVisits'] as num?)?.toInt() ?? 0;
+                final max = (event['maxVisits'] as num?)?.toInt() ?? maxVisits;
+                final isComplete = event['isComplete'] as bool? ?? false;
+                onProgress(AnalysisProgress(
+                  currentVisits: currentVisits,
+                  maxVisits: max,
+                  winrate: 0.5,
+                  scoreLead: 0.0,
+                  isComplete: isComplete,
+                ));
+              }
+            }
+          });
         }
 
-        debugPrint('$_tag Got response: ${response.length} bytes');
-        debugPrint('$_tag Raw response: ${response.substring(0, response.length.clamp(0, 300))}');
-        return _parseNativeResponse(response, maxVisits);
+        try {
+          final response = await _methodChannel.invokeMethod<String>(methodName, {
+            'boardXSize': boardSize,
+            'boardYSize': boardSize,
+            'moves': moves,
+            'komi': komi,
+            'maxVisits': maxVisits,
+          });
+
+          if (response == null || response.isEmpty) {
+            throw Exception('Empty response from native engine');
+          }
+
+          debugPrint('$_tag Got response: ${response.length} bytes');
+          debugPrint('$_tag Raw response: ${response.substring(0, response.length.clamp(0, 300))}');
+          return _parseNativeResponse(response, maxVisits);
+        } finally {
+          _progressSubscription?.cancel();
+          _progressSubscription = null;
+        }
       }
 
       // For desktop service
@@ -182,7 +213,11 @@ class KataGoEngine implements InferenceEngine {
 
   @override
   void cancelAnalysis() {
-    // TODO: Wrap cancelAnalysis
+    _progressSubscription?.cancel();
+    _progressSubscription = null;
+    if (!_isDesktop && Platform.isIOS) {
+      _methodChannel.invokeMethod('cancelAnalysisOnnx');
+    }
   }
 
   @override
