@@ -402,14 +402,12 @@ def import_katago_book(
                 x, y = xy_coords[0]
                 gtp_coord = katago_xy_to_gtp(x, y, board_size)
 
-                # KataGo book's 'wl' (winLoss) represents the OPPONENT's win probability
-                # or equivalently, the current player's LOSS probability.
-                # Lower wl = better move for current player.
-                # We need to convert to current player's WIN rate: winrate = 1.0 - wl
+                # KataGo book's 'wl' is the current player's win probability
+                # (higher = better for the player making the move).
+                # 'ssM' is the opponent's expected score lead, so we negate it.
                 wl = move_data.get('wl', 0.5)
-                winrate = 1.0 - wl  # Convert loss rate to win rate
-
-                score_lead = move_data.get('ssM', 0.0)
+                winrate = wl
+                score_lead = -move_data.get('ssM', 0.0)
                 visits = int(move_data.get('v', 0))
 
                 # Our winrate is always from black's perspective

@@ -57,7 +57,7 @@ class OpeningBookEntry {
 class OpeningBookService {
   static const String _bundledDbAsset = 'assets/data/opening_book.db.gz';
   static const String _dbName = 'opening_book_v1.db';
-  static const int _bundledVersion = 1;
+  static const int _bundledVersion = 2;
 
   Database? _database;
   int _totalEntries = 0;
