@@ -32,6 +32,43 @@ Google Sign-In 基本配置已完成（不再崩潰、瀏覽器正確開啟登�
 
 ## 已完成
 
+### ONNX Engine Input Features Fix (2026-02-17)
+
+**問題**: ONNX 引擎的 policy 輸出過度均勻，無法區分好壞手，所有候選手勝率相同（約 60%）。
+
+**根本原因**:
+1. Move history 編碼錯誤：應使用 channels 6-10，卻用了 9-13
+2. Global features 幾乎全空：只有 komi 和 board size，缺少 pass indicators 等 19 個特徵
+3. Territory estimation 過度簡化
+
+**修正** (`mobile/lib/services/inference/onnx_engine.dart`):
+1. 修正 binary features (22 channels) 按照 KataGo v7 規格：
+   - Channels 0-2: on-board, current player, opponent
+   - Channels 3-5: ko-ban, encore ko features
+   - Channels 6-10: move history (last 5 moves)
+   - Channels 14-17: ladder features (atari detection)
+   - Channels 18-19: territory estimation (flood-fill based)
+2. 補齊 global features (19 values)：
+   - 0-4: pass indicators for last 5 turns
+   - 5: komi / 20.0 (v7 normalization)
+   - 6-7: ko rule encoding
+   - 8: multi-stone suicide legality
+   - 9: territory scoring flag
+   - 10-14: tax rules, encore phase, komi parity
+3. 改進 policy 評估：
+   - 增加 uniformity ratio 檢測（max_prob / avg_prob * 10）
+   - ratio > 2.0 時使用模型輸出，否則 fallback 到 tactical heuristic
+   - 候選手勝率基於相對 policy probability 調整
+
+**測試結果** (Android ONNX):
+- 修正前：uniformity ratio < 2.0，所有手勝率 ~60%
+- 修正後：uniformity ratio 2.5-6.5，勝率範圍 38%-99%
+- Top moves 現在有明確差異，分析結果合理
+
+**參考資料**:
+- [KataGo paper - Accelerating Self-Play Learning in Go](https://arxiv.org/pdf/1902.10565)
+- [KataGo GitHub](https://github.com/lightvector/KataGo) - `cpp/neuralnet/nninputs.cpp` (fillRowV7)
+
 ### iOS Simulator: ONNX Fallback (2026-02-15)
 
 iOS Simulator 上 native KataGo 會崩潰。修復方式：

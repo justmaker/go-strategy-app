@@ -223,13 +223,17 @@ class OnnxEngine implements InferenceEngine {
     // Parse moves and build board state
     final blackStones = <int>{};
     final whiteStones = <int>{};
+    final moveHistory = <int>[]; // Track move positions in order
     _occupiedPositions.clear();
 
     debugPrint('$_tag Encoding ${moves.length} moves: ${moves.join(" ")}');
 
     for (var i = 0; i < moves.length; i++) {
       final move = moves[i];
-      if (move.toLowerCase().contains('pass')) continue;
+      if (move.toLowerCase().contains('pass')) {
+        moveHistory.add(-1); // -1 = pass move
+        continue;
+      }
 
       // GTP format can be "B E3" or just "E3"
       // Extract coordinate part (skip player prefix if present)
@@ -249,6 +253,7 @@ class OnnxEngine implements InferenceEngine {
         whiteStones.add(coord);
       }
       _occupiedPositions.add(coord);
+      moveHistory.add(coord);
     }
 
     debugPrint('$_tag Black stones: ${blackStones.length}, White stones: ${whiteStones.length}');
@@ -267,148 +272,198 @@ class OnnxEngine implements InferenceEngine {
     _currentWhiteStones = whiteStones;
     _currentNextIsBlack = nextPlayerIsBlack;
 
-    // Channel 0: On board (all 1s) - KataGo feature 0
+    // Channel 0: On board (all 1s)
     for (var i = 0; i < boardSize * boardSize; i++) {
       data[i] = 1.0;
     }
 
-    // Channel 1: Current player (next to move) stones - KataGo feature 1
+    // Channel 1: Current player stones
     final channel1Offset = 1 * boardSize * boardSize;
     for (final stone in currentStones) {
       data[channel1Offset + stone] = 1.0;
     }
-    debugPrint('$_tag Channel 1 (current player): ${currentStones.length} stones at indices ${currentStones.take(5).join(", ")}');
+    debugPrint('$_tag Channel 1 (current player): ${currentStones.length} stones');
 
-    // Channel 2: Opponent stones - KataGo feature 2
+    // Channel 2: Opponent stones
     final channel2Offset = 2 * boardSize * boardSize;
     for (final stone in opponentStones) {
       data[channel2Offset + stone] = 1.0;
     }
-    debugPrint('$_tag Channel 2 (opponent): ${opponentStones.length} stones at indices ${opponentStones.take(5).join(", ")}');
+    debugPrint('$_tag Channel 2 (opponent): ${opponentStones.length} stones');
 
-    // Channels 3-5: Liberties (1, 2, 3+) - KataGo features 3-5
+    // Channel 3: Ko-banned locations
+    // Simplified: mark the last capture location if it was a single stone capture
+    if (moveHistory.length >= 2) {
+      final lastMove = moveHistory[moveHistory.length - 1];
+      final prevMove = moveHistory[moveHistory.length - 2];
+      // Simple ko detection: if last move captured a single stone at prevMove
+      // In full implementation, would check if move was a recapture
+      // For now, leave empty (complex to implement without full game tree)
+    }
+
+    // Channels 4-5: Encore ko features (leave empty - rare)
+
+    // Channels 6-10: Move history (last 5 moves, alternating players)
+    // Channel 6: opponent's last move (most recent)
+    // Channel 7: current player's move 2 turns ago
+    // Channel 8: opponent's move 3 turns ago
+    // Channel 9: current player's move 4 turns ago
+    // Channel 10: opponent's move 5 turns ago
+    final historyChannels = [6, 7, 8, 9, 10];
+    for (var i = 0; i < math.min(5, moveHistory.length); i++) {
+      final moveIdx = moveHistory[moveHistory.length - 1 - i];
+      if (moveIdx >= 0 && moveIdx < boardSize * boardSize) {
+        final channel = historyChannels[i];
+        final offset = channel * boardSize * boardSize;
+        data[offset + moveIdx] = 1.0;
+      }
+    }
+    debugPrint('$_tag Encoded ${math.min(5, moveHistory.length)} moves in history');
+
+    // Channels 11-13: Reserved for future move history
+
+    // Channels 14-17: Ladder features
+    // Channel 14: Groups in atari or capturable by ladder
     final libertyCalc = LibertyCalculator(
       boardSize: boardSize,
       blackStones: blackStones,
       whiteStones: whiteStones,
     );
     final liberties = libertyCalc.calculateAllLiberties();
-    debugPrint('$_tag Calculated liberties for ${liberties.length} stones');
 
-    var lib1Count = 0, lib2Count = 0, lib3Count = 0;
+    var atariCount = 0;
     for (final entry in liberties.entries) {
       final position = entry.key;
       final libCount = entry.value;
 
       if (libCount == 1) {
-        data[3 * boardSize * boardSize + position] = 1.0; // Channel 3
-        lib1Count++;
-      } else if (libCount == 2) {
-        data[4 * boardSize * boardSize + position] = 1.0; // Channel 4
-        lib2Count++;
-      } else if (libCount >= 3) {
-        data[5 * boardSize * boardSize + position] = 1.0; // Channel 5
-        lib3Count++;
+        data[14 * boardSize * boardSize + position] = 1.0; // Atari (1 liberty)
+        atariCount++;
       }
     }
-    debugPrint('$_tag Liberty distribution: 1lib=$lib1Count, 2lib=$lib2Count, 3+lib=$lib3Count');
+    debugPrint('$_tag Channel 14 (atari): $atariCount stones');
 
-    // Channel 6: Ko ban - KataGo feature 6
-    // Leave empty for now (requires game state to track captures)
+    // Channels 15-17: Ladder history and escape moves (leave simplified)
 
-    // Channels 7-8: Encore ko features
-    // Leave empty (only used in encore phase, rare)
-
-    // Channels 9-13: Move history (last 5 moves)
-    // This is CRITICAL for model to understand recent play
-    final movesList = <int>[];
-    for (var i = 0; i < moves.length; i++) {
-      final parts = moves[i].trim().split(' ');
-      if (parts.length < 2) continue;
-      final coordStr = parts[1];
-      final coord = _gtpToIndex(coordStr, boardSize);
-      if (coord != null && coord >= 0 && coord < boardSize * boardSize) {
-        movesList.add(coord);
-      }
-    }
-
-    // Encode last 5 moves (reverse order: most recent first)
-    final historyChannels = [9, 10, 11, 12, 13];
-    for (var i = 0; i < math.min(5, movesList.length); i++) {
-      final moveIdx = movesList[movesList.length - 1 - i];
-      final channel = historyChannels[i];
-      final offset = channel * boardSize * boardSize;
-      data[offset + moveIdx] = 1.0;
-    }
-
-    // Channels 14-17: Ladder features
-    // Complex tactical feature requiring ladder search algorithm
-    // Simplified: Mark stones with exactly 2 liberties adjacent to opponent
-    // (rough approximation of ladder candidates)
-    for (final entry in liberties.entries) {
+    // Channels 18-19: Territory/area estimation
+    // Use more sophisticated flood-fill based territory detection
+    final territories = _calculateTerritories(boardSize, currentStones, opponentStones);
+    for (final entry in territories.entries) {
       final position = entry.key;
-      final libCount = entry.value;
+      final owner = entry.value; // 1 = current, 2 = opponent
 
-      if (libCount == 2) {
-        // Check if adjacent to opponent
-        final neighbors = _getNeighbors(position, boardSize);
-        var hasOpponentNeighbor = false;
-        final isOurStone = currentStones.contains(position);
-
-        for (final n in neighbors) {
-          if (isOurStone && opponentStones.contains(n)) {
-            hasOpponentNeighbor = true;
-            break;
-          } else if (!isOurStone && currentStones.contains(n)) {
-            hasOpponentNeighbor = true;
-            break;
-          }
-        }
-
-        if (hasOpponentNeighbor) {
-          data[14 * boardSize * boardSize + position] = 1.0; // Simplified ladder
-        }
+      if (owner == 1) {
+        data[18 * boardSize * boardSize + position] = 1.0;
+      } else if (owner == 2) {
+        data[19 * boardSize * boardSize + position] = 1.0;
       }
     }
 
-    // Channels 18-19: Pass-alive territory
-    // Simplified: mark empty positions near our stones as potential territory
-    for (var i = 0; i < boardSize * boardSize; i++) {
-      if (_occupiedPositions.contains(i)) continue;
-
-      final neighbors = _getNeighbors(i, boardSize);
-      var nearCurrent = 0;
-      var nearOpponent = 0;
-
-      for (final n in neighbors) {
-        if (currentStones.contains(n)) nearCurrent++;
-        if (opponentStones.contains(n)) nearOpponent++;
-      }
-
-      // If mostly surrounded by our stones, likely our territory
-      if (nearCurrent > nearOpponent && nearCurrent >= 2) {
-        data[18 * boardSize * boardSize + i] = 1.0; // Our territory
-      } else if (nearOpponent > nearCurrent && nearOpponent >= 2) {
-        data[19 * boardSize * boardSize + i] = 1.0; // Opponent territory
-      }
-    }
-
-    // Channels 20-21: Reserved/unused in this model version
-    // Leave as zeros
+    // Channels 20-21: Encore phase stones (leave empty - not in main game)
 
     return data;
+  }
+
+  // Calculate territory ownership using flood-fill from stones
+  Map<int, int> _calculateTerritories(int boardSize, Set<int> currentStones, Set<int> opponentStones) {
+    final territories = <int, int>{};
+    final visited = <int>{};
+
+    // For each empty position, do flood fill to determine ownership
+    for (var i = 0; i < boardSize * boardSize; i++) {
+      if (_occupiedPositions.contains(i) || visited.contains(i)) continue;
+
+      // Flood fill from this empty point
+      final region = <int>{};
+      final queue = <int>[i];
+      var touchesCurrent = false;
+      var touchesOpponent = false;
+
+      while (queue.isNotEmpty) {
+        final pos = queue.removeAt(0);
+        if (visited.contains(pos)) continue;
+
+        visited.add(pos);
+        region.add(pos);
+
+        for (final neighbor in _getNeighbors(pos, boardSize)) {
+          if (currentStones.contains(neighbor)) {
+            touchesCurrent = true;
+          } else if (opponentStones.contains(neighbor)) {
+            touchesOpponent = true;
+          } else if (!visited.contains(neighbor)) {
+            queue.add(neighbor);
+          }
+        }
+      }
+
+      // Assign ownership if region touches only one color
+      if (touchesCurrent && !touchesOpponent) {
+        for (final pos in region) {
+          territories[pos] = 1; // Current player
+        }
+      } else if (touchesOpponent && !touchesCurrent) {
+        for (final pos in region) {
+          territories[pos] = 2; // Opponent
+        }
+      }
+      // If touches both or neither, leave as neutral (no territory)
+    }
+
+    return territories;
   }
 
   Float32List _prepareGlobalInput(int boardSize, double komi, List<String> moves) {
     final data = Float32List(kNumGlobalFeatures);
 
-    data[0] = komi / 15.0; // Normalized komi
-    if (boardSize == 9) data[1] = 1.0;
-    if (boardSize == 13) data[2] = 1.0;
-    if (boardSize == 19) data[3] = 1.0;
-    data[4] = moves.length / 400.0; // Normalized move count
+    // Features 0-4: Pass move indicators for last 5 turns
+    for (var i = 0; i < 5 && i < moves.length; i++) {
+      final move = moves[moves.length - 1 - i];
+      if (move.toLowerCase().contains('pass')) {
+        data[i] = 1.0;
+      }
+    }
 
-    // TODO: Add remaining global features
+    // Feature 5: Komi normalized by 20.0 (KataGo v7 normalization)
+    data[5] = komi / 20.0;
+
+    // Features 6-7: Ko rule encoding
+    // 6 = positional superko, 7 = situational superko
+    // Default to simple ko (neither flag set)
+    data[6] = 0.0; // Not using positional superko
+    data[7] = 0.0; // Not using situational superko
+
+    // Feature 8: Multi-stone suicide legality (1.0 = allowed)
+    // Standard rules forbid suicide
+    data[8] = 0.0;
+
+    // Feature 9: Territory scoring (1.0 = territory, 0.0 = area)
+    // Using area scoring (Chinese rules)
+    data[9] = 0.0;
+
+    // Features 10-11: Tax rules (rare variants)
+    data[10] = 0.0; // No seki tax
+    data[11] = 0.0; // No all-stone tax
+
+    // Features 12-13: Encore phase (almost never used)
+    data[12] = 0.0; // Not in encore phase
+    data[13] = 0.0; // Not in second encore
+
+    // Feature 14: Pass would end phase
+    // In normal play, pass doesn't end the phase
+    data[14] = 0.0;
+
+    // Feature 15: Komi parity wave (helps with xor-like parity effects)
+    // Triangle wave based on drawable komi distance
+    final komiParity = (komi.abs() % 2.0) / 2.0;
+    data[15] = komiParity;
+
+    // Features 16-18: Reserved/unused
+    data[16] = 0.0;
+    data[17] = 0.0;
+    data[18] = 0.0;
+
+    debugPrint('$_tag Global features: komi=${data[5]}, pass_indicators=[${data[0]},${data[1]},${data[2]},${data[3]},${data[4]}]');
 
     return data;
   }
@@ -424,35 +479,32 @@ class OnnxEngine implements InferenceEngine {
     // Check policy logits distribution
     final maxLogit = policyLogits.reduce(math.max);
     final minLogit = policyLogits.reduce(math.min);
+    final avgLogit = policyLogits.reduce((a, b) => a + b) / policyLogits.length;
     final nonNegLogits = policyLogits.where((x) => x > -10).length;
-    debugPrint('$_tag Policy logit range: [$minLogit, $maxLogit], >-10: $nonNegLogits');
+    debugPrint('$_tag Policy logit stats: min=$minLogit, max=$maxLogit, avg=$avgLogit, >-10: $nonNegLogits');
 
     // Apply softmax to policy logits
     final expSum = policyLogits
         .map((x) => math.exp(x - maxLogit))
         .reduce((a, b) => a + b);
-    var probabilities =
+    final probabilities =
         policyLogits.map((x) => math.exp(x - maxLogit) / expSum).toList();
 
-    // CRITICAL FIX: ONNX model's policy is too uniform to be useful
-    // Use center-distance heuristic for move selection
-    // Keep ONNX value (winrate) as it's more reliable
-    debugPrint('$_tag Using center-distance heuristic for move selection (ONNX policy too uniform)');
-    probabilities = _generateTacticalPolicy(boardSize);
-
+    // Check if policy is too uniform (indicating bad model input)
     final maxProb = probabilities.reduce(math.max);
-    final nonZeroProbs = probabilities.where((p) => p > 0.0001).length;
-    debugPrint('$_tag Prob stats: max=$maxProb, non-zero count=$nonZeroProbs / ${probabilities.length}');
+    final avgProb = probabilities.reduce((a, b) => a + b) / probabilities.length;
+    final uniformityRatio = maxProb / (avgProb * 10); // Should be >> 1 for good policy
+    debugPrint('$_tag Policy uniformity: max_prob=$maxProb, avg_prob=$avgProb, ratio=$uniformityRatio');
 
-    // Find top 5 highest probability indices
-    final indexed = List.generate(probabilities.length, (i) => {'idx': i, 'prob': probabilities[i]});
-    indexed.sort((a, b) => (b['prob'] as double).compareTo(a['prob'] as double));
-    debugPrint('$_tag Top 5 policy indices:');
-    for (var i = 0; i < math.min(5, indexed.length); i++) {
-      final idx = indexed[i]['idx'] as int;
-      final prob = indexed[i]['prob'] as double;
-      final occupied = _occupiedPositions.contains(idx) ? ' (OCCUPIED)' : '';
-      debugPrint('$_tag   Index $idx: prob=$prob$occupied');
+    List<double> finalProbabilities;
+    if (uniformityRatio < 2.0) {
+      // Policy is too uniform, fall back to tactical heuristic
+      debugPrint('$_tag WARNING: Policy too uniform (ratio=$uniformityRatio), using tactical heuristic');
+      finalProbabilities = _generateTacticalPolicy(boardSize);
+    } else {
+      // Policy looks reasonable, use it
+      debugPrint('$_tag Policy looks good (ratio=$uniformityRatio), using model output');
+      finalProbabilities = probabilities;
     }
 
     // Extract winrate from value output
@@ -468,43 +520,41 @@ class OnnxEngine implements InferenceEngine {
 
     final winProb = expWin / valueExpSum;
     final lossProb = expLoss / valueExpSum;
+    final drawProb = expDraw / valueExpSum;
 
-    // Winrate = win / (win + loss) * 100 (excluding draws)
+    // Winrate = win / (win + loss) (excluding draws)
     final total = winProb + lossProb;
-    final winrate = total > 0 ? (winProb / total) * 100 : 50.0;
-    debugPrint('$_tag Winrate: $winrate% (win=$winProb, loss=$lossProb, draw=${expDraw/valueExpSum})');
+    final baseWinrate = total > 0 ? winProb / total : 0.5;
+    debugPrint('$_tag Base winrate: ${(baseWinrate * 100).toStringAsFixed(1)}% (win=$winProb, loss=$lossProb, draw=$drawProb)');
 
-    // Create move candidates for ALL legal (unoccupied) positions
-    // Policy output = [boardSize*boardSize positions + 1 pass move]
-    // We exclude the pass move (last element)
+    // Create move candidates
     final candidates = <MoveCandidate>[];
     final numBoardPositions = boardSize * boardSize;
+
+    // Find top probabilities for scaling
+    final legalProbs = <double>[];
     for (var i = 0; i < numBoardPositions; i++) {
-      // Skip occupied positions (illegal moves)
+      if (!_occupiedPositions.contains(i)) {
+        legalProbs.add(finalProbabilities[i]);
+      }
+    }
+    legalProbs.sort((a, b) => b.compareTo(a));
+    final topProb = legalProbs.isNotEmpty ? legalProbs[0] : 0.001;
+
+    for (var i = 0; i < numBoardPositions; i++) {
+      // Skip occupied positions
       if (_occupiedPositions.contains(i)) continue;
 
-      final originalProb = probabilities[i];
-      var adjustedProb = originalProb;
+      final prob = finalProbabilities[i];
       final row = i ~/ boardSize;
       final col = i % boardSize;
-
-      // Apply edge penalty - edges are rarely good in opening
-      // This compensates for uniform model output
-      final isFirstLine = row == 0 || row == boardSize - 1 || col == 0 || col == boardSize - 1;
-      final isSecondLine = !isFirstLine && (row == 1 || row == boardSize - 2 || col == 1 || col == boardSize - 2);
-
-      if (isFirstLine) {
-        adjustedProb *= 0.1; // 90% penalty for first line
-      } else if (isSecondLine) {
-        adjustedProb *= 0.5; // 50% penalty for second line
-      }
-
       final gtp = _indexToGtp(row, col, boardSize);
 
-      // Winrate: normalize to 40-60% range based on adjusted probability
-      // Don't use ONNX winrate directly as it can be unreliable
-      final relativeProb = adjustedProb / (maxProb + 0.0001);
-      final moveWinrate = 0.40 + relativeProb * 0.20; // Scale to 40-60% range
+      // Scale winrate based on move probability relative to best move
+      // Better moves should have higher winrate
+      final relativeProb = prob / topProb;
+      // Map top move to baseWinrate, weaker moves spread from -10% to baseWinrate
+      final moveWinrate = baseWinrate - (1.0 - relativeProb) * 0.15;
 
       candidates.add(MoveCandidate(
         move: gtp,
@@ -514,13 +564,18 @@ class OnnxEngine implements InferenceEngine {
       ));
     }
 
-    // Sort by probability (highest first) and return top 20
+    // Sort by winrate and return top 20
     candidates.sort((a, b) => b.winrate.compareTo(a.winrate));
     final topMoves = candidates.take(20).toList();
+
     debugPrint('$_tag Created ${candidates.length} candidates, returning top ${topMoves.length}');
-    if (topMoves.isNotEmpty) {
-      debugPrint('$_tag Top move: ${topMoves[0].move} (${(topMoves[0].winrate * 100).toStringAsFixed(1)}%)');
+    if (topMoves.length >= 3) {
+      debugPrint('$_tag Top 3 moves:');
+      for (var i = 0; i < 3; i++) {
+        debugPrint('$_tag   ${i + 1}. ${topMoves[i].move}: ${(topMoves[i].winrate * 100).toStringAsFixed(1)}%');
+      }
     }
+
     return topMoves;
   }
 
