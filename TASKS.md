@@ -24,13 +24,66 @@ Google Sign-In 基本配置已完成（不再崩潰、瀏覽器正確開啟登�
 |------------|---------|-------|--------|------|
 | 9x9 | 1,519,000 | 0-18 | 90K+ avg | KataGo 官方 book，已完成 |
 | 13x13 | 139,235 | 0-14 | 500 | b18c384 模型 |
-| 19x19 | 404,448 | 0-14 | 500 | b18c384 模型 |
+| 19x19 | 404,473 | 0-14 | 500 | b18c384 模型，淺層已補強 |
 
-可繼續擴充 depth 15+，需在 GPU server 上執行 `python3 -m src.scripts.build_opening_book_parallel`。
+可繼續擴充 depth 15+，需在 GPU server 上執行：
+```bash
+python3 -m src.scripts.build_opening_book_parallel \
+    --board-size 19 --depth 15 --visits 500 --batch-size 64 --branching 7
+```
+
+本機也可補充淺層資料（需 `/opt/homebrew/bin/katago`）：
+```bash
+python3 -m src.scripts.build_opening_book_parallel \
+    --board-size 19 --depth 3 --visits 500 --batch-size 4 --branching 7 \
+    --min-cache-visits 500 \
+    --katago-path /opt/homebrew/bin/katago \
+    --model-path /opt/homebrew/share/katago/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz \
+    --config-path katago/analysis.cfg
+```
 
 ---
 
 ## 已完成
+
+### Web Deploy: dart:ffi 編譯修復 (2026-02-19)
+
+**問題**: `Deploy Flutter Web to GitHub Pages` workflow 持續失敗，因為 `onnx_engine.dart` 無條件 import `package:onnxruntime`（依賴 `dart:ffi`），Wasm 編譯時不可用。
+
+**修正**:
+- 新增 `onnx_engine_stub.dart`：Web 平台用的空實作（`isAvailable = false`）
+- `game_provider.dart`：改用 conditional import `if (dart.library.ffi)` 選擇真實 vs stub
+- 本地 `flutter build web` 驗證通過，CI 已綠 ✅
+
+### 19x19 Opening Book 淺層覆蓋改善 (2026-02-19)
+
+**問題**: 19x19 開局只顯示 2 個 rank（小目 + 三三），缺少星位（4-4 hoshi）；opening book tree 在 depth 0 只有 3 個候選且全為小目等價點，BFS 展開因 branching factor=3 導致樹極窄。
+
+**修正**:
+1. **`opening_book_service.dart`**:
+   - 注入 4-4 星位（hoshi）為 13x13/19x19 的標準開局
+   - 星位、小目、三三使用不同 winrate ratio 確保 3 個獨立 rank 顯示
+   - Opening book 版本 2→3，強制 app 重新解壓
+
+2. **`build_opening_book_parallel.py`**:
+   - 新增 `--branching`（default 7）、`--shallow-branching` CLI 參數
+   - Depth 0：展開所有候選（無 branching/winrate 限制）
+   - Depth 1-2：寬展開（shallow branching）、放寬 winrate 門檻至 0.20
+   - 儲存 top 20 候選（原 10），避免對稱等價點佔滿名額
+   - 新增 `--katago-path`、`--model-path`、`--config-path` 支援本機執行
+   - 新增 `--min-cache-visits` 過濾低品質 cache 條目
+
+3. **`export_opening_book.py`**:
+   - Dead move filter 跳過 depth 0-3，保留淺層所有候選
+
+4. **`analysis.cfg`**:
+   - 加入 `numAnalysisThreads`（analysis mode 必要參數）
+   - 修正 `reportAnalysisWinratesAs = BLACK`（與 GPU config 一致）
+
+5. **Opening Book 數據補強**:
+   - 本機用 KataGo Metal (500 visits) 重新分析 depth 0-2
+   - 初始位置從 3 候選 → 20 候選（星位、小目、高目全覆蓋）
+   - 合併 25 筆新數據到 opening_book.db.gz
 
 ### ONNX 模型統一與最佳化 (2026-02-18)
 
