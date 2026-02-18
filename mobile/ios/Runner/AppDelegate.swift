@@ -415,19 +415,21 @@ private var isOnnxInitialized = false
           return (nil, nil, nil)
       }
 
-      // 2. Board-size-specific ONNX model
-      let modelOnnxKey = FlutterDartProject.lookupKey(forAsset: "assets/katago/model_\(boardSize)x\(boardSize).onnx")
+      // 2. ONNX model: prefer large model.onnx (b20c256) for native MCTS search
+      let modelOnnxKey = FlutterDartProject.lookupKey(forAsset: "assets/katago/model.onnx")
       var modelOnnxPath = Bundle.main.path(forResource: modelOnnxKey, ofType: nil)
 
-      if modelOnnxPath == nil {
-          NSLog("[KataGoONNX] Failed to find model_\(boardSize)x\(boardSize).onnx")
-          // Fallback to generic model
-          let fallbackKey = FlutterDartProject.lookupKey(forAsset: "assets/katago/model.onnx")
+      if modelOnnxPath != nil {
+          NSLog("[KataGoONNX] Using model.onnx (b20c256)")
+      } else {
+          NSLog("[KataGoONNX] model.onnx not found, falling back to board-size-specific model")
+          // Fallback to board-size-specific model (b6c96)
+          let fallbackKey = FlutterDartProject.lookupKey(forAsset: "assets/katago/model_\(boardSize)x\(boardSize).onnx")
           if let fallbackPath = Bundle.main.path(forResource: fallbackKey, ofType: nil) {
               modelOnnxPath = fallbackPath
-              NSLog("[KataGoONNX] Using fallback model.onnx")
+              NSLog("[KataGoONNX] Using model_\(boardSize)x\(boardSize).onnx (b6c96)")
           } else {
-              NSLog("[KataGoONNX] Fallback model.onnx also not found")
+              NSLog("[KataGoONNX] No ONNX model found")
               return (nil, nil, nil)
           }
       }

@@ -347,7 +347,22 @@ class OpeningBookService {
       injectIfMissing(const BoardPoint(2, 2), 0.96, 0.4);
     }
 
-    expandedMoves.sort((a, b) => b.winrate.compareTo(a.winrate));
+    // Sort by visits (KataGo MCTS preference), but push clearly bad moves
+    // to the end. Winrate is stored from Black's perspective, so we need to
+    // know whose turn it is to determine "current player's winrate".
+    final moveCount = entry.movesSequence.isEmpty
+        ? 0
+        : entry.movesSequence.split(';').length;
+    final isBlackTurn = moveCount % 2 == 0;
+
+    expandedMoves.sort((a, b) {
+      final aPlayerWr = isBlackTurn ? a.winrate : 1.0 - a.winrate;
+      final bPlayerWr = isBlackTurn ? b.winrate : 1.0 - b.winrate;
+      final aGood = aPlayerWr > 0.3;
+      final bGood = bPlayerWr > 0.3;
+      if (aGood != bGood) return aGood ? -1 : 1;
+      return b.visits.compareTo(a.visits);
+    });
 
     return OpeningBookEntry(
       hash: entry.hash,

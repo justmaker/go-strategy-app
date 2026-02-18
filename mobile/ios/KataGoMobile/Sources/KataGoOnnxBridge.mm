@@ -39,7 +39,7 @@ static Logger* g_logger = nullptr;
 static NNEvaluator* g_nnEval = nullptr;
 static SearchParams* g_searchParams = nullptr;
 static Rules g_rules;
-static std::string g_modelName = "kata1-b6c96";
+static std::string g_modelName = "g170-b20c256x2";
 std::string g_onnxModelPath;  // Global for onnxbackend.cpp
 static bool g_globalsInitialized = false;
 static bool g_engineInitialized = false;

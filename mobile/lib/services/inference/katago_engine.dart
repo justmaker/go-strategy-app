@@ -62,7 +62,7 @@ class KataGoEngine implements InferenceEngine {
 
     try {
       // On Android and iOS, pass boardSize via MethodChannel so the native engine
-      // initialises with the correct ONNX model (model_9x9.onnx, etc.)
+      // initialises with the ONNX model (model.onnx, dynamic board size)
       if (!_isDesktop && _engine is KataGoService) {
         // Try ONNX engine first (iOS and Android support)
         final methodName = Platform.isIOS ? 'startEngineOnnx' : 'startEngine';

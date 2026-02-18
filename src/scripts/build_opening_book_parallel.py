@@ -335,7 +335,10 @@ def main():
 
                     # Store in cache
                     if candidates:
-                        moves_str = ";".join(moves) if moves else ""
+                        # Use bracket format: "B[Q16];W[D4]" to match import_katago_book.py
+                        moves_str = ";".join(
+                            f"{m.split()[0]}[{m.split()[1]}]" for m in moves
+                        ) if moves else ""
                         total_visits = sum(c.visits for c in candidates)
 
                         cache.put(

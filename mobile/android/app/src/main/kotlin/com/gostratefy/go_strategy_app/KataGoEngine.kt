@@ -79,9 +79,9 @@ class KataGoEngine(private val context: Context) {
             val modelBinPath = extractAsset("katago/$MODEL_BIN_FILE")
                 ?: return@withContext false
 
-            // Load board-size-specific ONNX model
-            val modelOnnxPath = extractAsset("katago/model_${boardSize}x${boardSize}.onnx")
-                ?: extractAsset("katago/model.onnx")
+            // Load ONNX model (prefer large model.onnx, fallback to board-size-specific)
+            val modelOnnxPath = extractAsset("katago/model.onnx")
+                ?: extractAsset("katago/model_${boardSize}x${boardSize}.onnx")
                 ?: return@withContext false
 
             val configPath = createConfigFile()

@@ -18,8 +18,8 @@ const int kNumGlobalFeatures = 19;
 class OnnxEngine implements InferenceEngine {
   static const String _tag = '[OnnxEngine]';
 
-  // Separate models for each board size
-  final Map<int, OrtSession> _sessions = {};
+  // Single shared session for all board sizes (model has dynamic dimensions)
+  OrtSession? _session;
   OrtSessionOptions? _sessionOptions;
   bool _isRunning = false;
 
@@ -57,20 +57,15 @@ class OnnxEngine implements InferenceEngine {
           GraphOptimizationLevel.ortEnableAll,
         );
 
-      // Load models for all board sizes
-      debugPrint('$_tag Loading ONNX models for all board sizes...');
-      for (final size in [9, 13, 19]) {
-        final modelAsset = 'assets/katago/model_${size}x$size.onnx';
-        final rawAssetFile = await rootBundle.load(modelAsset);
-        final modelBytes = rawAssetFile.buffer.asUint8List();
-        debugPrint('$_tag Model $size x$size loaded: ${modelBytes.length} bytes');
+      // Load single model (b20c256, dynamic board size)
+      const modelAsset = 'assets/katago/model.onnx';
+      debugPrint('$_tag Loading ONNX model: $modelAsset');
+      final rawAssetFile = await rootBundle.load(modelAsset);
+      final modelBytes = rawAssetFile.buffer.asUint8List();
+      debugPrint('$_tag Model loaded: ${modelBytes.length} bytes');
 
-        final session = OrtSession.fromBuffer(modelBytes, _sessionOptions!);
-        _sessions[size] = session;
-        debugPrint('$_tag Session ${size}x$size created');
-      }
-
-      debugPrint('$_tag All sessions created successfully');
+      _session = OrtSession.fromBuffer(modelBytes, _sessionOptions!);
+      debugPrint('$_tag Session created (dynamic board size)');
 
       _isRunning = true;
       return true;
@@ -85,10 +80,8 @@ class OnnxEngine implements InferenceEngine {
   Future<void> stop() async {
     if (!_isRunning) return;
 
-    for (final session in _sessions.values) {
-      session.release();
-    }
-    _sessions.clear();
+    _session?.release();
+    _session = null;
     _sessionOptions?.release();
     _sessionOptions = null;
     OrtEnv.instance.release();
@@ -109,13 +102,12 @@ class OnnxEngine implements InferenceEngine {
       throw StateError('Engine not running');
     }
 
-    final session = _sessions[boardSize];
+    final session = _session;
     if (session == null) {
-      debugPrint('$_tag ERROR: No session for ${boardSize}x$boardSize. Available: ${_sessions.keys.toList()}');
-      throw UnsupportedError("No ONNX model for ${boardSize}x$boardSize");
+      throw StateError('ONNX session not initialized');
     }
 
-    debugPrint('$_tag Analyzing: ${boardSize}x$boardSize, ${moves.length} moves (using model for ${boardSize}x$boardSize)');
+    debugPrint('$_tag Analyzing: ${boardSize}x$boardSize, ${moves.length} moves');
 
     try {
       // Prepare input tensors
@@ -200,7 +192,7 @@ class OnnxEngine implements InferenceEngine {
       return EngineAnalysisResult(
         topMoves: topMoves,
         visits: maxVisits,
-        modelName: 'katago-b6c96-onnx',
+        modelName: 'katago-b20c256-onnx',
       );
     } catch (e, stack) {
       debugPrint('$_tag Analysis error: $e');
