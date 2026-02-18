@@ -32,6 +32,38 @@ Google Sign-In 基本配置已完成（不再崩潰、瀏覽器正確開啟登�
 
 ## 已完成
 
+### ONNX 模型統一與最佳化 (2026-02-18)
+
+**任務**: 統一 ONNX 模型為單一 b20c256 變體，取代 3 個 size-specific 模型。
+
+**完成項目**:
+1. **模型合併**:
+   - 刪除 `model_9x9.onnx`、`model_13x13.onnx`、`model_19x19.onnx`
+   - 統一使用 `model.onnx` (b20c256)
+   - b20c256 對所有棋盤大小具有更好的泛化能力
+
+2. **模型加載優先順序調整**:
+   - Android (`KataGoEngine.kt`): 優先 `model.onnx`，備用 size-specific 模型
+   - iOS (`AppDelegate.swift`): 優先 `model.onnx` (b20c256) 用於 native MCTS，備用 b6c96 variants
+
+3. **Opening Book 排序邏輯改善**:
+   - 考慮當前玩家的輪次（黑白交替）
+   - 根據當前玩家的實際勝率評估：黑手為直接勝率，白手則反轉
+   - 優先按 visits 排序（MCTS 偏好），將低於 30% 當前玩家勝率的手段推至末尾
+   - 結果：更準確的手段排名，符合 KataGo MCTS 搜尋的自然偏好
+
+4. **Git LFS 配置擴充**:
+   - 新增 `model.onnx` (4.5 MB)、`model.bin` (4.1 MB)、`model.bin.gz` (3.8 MB) 到 LFS 追蹤
+
+5. **構建腳本格式規範**:
+   - `build_opening_book_parallel.py` 更新為括號式記譜 (e.g., `B[Q16];W[D4]`)
+   - 與 `import_katago_book.py` 保持一致
+
+**影響**:
+- App 資產包體積優化（3 個模型 → 1 個）
+- 推論品質提升（b20c256 對小棋盤更好）
+- 更準確的手段排名
+
 ### 9x9 Opening Book 勝率修正 (2026-02-17)
 
 **問題**: 9x9 opening book 的勝率顯示反轉 — 邊角 99.8%、中央 3.5%。
