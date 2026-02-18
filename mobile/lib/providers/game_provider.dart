@@ -16,7 +16,8 @@ import '../models/models.dart';
 import '../services/services.dart';
 import '../services/inference/inference_engine.dart';
 import '../services/inference/inference_factory.dart';
-import '../services/inference/onnx_engine.dart';
+import '../services/inference/onnx_engine_stub.dart'
+    if (dart.library.ffi) '../services/inference/onnx_engine.dart';
 
 /// Connection status
 enum ConnectionStatus { online, offline, checking }
