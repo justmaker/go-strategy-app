@@ -185,7 +185,8 @@ def parse_response(response: dict) -> Tuple[str, List[MoveCandidate], Optional[L
     # Sort by visits
     candidates.sort(key=lambda m: m.visits, reverse=True)
 
-    return query_id, candidates[:10], ownership
+    # Keep top 20 to capture more opening types beyond symmetry variants
+    return query_id, candidates[:20], ownership
 
 
 def main():
@@ -195,6 +196,18 @@ def main():
     parser.add_argument('--visits', type=int, default=500)
     parser.add_argument('--batch-size', type=int, default=32,
                         help='Number of positions to analyze in parallel')
+    parser.add_argument('--branching', type=int, default=7,
+                        help='Max unique children to explore per position (default: 7)')
+    parser.add_argument('--shallow-branching', type=int, default=0,
+                        help='Override branching for depth 0-2. 0 = use --branching value')
+    parser.add_argument('--katago-path', type=str, default=None,
+                        help='Override KataGo binary path')
+    parser.add_argument('--model-path', type=str, default=None,
+                        help='Override model path')
+    parser.add_argument('--config-path', type=str, default=None,
+                        help='Override analysis config path (default: katago/analysis_gpu.cfg)')
+    parser.add_argument('--min-cache-visits', type=int, default=0,
+                        help='Minimum visits for cache entry to be accepted (0 = accept any)')
     args = parser.parse_args()
 
     logger.info("=" * 60)
@@ -204,7 +217,13 @@ def main():
     logger.info(f"Max depth:   {args.depth}")
     logger.info(f"Visits:      {args.visits}")
     logger.info(f"Batch size:  {args.batch_size}")
+    logger.info(f"Branching:   {args.branching}")
+    logger.info(f"Shallow br:  {args.shallow_branching or args.branching} (depth 0-2)")
     logger.info("=" * 60)
+
+    # Branching limits per depth
+    shallow_branch = args.shallow_branching or args.branching
+    deep_branch = args.branching
 
     # Load config
     config = load_config()
@@ -212,11 +231,11 @@ def main():
     # Initialize cache
     cache = AnalysisCache(config=config)
 
-    # Initialize KataGo analysis engine
+    # Initialize KataGo analysis engine (CLI overrides take priority)
     engine = KataGoAnalysisEngine(
-        config_path="katago/analysis_gpu.cfg",
-        model_path=config.katago.model_path,
-        katago_path=config.katago.katago_path
+        config_path=args.config_path or "katago/analysis_gpu.cfg",
+        model_path=args.model_path or config.katago.model_path,
+        katago_path=args.katago_path or config.katago.katago_path
     )
     engine.start()
 
@@ -263,6 +282,12 @@ def main():
                     required_visits=None  # Get highest visits
                 )
 
+                # Reject low-quality cache entries
+                if cached and args.min_cache_visits > 0:
+                    if cached.engine_visits < args.min_cache_visits:
+                        logger.info(f"Cache SKIP: depth={depth}, visits={cached.engine_visits} < {args.min_cache_visits}")
+                        cached = None
+
                 if cached:
                     cache_hits += 1
                     total_processed += 1
@@ -273,10 +298,20 @@ def main():
                     next_player = board.next_player
                     best_winrate = result.top_moves[0].winrate if result.top_moves else 0.5
 
+                    # Depth 0: expand ALL candidates (no winrate/branching limit)
+                    # Shallow depths: wider branching, relaxed threshold
+                    if depth == 0:
+                        max_children = 999
+                    elif depth <= 2:
+                        max_children = shallow_branch
+                    else:
+                        max_children = deep_branch
+                    wr_threshold = 0.20 if depth <= 2 else 0.10
+
                     selected = 0
                     seen_child_hashes = set()
                     for move_cand in result.top_moves[:20]:
-                        if move_cand.winrate < (best_winrate - 0.10):
+                        if depth > 0 and move_cand.winrate < (best_winrate - wr_threshold):
                             break
                         if move_cand.move.upper() == 'PASS':
                             continue
@@ -295,12 +330,12 @@ def main():
                             queue.append((new_moves, depth + 1))
                             selected += 1
                             logger.debug(f"Added child: {move_cand.move} at depth {depth+1}")
-                            if selected >= 3:
+                            if selected >= max_children:
                                 break
                         except Exception as e:
                             logger.warning(f"Error creating child board: {e}")
                             continue
-                    logger.info(f"Added {selected} children to queue. Queue size: {len(queue)}")
+                    logger.info(f"Added {selected} children to queue (max={max_children}). Queue size: {len(queue)}")
                 else:
                     # Send to KataGo
                     query_id = f"q{query_counter}"
@@ -346,7 +381,7 @@ def main():
                             moves_sequence=moves_str,
                             board_size=args.board_size,
                             komi=7.5,
-                            top_moves=candidates[:10],
+                            top_moves=candidates[:20],
                             engine_visits=total_visits,
                             model_name="kata1-b18c384nbt",
                             ownership=ownership
@@ -354,11 +389,19 @@ def main():
 
                         # Add children to queue
                         best_winrate = candidates[0].winrate if candidates else 0.5
+                        if depth == 0:
+                            max_children = 999
+                        elif depth <= 2:
+                            max_children = shallow_branch
+                        else:
+                            max_children = deep_branch
+                        wr_threshold = 0.20 if depth <= 2 else 0.10
+
                         selected = 0
                         seen_child_hashes = set()
 
                         for move_cand in candidates[:20]:
-                            if move_cand.winrate < (best_winrate - 0.10):
+                            if depth > 0 and move_cand.winrate < (best_winrate - wr_threshold):
                                 break
                             if move_cand.move.upper() == 'PASS':
                                 continue
@@ -376,7 +419,7 @@ def main():
 
                                 queue.append((new_moves, depth + 1))
                                 selected += 1
-                                if selected >= 3:
+                                if selected >= max_children:
                                     break
                             except:
                                 continue

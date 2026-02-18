@@ -57,7 +57,7 @@ class OpeningBookEntry {
 class OpeningBookService {
   static const String _bundledDbAsset = 'assets/data/opening_book.db.gz';
   static const String _dbName = 'opening_book_v1.db';
-  static const int _bundledVersion = 2;
+  static const int _bundledVersion = 3;
 
   Database? _database;
   int _totalEntries = 0;
@@ -343,7 +343,14 @@ class OpeningBookService {
         }
       }
 
+      // 4-4 star point (hoshi) — standard opening for 13x13 and 19x19
+      // Use slightly higher winrate than DB komoku to form a separate rank
+      if (size >= 13) {
+        injectIfMissing(const BoardPoint(3, 3), 1.02, -0.1);
+      }
+      // 3-4 komoku
       injectIfMissing(const BoardPoint(2, 3), 0.98, 0.2);
+      // 3-3 san-san
       injectIfMissing(const BoardPoint(2, 2), 0.96, 0.4);
     }
 

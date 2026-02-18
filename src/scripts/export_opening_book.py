@@ -466,8 +466,10 @@ def export_opening_book_sqlite(
             seq = row['moves_sequence'] or ''
             visits = row['engine_visits']
 
-            # Optionally filter dead moves
-            if filter_dead_moves and existing_sequences and top_moves_json:
+            # Optionally filter dead moves (skip for shallow depths 0-3
+            # to preserve all candidates at the start of the game)
+            move_depth = seq.count(';') + 1 if seq else 0
+            if filter_dead_moves and existing_sequences and top_moves_json and move_depth >= 4:
                 # Determine next player from move sequence
                 if seq:
                     num_black = seq.count('B[')
