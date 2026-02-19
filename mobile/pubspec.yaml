@@ -52,6 +52,10 @@ dependencies:
   # AI Inference (Android only)
   onnxruntime: ^1.4.1  # ONNX Runtime for Android (avoids pthread crash)
 
+  # Shared KataGo ONNX engine plugin (for mobile platforms)
+  katago_onnx_mobile:
+    path: ../../katago-onnx-mobile
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
