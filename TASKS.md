@@ -2,17 +2,80 @@
 
 ## 待處理
 
-### macOS Google Sign-In: OAuth 回調未返回
+### 抽出 katago-onnx-mobile 到獨立 repo
 
-**狀態**: 🔴 未解決
-**PR**: [#1](https://github.com/justmaker/go-strategy-app/pull/1) (已 merged)
+**狀態**: 🔴 未開始
 
-Google Sign-In 基本配置已完成（不再崩潰、瀏覽器正確開啟登入頁），但 OAuth 回調後 `_googleSignIn.signIn()` 沒有正確返回，UI 仍顯示未登入。
+**目的**: Go Strategy App 要做第二個獨立的圍棋解題 App，兩個 app 共用 KataGo ONNX 引擎。需要將 ONNX 相關的共用元件抽出到 `https://github.com/justmaker/katago-onnx-mobile` 作為 Flutter plugin。
 
-**Debug 線索**:
-- `auth_service.dart` 已有 `[AuthService]` debug print
-- 需觀察 console 是否出現 `signIn returned:` 訊息
-- 可能是 AppDelegate 或 URL scheme 回調處理問題
+**新 App 規格**:
+- 輸入方式: 手動擺棋 + 拍照辨識 + 匯入圖片/SGF + GTP
+- 引擎: 手機平板用 KataGo ONNX，桌機用 KataGo Eigen
+- 目標: 提供局部或整盤棋局，算出 top N 次一手
+
+**要抽出的元件**:
+
+| 類別 | 檔案 | 來源路徑 |
+|------|------|---------|
+| Dart | `inference_engine.dart` | `mobile/lib/services/inference/` |
+| Dart | `onnx_engine.dart` | 同上 |
+| Dart | `onnx_engine_stub.dart` | 同上 |
+| Dart | `katago_engine.dart` | 同上 |
+| Dart | `liberty_calculator.dart` | 同上 |
+| Dart | `tactical_evaluator.dart` | 同上 |
+| iOS | `KataGoOnnxBridge.h/mm` | `mobile/ios/KataGoMobile/Sources/` |
+| iOS | `KataGoWrapper.h/mm` | 同上 |
+| iOS | `stubs.cpp` | 同上 |
+| iOS | KataGo C++ core | `mobile/ios/KataGoMobile/Sources/katago/cpp/` |
+| Android | `native-lib.cpp` | `mobile/android/app/src/main/cpp/` |
+| Android | `stubs.cpp` | 同上 |
+| Android | `CMakeLists.txt` | 同上 |
+| Android | `KataGoEngine.kt` | `mobile/android/.../go_strategy_app/` |
+| Android | KataGo C++ core | `mobile/android/app/src/main/cpp/katago/` |
+| Android | Eigen headers | `mobile/android/app/src/main/cpp/eigen/` |
+| Android | ONNX Runtime libs | `mobile/android/app/src/main/cpp/onnxruntime/` |
+| Model | `model.onnx`, `model.bin.gz`, `model.bin` | `mobile/assets/` |
+
+**Plugin 目標結構**:
+
+```
+katago-onnx-mobile/
+├── pubspec.yaml
+├── lib/
+│   ├── katago_onnx_mobile.dart     # Public API
+│   └── src/                        # Dart inference 檔案
+├── android/
+│   ├── build.gradle
+│   └── src/main/
+│       ├── kotlin/.../KataGoEngine.kt
+│       └── cpp/                    # native-lib, katago, eigen, onnxruntime
+├── ios/
+│   ├── Classes/                    # OnnxBridge, Wrapper, stubs
+│   ├── katago/cpp/                 # KataGo core
+│   └── katago_onnx_mobile.podspec
+├── assets/                         # model.onnx, model.bin, model.bin.gz
+└── example/
+```
+
+**實作步驟**:
+
+1. ✅ 計劃已寫入 TASKS.md
+2. ⬜ 建立新 repo 基本結構 (`flutter create --template=plugin`)
+3. ⬜ 遷移 Dart 程式碼（修改 import paths，移除 app-specific 依賴）
+4. ⬜ 遷移 Android Native（JNI package 名稱、build.gradle plugin 格式）
+5. ⬜ 遷移 iOS Native（podspec、header search paths）
+6. ⬜ 遷移 Model 檔案（Git LFS）
+7. ⬜ 修改原 Go Strategy App（改用 git dependency，移除重複檔案）
+8. ⬜ 驗證（macOS build、Android ONNX、iOS ONNX、plugin example app）
+
+**注意事項**:
+- MethodChannel 名稱需改為 plugin 專用（如 `com.justmaker.katago_onnx_mobile/engine`）
+- KataGoEngine.kt 的 package name 需改為 plugin 的
+- JNI 函式名稱與 Java/Kotlin package name 綁定，需同步修改 `native-lib.cpp`
+- iOS EventChannel 進度回報需整合到 plugin 內
+- Plugin assets 路徑與 app assets 不同，需調整 asset lookup
+
+---
 
 ### Opening Book: 13x13 / 19x19 擴充
 
@@ -45,6 +108,18 @@ python3 -m src.scripts.build_opening_book_parallel \
 ---
 
 ## 已完成
+
+### macOS Google Sign-In 修復 (2026-02-19)
+
+**問題**: OAuth 回調後 `_googleSignIn.signIn()` 不返回，UI 仍顯示未登入。
+
+**根本原因**: OAuth Client ID 類型為 **Desktop**，但 GoogleSignIn SDK（google_sign_in_ios）預期 **iOS** 類型。Desktop 類型的 redirect URI 是 loopback (`http://localhost:PORT`)，與 SDK 構建的 custom URL scheme redirect 不匹配。
+
+**修正**:
+1. 在 Google Cloud Console 建立 **iOS 類型** OAuth Client ID（Bundle ID: `com.gostratefy.goStrategyApp`）
+2. 更新 `Info.plist` 的 `GIDClientID` 和 `CFBundleURLTypes` 使用新 Client ID
+3. `AppDelegate.swift` 加入 `application(_:open:)` override 和 debug logging
+4. 啟用 Google Drive API 支援 Cloud Sync
 
 ### Web Deploy: dart:ffi 編譯修復 (2026-02-19)
 
