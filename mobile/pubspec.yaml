@@ -67,7 +67,9 @@ flutter:
   
   # Bundled assets
   assets:
-    - assets/data/opening_book.db.gz
+    - assets/data/opening_book_9x9.db.gz
+    - assets/data/opening_book_13x13.db.gz
+    - assets/data/opening_book_19x19.db.gz
     - assets/katago/model.bin.gz
     - assets/katago/model.bin          # b20c256 model metadata
     - assets/katago/model.onnx         # b20c256 ONNX model (all board sizes)

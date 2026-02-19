@@ -1,13 +1,12 @@
 /// Opening book service for offline-first analysis.
 ///
-/// Uses a bundled SQLite database for memory-efficient lookups
-/// without loading all data into memory.
+/// Uses per-board-size SQLite databases with lazy loading and streaming
+/// decompression to minimize memory usage (critical for iOS memory limits).
 library;
 
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
@@ -55,15 +54,19 @@ class OpeningBookEntry {
 
 /// Service for managing bundled opening book data via SQLite
 class OpeningBookService {
-  static const String _bundledDbAsset = 'assets/data/opening_book.db.gz';
-  static const String _dbName = 'opening_book_v1.db';
-  static const int _bundledVersion = 3;
+  static const int _bundledVersion = 4;
+  /// Per-board-size databases, lazily loaded on first query
+  final Map<int, Database> _databases = {};
 
-  Database? _database;
+  /// Track which board sizes are currently being loaded (prevent concurrent loads)
+  final Map<int, Future<void>> _loadingFutures = {};
+
   int _totalEntries = 0;
   Map<int, int> _entriesByBoardSize = {};
   bool _isLoaded = false;
   String? _loadError;
+  String? _dbBasePath;
+  bool _ffiInitialized = false;
 
   // Getters
   bool get isLoaded => _isLoaded;
@@ -71,7 +74,16 @@ class OpeningBookService {
   Map<int, int> get entriesByBoardSize => Map.unmodifiable(_entriesByBoardSize);
   String? get loadError => _loadError;
 
-  /// Load opening book database from bundled assets
+  /// Asset path for a given board size
+  static String _assetPath(int boardSize) =>
+      'assets/data/opening_book_${boardSize}x$boardSize.db.gz';
+
+  /// DB file name for a given board size
+  static String _dbFileName(int boardSize) =>
+      'opening_book_${boardSize}x$boardSize.db';
+
+  /// Initialize service — resolves paths but does NOT decompress any DB.
+  /// Actual DB extraction happens lazily on first query per board size.
   Future<void> load() async {
     if (_isLoaded) return;
 
@@ -81,98 +93,165 @@ class OpeningBookService {
     }
 
     try {
-      String dbPath;
-
       if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        initFfiDatabase();
+        if (!_ffiInitialized) {
+          initFfiDatabase();
+          _ffiInitialized = true;
+        }
         final appDir = await getApplicationSupportDirectory();
-        dbPath = appDir.path;
-        final dir = Directory(dbPath);
+        _dbBasePath = appDir.path;
+        final dir = Directory(_dbBasePath!);
         if (!await dir.exists()) {
           await dir.create(recursive: true);
         }
       } else {
-        dbPath = await getDatabasesPath();
+        _dbBasePath = await getDatabasesPath();
       }
-
-      final path = p.join(dbPath, _dbName);
-      await _copyBundledDbIfNeeded(path);
-
-      final file = File(path);
-      if (!await file.exists() || await file.length() < 1024) {
-        _loadError = 'Opening book database not found';
-        return;
-      }
-
-      _database = await openDatabase(path, readOnly: false);
-
-      // Ensure index exists (created on first launch, not in bundled DB)
-      await _ensureIndex();
-
-      // Load stats
-      await _loadStats();
 
       _isLoaded = true;
       _loadError = null;
+      debugPrint('[OpeningBook] Service initialized (lazy loading enabled)');
     } catch (e) {
-      _loadError = 'Failed to load opening book: $e';
+      _loadError = 'Failed to initialize opening book: $e';
       _isLoaded = false;
-      debugPrint('[OpeningBook] Load error: $e');
+      debugPrint('[OpeningBook] Init error: $e');
     }
   }
 
-  /// Copy bundled database if not already present
-  Future<void> _copyBundledDbIfNeeded(String targetPath) async {
+  /// Ensure a specific board size DB is loaded, extracting from assets if needed
+  Future<void> _ensureBoardSizeLoaded(int boardSize) async {
+    if (_databases.containsKey(boardSize)) return;
+
+    // Prevent concurrent loads for the same board size
+    if (_loadingFutures.containsKey(boardSize)) {
+      await _loadingFutures[boardSize];
+      return;
+    }
+
+    final future = _loadBoardSize(boardSize);
+    _loadingFutures[boardSize] = future;
+    try {
+      await future;
+    } finally {
+      _loadingFutures.remove(boardSize);
+    }
+  }
+
+  Future<void> _loadBoardSize(int boardSize) async {
+    if (_dbBasePath == null) return;
+
+    final dbPath = p.join(_dbBasePath!, _dbFileName(boardSize));
+    final sw = Stopwatch()..start();
+
+    debugPrint('[OpeningBook] Loading ${boardSize}x$boardSize DB...');
+
+    await _extractAssetIfNeeded(boardSize, dbPath);
+
+    final file = File(dbPath);
+    if (!await file.exists() || await file.length() < 1024) {
+      debugPrint('[OpeningBook] DB file not found for ${boardSize}x$boardSize');
+      return;
+    }
+
+    final db = await openDatabase(dbPath, readOnly: false);
+    _databases[boardSize] = db;
+
+    await _ensureIndex(db, boardSize);
+    await _loadStatsForBoardSize(db, boardSize);
+
+    sw.stop();
+    debugPrint(
+        '[OpeningBook] ${boardSize}x$boardSize loaded in ${sw.elapsedMilliseconds}ms');
+  }
+
+  /// Extract a board-size-specific asset if not already present or outdated
+  Future<void> _extractAssetIfNeeded(int boardSize, String targetPath) async {
     final targetFile = File(targetPath);
     final versionFile = File('$targetPath.version');
 
-    // Check if already extracted and up to date
     if (await targetFile.exists() && await versionFile.exists()) {
       final currentVersion =
           int.tryParse(await versionFile.readAsString()) ?? 0;
       if (currentVersion >= _bundledVersion) {
         final size = await targetFile.length();
         debugPrint(
-            '[OpeningBook] DB exists (${(size / 1024 / 1024).toStringAsFixed(1)} MB), version $currentVersion');
+            '[OpeningBook] ${boardSize}x$boardSize DB exists '
+            '(${(size / 1024 / 1024).toStringAsFixed(1)} MB), version $currentVersion');
         return;
       }
     }
 
-    debugPrint('[OpeningBook] Extracting bundled opening book database...');
+    final assetPath = _assetPath(boardSize);
+    debugPrint('[OpeningBook] Extracting ${boardSize}x$boardSize from $assetPath...');
 
     try {
-      final data = await rootBundle.load(_bundledDbAsset);
-      final gzBytes = data.buffer.asUint8List();
-      debugPrint(
-          '[OpeningBook] Loaded compressed asset (${(gzBytes.length / 1024 / 1024).toStringAsFixed(1)} MB), decompressing...');
-
-      // Stream-decompress gzip to file to avoid holding both compressed
-      // and decompressed data in memory simultaneously
-      final sink = targetFile.openWrite();
-      await sink.addStream(
-          GZipCodec().decoder.bind(Stream.value(gzBytes)));
-      await sink.close();
+      await _extractAssetStreaming(assetPath, targetPath);
 
       final decompressedSize = await targetFile.length();
       await versionFile.writeAsString(_bundledVersion.toString());
       debugPrint(
-          '[OpeningBook] Extracted DB (${(decompressedSize / 1024 / 1024).toStringAsFixed(1)} MB)');
+          '[OpeningBook] Extracted ${boardSize}x$boardSize '
+          '(${(decompressedSize / 1024 / 1024).toStringAsFixed(1)} MB)');
     } catch (e) {
-      debugPrint('[OpeningBook] No bundled DB found: $e');
+      debugPrint('[OpeningBook] Extraction failed for ${boardSize}x$boardSize: $e');
     }
   }
 
-  /// Create index if it doesn't exist (not in bundled DB to save space)
-  Future<void> _ensureIndex() async {
-    if (_database == null) return;
+  /// Stream-decompress a gzipped asset to a target file.
+  ///
+  /// On iOS/macOS, reads directly from the bundle file path to avoid loading
+  /// the entire compressed file into RAM via rootBundle.load(). This is
+  /// critical for the 9x9 DB (~144 MB compressed, ~674 MB decompressed)
+  /// which would cause iOS SIGKILL if loaded entirely into memory.
+  Future<void> _extractAssetStreaming(String assetPath, String targetPath) async {
+    // iOS/macOS: stream directly from bundle file path
+    final bundlePath = _resolveAssetFilePath(assetPath);
+    if (bundlePath != null && await File(bundlePath).exists()) {
+      debugPrint('[OpeningBook] Streaming from bundle path: $bundlePath');
+      final inputStream = File(bundlePath).openRead();
+      final sink = File(targetPath).openWrite();
+      await sink.addStream(GZipCodec().decoder.bind(inputStream));
+      await sink.close();
+      return;
+    }
 
+    // Fallback: rootBundle.load() — used on Android and other platforms.
+    // Safe for small DBs (13x13, 19x19). For large DBs on memory-constrained
+    // platforms, the streaming path above should be used.
+    debugPrint('[OpeningBook] Fallback: rootBundle.load($assetPath)');
+    final data = await rootBundle.load(assetPath);
+    final gzBytes = data.buffer.asUint8List();
+    debugPrint(
+        '[OpeningBook] Loaded compressed asset '
+        '(${(gzBytes.length / 1024 / 1024).toStringAsFixed(1)} MB), decompressing...');
+
+    final sink = File(targetPath).openWrite();
+    await sink.addStream(GZipCodec().decoder.bind(Stream.value(gzBytes)));
+    await sink.close();
+  }
+
+  /// Resolve the actual file path for a Flutter asset in the platform bundle.
+  /// Returns null on platforms where direct file access is not available.
+  String? _resolveAssetFilePath(String assetPath) {
+    if (Platform.isIOS) {
+      final appDir = File(Platform.resolvedExecutable).parent.path;
+      return '$appDir/Frameworks/App.framework/flutter_assets/$assetPath';
+    } else if (Platform.isMacOS) {
+      final appDir = File(Platform.resolvedExecutable).parent.path;
+      return '$appDir/../Frameworks/App.framework/Resources/flutter_assets/$assetPath';
+    }
+    return null; // Android/Windows/Linux: use rootBundle fallback
+  }
+
+  /// Create index if it doesn't exist
+  Future<void> _ensureIndex(Database db, int boardSize) async {
     try {
-      final indices = await _database!.rawQuery(
+      final indices = await db.rawQuery(
           "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_lookup'");
       if (indices.isEmpty) {
-        debugPrint('[OpeningBook] Creating lookup index (one-time)...');
+        debugPrint('[OpeningBook] Creating index for ${boardSize}x$boardSize...');
         final sw = Stopwatch()..start();
-        await _database!.execute(
+        await db.execute(
             'CREATE INDEX idx_lookup ON opening_book(board_size, komi, moves_sequence)');
         sw.stop();
         debugPrint(
@@ -183,29 +262,27 @@ class OpeningBookService {
     }
   }
 
-  /// Load stats from metadata table
-  Future<void> _loadStats() async {
-    if (_database == null) return;
-
+  /// Load stats from a single board-size database
+  Future<void> _loadStatsForBoardSize(Database db, int boardSize) async {
     try {
-      final metaRows = await _database!.rawQuery(
+      final metaRows = await db.rawQuery(
           "SELECT key, value FROM opening_book_meta WHERE key IN ('total_entries', 'by_board_size')");
       for (final row in metaRows) {
         final key = row['key'] as String;
         final value = row['value'] as String;
         if (key == 'total_entries') {
-          _totalEntries = int.tryParse(value) ?? 0;
-        } else if (key == 'by_board_size') {
-          final map = jsonDecode(value) as Map<String, dynamic>;
-          _entriesByBoardSize =
-              map.map((k, v) => MapEntry(int.parse(k), v as int));
+          final count = int.tryParse(value) ?? 0;
+          _entriesByBoardSize[boardSize] = count;
+          _totalEntries = _entriesByBoardSize.values.fold(0, (a, b) => a + b);
         }
       }
     } catch (e) {
       try {
-        final countResult = await _database!
+        final countResult = await db
             .rawQuery('SELECT COUNT(*) as cnt FROM opening_book');
-        _totalEntries = countResult.first['cnt'] as int;
+        final count = countResult.first['cnt'] as int;
+        _entriesByBoardSize[boardSize] = count;
+        _totalEntries = _entriesByBoardSize.values.fold(0, (a, b) => a + b);
       } catch (_) {}
     }
   }
@@ -476,7 +553,14 @@ class OpeningBookService {
   /// Look up analysis by moves sequence using SQLite with symmetry search
   Future<AnalysisResult?> lookupByMoves(
       int boardSize, double komi, List<String> moves) async {
-    if (!_isLoaded || _database == null) {
+    if (!_isLoaded) {
+      return null;
+    }
+
+    // Lazy load the DB for this board size
+    await _ensureBoardSizeLoaded(boardSize);
+    final db = _databases[boardSize];
+    if (db == null) {
       return null;
     }
 
@@ -495,7 +579,7 @@ class OpeningBookService {
       }).join(';');
 
       try {
-        final results = await _database!.rawQuery(
+        final results = await db.rawQuery(
           'SELECT top_moves, visits FROM opening_book '
           'WHERE board_size = ? AND komi = ? AND moves_sequence = ? '
           'ORDER BY visits DESC LIMIT 1',
@@ -587,14 +671,18 @@ class OpeningBookService {
       'is_loaded': _isLoaded,
       'total_entries': _totalEntries,
       'by_board_size': _entriesByBoardSize,
+      'loaded_board_sizes': _databases.keys.toList(),
       'load_error': _loadError,
     };
   }
 
   /// Clear resources
   void clear() {
-    _database?.close();
-    _database = null;
+    for (final db in _databases.values) {
+      db.close();
+    }
+    _databases.clear();
+    _loadingFutures.clear();
     _isLoaded = false;
     _totalEntries = 0;
     _entriesByBoardSize = {};
