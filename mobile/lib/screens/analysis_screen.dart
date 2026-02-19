@@ -37,6 +37,7 @@ class AnalysisScreen extends StatelessWidget {
                 ],
                 selected: {game.board.size},
                 onSelectionChanged: (sizes) {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
                   game.setBoardSize(sizes.first);
                 },
                 style: ButtonStyle(
@@ -183,6 +184,7 @@ class AnalysisScreen extends StatelessWidget {
           onTap: game.isAnalyzing
               ? null
               : (point) {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
                   // If move confirmation is enabled, set pending move
                   // Otherwise, place stone directly
                   if (game.moveConfirmationEnabled) {
@@ -951,18 +953,31 @@ class _ControlsPanel extends StatelessWidget {
             runSpacing: 8,
             children: [
               ElevatedButton.icon(
-                onPressed: game.board.moveCount > 0 ? () => game.undo() : null,
+                onPressed: game.board.moveCount > 0
+                    ? () {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        game.undo();
+                      }
+                    : null,
                 icon: const Icon(Icons.undo),
                 label: const Text('Undo'),
               ),
               ElevatedButton.icon(
-                onPressed: game.isAnalyzing ? null : () => game.pass(),
+                onPressed: game.isAnalyzing
+                    ? null
+                    : () {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        game.pass();
+                      },
                 icon: const Icon(Icons.skip_next),
                 label: const Text('Pass'),
               ),
               ElevatedButton.icon(
                 onPressed: game.board.moveCount > 0
-                    ? () => _showClearConfirmDialog(context)
+                    ? () {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        _showClearConfirmDialog(context);
+                      }
                     : null,
                 icon: const Icon(Icons.clear),
                 label: const Text('Clear'),
@@ -970,7 +985,10 @@ class _ControlsPanel extends StatelessWidget {
               ElevatedButton.icon(
                 onPressed: game.isAnalyzing
                     ? null
-                    : () => game.analyze(forceRefresh: true),
+                    : () {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        game.analyze(forceRefresh: true);
+                      },
                 icon: const Icon(Icons.refresh),
                 label: const Text('Re-analyze'),
               ),
