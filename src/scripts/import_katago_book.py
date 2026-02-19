@@ -402,19 +402,30 @@ def import_katago_book(
                 x, y = xy_coords[0]
                 gtp_coord = katago_xy_to_gtp(x, y, board_size)
 
-                # KataGo book's 'wl' is the current player's win probability
-                # (higher = better for the player making the move).
-                # 'ssM' is the opponent's expected score lead, so we negate it.
-                wl = move_data.get('wl', 0.5)
-                winrate = wl
-                score_lead = -move_data.get('ssM', 0.0)
+                # KataGo book's 'wl' is the CURRENT player's win-loss
+                # value in [-1, 1] range:
+                #   wl = 1.0  → current player wins 100%
+                #   wl = -1.0 → current player loses 100%
+                #   wl = 0.0  → 50-50
+                # 'ssM' is the score mean from the current player's perspective.
+                #
+                # Convert to Black's win probability [0, 1]:
+                #   current_player_winrate = (1 + wl) / 2
+                wl = move_data.get('wl', 0.0)
+                wl = max(-1.0, min(1.0, wl))  # Clamp to [-1, 1]
+                ssM = move_data.get('ssM', 0.0)
                 visits = int(move_data.get('v', 0))
 
-                # Our winrate is always from black's perspective
-                # If current player is White, flip the winrate and score
-                if next_player == 'W':
-                    winrate = 1.0 - winrate
-                    score_lead = -score_lead
+                # Our winrate is always from Black's perspective
+                if next_player == 'B':
+                    # Black is making the move; wl is Black's perspective
+                    winrate = (1.0 + wl) / 2.0
+                    score_lead = ssM
+                else:
+                    # White is making the move; wl is White's perspective
+                    # Black's winrate = 1 - White's = 1 - (1+wl)/2 = (1-wl)/2
+                    winrate = (1.0 - wl) / 2.0
+                    score_lead = -ssM
 
                 top_moves.append(MoveCandidate(
                     move=gtp_coord,
