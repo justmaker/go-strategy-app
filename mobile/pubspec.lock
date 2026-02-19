@@ -347,9 +347,11 @@ packages:
   katago_onnx_mobile:
     dependency: "direct main"
     description:
-      path: "../../katago-onnx-mobile"
-      relative: true
-    source: path
+      path: "."
+      ref: HEAD
+      resolved-ref: "07cbd198368634e0afdca4ac4ade9957f198b942"
+      url: "https://github.com/justmaker/katago-onnx-mobile.git"
+    source: git
     version: "0.1.0"
   leak_tracker:
     dependency: transitive

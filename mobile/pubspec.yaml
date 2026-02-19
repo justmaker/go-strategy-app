@@ -54,7 +54,8 @@ dependencies:
 
   # Shared KataGo ONNX engine plugin (for mobile platforms)
   katago_onnx_mobile:
-    path: ../../katago-onnx-mobile
+    git:
+      url: https://github.com/justmaker/katago-onnx-mobile.git
 
 dev_dependencies:
   flutter_test:
