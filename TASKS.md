@@ -4,7 +4,7 @@
 
 ### 抽出 katago-onnx-mobile 到獨立 repo
 
-**狀態**: 🔴 未開始
+**狀態**: 🟡 進行中（iOS/Android ONNX 測試通過，待合併到 main）
 
 **目的**: Go Strategy App 要做第二個獨立的圍棋解題 App，兩個 app 共用 KataGo ONNX 引擎。需要將 ONNX 相關的共用元件抽出到 `https://github.com/justmaker/katago-onnx-mobile` 作為 Flutter plugin。
 
@@ -60,20 +60,33 @@ katago-onnx-mobile/
 **實作步驟**:
 
 1. ✅ 計劃已寫入 TASKS.md
-2. ⬜ 建立新 repo 基本結構 (`flutter create --template=plugin`)
-3. ⬜ 遷移 Dart 程式碼（修改 import paths，移除 app-specific 依賴）
-4. ⬜ 遷移 Android Native（JNI package 名稱、build.gradle plugin 格式）
-5. ⬜ 遷移 iOS Native（podspec、header search paths）
-6. ⬜ 遷移 Model 檔案（Git LFS）
-7. ⬜ 修改原 Go Strategy App（改用 git dependency，移除重複檔案）
-8. ⬜ 驗證（macOS build、Android ONNX、iOS ONNX、plugin example app）
+2. ✅ 建立新 repo 基本結構 (`flutter create --template=plugin`)
+3. ✅ 遷移 Dart 程式碼（修改 import paths，移除 app-specific 依賴）
+4. ✅ 遷移 Android Native（JNI package 名稱、build.gradle plugin 格式）
+5. ✅ 遷移 iOS Native（podspec、header search paths、single-threaded mode）
+6. ✅ 遷移 Model 檔案（改為 regular git，不用 LFS — Flutter pub get 不支援 LFS）
+7. ✅ 修改原 Go Strategy App（改用 git dependency，移除 KataGoMobile pod）
+8. 🟡 驗證:
+   - ✅ macOS build (808.5MB)
+   - ✅ Android ONNX inference (96 次推論，0 error)
+   - ✅ iOS ONNX inference (8+ 次推論，19x19 + 13x13 切換正常)
+   - ⬠iOS 記憶體問題：Signal 9 (SIGKILL)，opening_book.db 過大
+   - ⬜ Plugin example app 獨立 build 測試
+
+**Plugin repo**: `https://github.com/justmaker/katago-onnx-mobile`
+**App branch**: `feature/katago-onnx-mobile-plugin`
+
+**iOS 修復記錄** (2026-02-19):
+1. 移除舊 `KataGoMobile` pod 避免 duplicate symbols
+2. 修正 moves 格式轉換（`["B Q16"]` → `[["B", "Q16"]]`）
+3. 從 Android 移植 `setSingleThreadedMode` 到 iOS KataGo C++（nneval.h/cpp）
+4. 新增 board size 追蹤，切換棋盤大小時重新初始化引擎
 
 **注意事項**:
-- MethodChannel 名稱需改為 plugin 專用（如 `com.justmaker.katago_onnx_mobile/engine`）
-- KataGoEngine.kt 的 package name 需改為 plugin 的
-- JNI 函式名稱與 Java/Kotlin package name 綁定，需同步修改 `native-lib.cpp`
-- iOS EventChannel 進度回報需整合到 plugin 內
-- Plugin assets 路徑與 app assets 不同，需調整 asset lookup
+- Flutter pub get 不支援 Git LFS — plugin 的大檔案必須用 regular git
+- iOS 使用 plugin 的 MethodChannel (`com.justmaker.katago_onnx_mobile/engine`)
+- Android 目前仍用 app 內建的 channel (`com.gostratefy.go_strategy_app/katago`)，之後需遷移
+- macOS 使用 Eigen backend，不受 ONNX plugin 影響
 
 ---
 
