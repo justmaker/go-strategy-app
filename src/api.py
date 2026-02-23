@@ -104,7 +104,9 @@ class AnalyzeRequest(BaseModel):
         default=19, description="Board size (9, 13, or 19)"
     )
     moves: List[str] = Field(
-        default=[], description="List of moves in GTP format (e.g., ['B Q16', 'W D4'])"
+        default=[],
+        max_length=600,
+        description="List of moves in GTP format (e.g., ['B Q16', 'W D4'])",
     )
     handicap: int = Field(
         default=0, ge=0, le=9, description="Number of handicap stones (0-9)"
@@ -113,7 +115,7 @@ class AnalyzeRequest(BaseModel):
         default=None, description="Komi value (default: 7.5, or 0.5 for handicap)"
     )
     visits: Optional[int] = Field(
-        default=None, ge=1, description="Override default visit count"
+        default=None, ge=1, le=100000, description="Override default visit count"
     )
     force_refresh: bool = Field(
         default=False, description="Bypass cache and force new analysis"
@@ -150,7 +152,9 @@ class QueryRequest(BaseModel):
     board_size: Literal[9, 13, 19] = Field(
         default=19, description="Board size (9, 13, or 19)"
     )
-    moves: List[str] = Field(default=[], description="List of moves in GTP format")
+    moves: List[str] = Field(
+        default=[], max_length=600, description="List of moves in GTP format"
+    )
     handicap: int = Field(
         default=0, ge=0, le=9, description="Number of handicap stones"
     )
