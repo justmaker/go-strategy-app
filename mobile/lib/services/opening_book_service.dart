@@ -55,9 +55,13 @@ class OpeningBookEntry {
 
 /// Service for managing bundled opening book data via SQLite
 class OpeningBookService {
-  static const String _bundledDbAsset = 'assets/data/opening_book.db.gz';
-  static const String _dbName = 'opening_book_v1.db';
-  static const int _bundledVersion = 3;
+  static const List<String> _bundledDbAssets = [
+    'assets/data/opening_book_9x9.db.gz',
+    'assets/data/opening_book_13x13.db.gz',
+    'assets/data/opening_book_19x19.db.gz',
+  ];
+  static const String _dbName = 'opening_book_v4.db';
+  static const int _bundledVersion = 4;
 
   Database? _database;
   int _totalEntries = 0;
@@ -138,27 +142,79 @@ class OpeningBookService {
       }
     }
 
-    debugPrint('[OpeningBook] Extracting bundled opening book database...');
+    debugPrint('[OpeningBook] Extracting bundled opening book databases...');
 
     try {
-      final data = await rootBundle.load(_bundledDbAsset);
-      final gzBytes = data.buffer.asUint8List();
-      debugPrint(
-          '[OpeningBook] Loaded compressed asset (${(gzBytes.length / 1024 / 1024).toStringAsFixed(1)} MB), decompressing...');
+      bool firstDb = true;
+      for (final asset in _bundledDbAssets) {
+        final data = await rootBundle.load(asset);
+        final gzBytes = data.buffer.asUint8List();
+        debugPrint(
+            '[OpeningBook] Loading $asset (${(gzBytes.length / 1024 / 1024).toStringAsFixed(1)} MB)...');
 
-      // Stream-decompress gzip to file to avoid holding both compressed
-      // and decompressed data in memory simultaneously
-      final sink = targetFile.openWrite();
-      await sink.addStream(
-          GZipCodec().decoder.bind(Stream.value(gzBytes)));
-      await sink.close();
+        if (firstDb) {
+          // First DB: decompress directly as the base database
+          final sink = targetFile.openWrite();
+          await sink.addStream(
+              GZipCodec().decoder.bind(Stream.value(gzBytes)));
+          await sink.close();
+          firstDb = false;
+        } else {
+          // Subsequent DBs: decompress to temp, then merge via ATTACH
+          final tmpFile = File('$targetPath.tmp');
+          final sink = tmpFile.openWrite();
+          await sink.addStream(
+              GZipCodec().decoder.bind(Stream.value(gzBytes)));
+          await sink.close();
+
+          final db = await openDatabase(targetPath, readOnly: false);
+          await db.execute("ATTACH DATABASE '${tmpFile.path}' AS src");
+          await db.execute(
+              'INSERT INTO opening_book (board_size, komi, moves_sequence, top_moves, visits) '
+              'SELECT board_size, komi, moves_sequence, top_moves, visits FROM src.opening_book');
+          // Merge meta: update total_entries and by_board_size
+          try {
+            final srcMeta = await db.rawQuery(
+                "SELECT key, value FROM src.opening_book_meta");
+            for (final row in srcMeta) {
+              final key = row['key'] as String;
+              final value = row['value'] as String;
+              if (key == 'total_entries') {
+                final existing = await db.rawQuery(
+                    "SELECT value FROM opening_book_meta WHERE key = 'total_entries'");
+                final oldVal = existing.isNotEmpty
+                    ? int.tryParse(existing.first['value'] as String) ?? 0
+                    : 0;
+                final newVal = oldVal + (int.tryParse(value) ?? 0);
+                await db.execute(
+                    "INSERT OR REPLACE INTO opening_book_meta (key, value) VALUES ('total_entries', '$newVal')");
+              } else if (key == 'by_board_size') {
+                final existing = await db.rawQuery(
+                    "SELECT value FROM opening_book_meta WHERE key = 'by_board_size'");
+                Map<String, dynamic> merged = {};
+                if (existing.isNotEmpty) {
+                  merged = Map<String, dynamic>.from(
+                      jsonDecode(existing.first['value'] as String));
+                }
+                final srcMap = jsonDecode(value) as Map<String, dynamic>;
+                merged.addAll(srcMap);
+                await db.execute(
+                    "INSERT OR REPLACE INTO opening_book_meta (key, value) VALUES ('by_board_size', '${jsonEncode(merged)}')");
+              }
+            }
+          } catch (_) {}
+          await db.execute('DETACH DATABASE src');
+          await db.close();
+          await tmpFile.delete();
+        }
+      }
 
       final decompressedSize = await targetFile.length();
       await versionFile.writeAsString(_bundledVersion.toString());
       debugPrint(
-          '[OpeningBook] Extracted DB (${(decompressedSize / 1024 / 1024).toStringAsFixed(1)} MB)');
+          '[OpeningBook] Merged DB (${(decompressedSize / 1024 / 1024).toStringAsFixed(1)} MB)');
     } catch (e) {
-      debugPrint('[OpeningBook] No bundled DB found: $e');
+      debugPrint('[OpeningBook] DB extraction error: $e');
     }
   }
 

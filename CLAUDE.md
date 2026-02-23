@@ -70,10 +70,10 @@ analysis:
   visits_small: 500
 ```
 
-資料庫狀態（2026-02-17 更新）：
+資料庫狀態（2026-02-23 更新）：
 - 9x9: 1,519,000 筆 (depth 0-18, KataGo 官方 book, 90K+ visits)
-- 13x13: 139,235 筆 (depth 0-14, b18c384 模型, 500v)
-- 19x19: 404,448 筆 (depth 0-14, b18c384 模型, 500v)
+- 13x13: 345,055 筆 (depth 0-15, b18c384 模型, 500v)
+- 19x19: 1,071,874 筆 (depth 0-15, b18c384 模型, 500v)
 
 ## 資料匯入注意事項
 
@@ -82,7 +82,7 @@ analysis:
 | 資料來源 | 位置 | 用途 |
 |---------|------|------|
 | **SQLite 資料庫** | `data/analysis.db` | 資料生成工具源資料 |
-| **Opening Book DB** | `mobile/assets/data/opening_book.db.gz` | App 打包資產、離線使用（Git LFS） |
+| **Opening Book DB** | `mobile/assets/data/opening_book_*.db.gz` | App 打包資產、離線使用（Git LFS，按棋盤大小分檔） |
 
 ### 匯入流程
 
@@ -97,8 +97,8 @@ python3 -c "
 # opening_book 表格式（board_size, komi, moves_sequence, top_moves, visits）
 "
 
-# 3. 提交（opening_book.db.gz 使用 Git LFS 管理）
-git add mobile/assets/data/opening_book.db.gz && git push
+# 3. 提交（opening_book_*.db.gz 使用 Git LFS 管理）
+git add mobile/assets/data/opening_book_*.db.gz && git push
 ```
 
 ### KataGo Book winrate 轉換
