@@ -32,6 +32,15 @@ analysis:
   # Number of top candidate moves to return
   top_moves_count: 5
 
+server:
+  # Allowed CORS origins
+  # By default only Streamlit (http://localhost:8501) is allowed.
+  # For Flutter web development, add your Flutter port here (e.g. http://localhost:3000)
+  # or set GO_API_ALLOWED_ORIGINS="http://localhost:3000" env var.
+  # allowed_origins: ["http://localhost:8501"]
+  allowed_origins:
+    - "http://localhost:8501"
+
 database:
   # Path to SQLite database file (relative to project root)
   path: "data/analysis.db"
