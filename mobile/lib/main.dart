@@ -83,6 +83,9 @@ class _AppWrapperState extends State<AppWrapper> {
 
   Future<void> _initServices() async {
     try {
+      // Step 0: Initialize Settings Service
+      await SettingsService().init();
+
       // Step 1: Initialize auth service
       setState(() => _initStatus = '初始化認證服務...');
       _authService = AuthService();
@@ -104,7 +107,7 @@ class _AppWrapperState extends State<AppWrapper> {
       // Step 5: Configure API endpoint from config
       setState(() => _initStatus = '連接伺服器...');
       _apiService = ApiService(
-        baseUrl: AppConfig.apiBaseUrl,
+        baseUrl: SettingsService().apiBaseUrl,
         timeout: AppConfig.connectionTimeout,
       );
 

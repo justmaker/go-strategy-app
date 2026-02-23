@@ -45,7 +45,7 @@ class GameProvider extends ChangeNotifier {
   bool _openingBookLoaded = false;
 
   // Local engine state
-  bool _localEngineEnabled = true;
+  bool _localEngineEnabled = !kIsWeb;
   String? _engineError;
   AnalysisProgress? _analysisProgress;
   DesktopAnalysisProgress? _desktopAnalysisProgress;
