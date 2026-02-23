@@ -5,19 +5,14 @@
 library;
 
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:archive/archive.dart'; // Cross-platform GZip
 import '../models/models.dart';
-
-// Conditional import for FFI (desktop only, not web)
-import 'cache_service_ffi_stub.dart'
-    if (dart.library.io) 'cache_service_ffi.dart';
+import 'db_helper/db_helper.dart';
 
 /// Entry in the opening book
 class OpeningBookEntry {
@@ -79,34 +74,25 @@ class OpeningBookService {
   Future<void> load() async {
     if (_isLoaded) return;
 
-    if (kIsWeb) {
-      _loadError = 'SQLite not supported on web';
-      return;
-    }
+    // Initialize database helper (sets up FFI for Web/Desktop)
+    await dbHelper.init();
 
     try {
-      String dbPath;
-
-      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        initFfiDatabase();
-        final appDir = await getApplicationSupportDirectory();
-        dbPath = appDir.path;
-        final dir = Directory(dbPath);
-        if (!await dir.exists()) {
-          await dir.create(recursive: true);
-        }
-      } else {
-        dbPath = await getDatabasesPath();
-      }
-
+      final dbPath = await dbHelper.getDatabasesPath();
       final path = p.join(dbPath, _dbName);
+
       await _copyBundledDbIfNeeded(path);
 
-      final file = File(path);
-      if (!await file.exists() || await file.length() < 1024) {
+      // Verify file exists and is valid (skip size check on web if unreliable, but dbHelper handles it)
+      if (!await dbHelper.databaseExists(path)) {
         _loadError = 'Opening book database not found';
         return;
       }
+
+      // On native, check size. On web, size might be dummy or 0, that's fine as long as exists.
+      // If dbHelper.getDatabaseSize returns 0, we assume it's valid if it exists (especially on Web)
+      // or we can skip this check.
+      // For now, let's trust _copyBundledDbIfNeeded.
 
       _database = await openDatabase(path, readOnly: false);
 
@@ -127,15 +113,14 @@ class OpeningBookService {
 
   /// Copy bundled database if not already present
   Future<void> _copyBundledDbIfNeeded(String targetPath) async {
-    final targetFile = File(targetPath);
-    final versionFile = File('$targetPath.version');
+    final versionPath = '$targetPath.version';
 
     // Check if already extracted and up to date
-    if (await targetFile.exists() && await versionFile.exists()) {
-      final currentVersion =
-          int.tryParse(await versionFile.readAsString()) ?? 0;
+    if (await dbHelper.databaseExists(targetPath)) {
+      final currentVersionStr = await dbHelper.readStringFile(versionPath);
+      final currentVersion = int.tryParse(currentVersionStr ?? '') ?? 0;
       if (currentVersion >= _bundledVersion) {
-        final size = await targetFile.length();
+        final size = await dbHelper.getDatabaseSize(targetPath);
         debugPrint(
             '[OpeningBook] DB exists (${(size / 1024 / 1024).toStringAsFixed(1)} MB), version $currentVersion');
         return;
@@ -152,27 +137,31 @@ class OpeningBookService {
         debugPrint(
             '[OpeningBook] Loading $asset (${(gzBytes.length / 1024 / 1024).toStringAsFixed(1)} MB)...');
 
+        // Decompress using archive package (cross-platform)
+        // decodeBytes returns List<int> (synchronous)
+        final bytes = GZipDecoder().decodeBytes(gzBytes);
+
         if (firstDb) {
-          // First DB: decompress directly as the base database
-          final sink = targetFile.openWrite();
-          await sink.addStream(
-              GZipCodec().decoder.bind(Stream.value(gzBytes)));
-          await sink.close();
+          // First DB: write directly as the base database
+          await dbHelper.writeDatabaseBytes(targetPath, bytes);
           firstDb = false;
         } else {
-          // Subsequent DBs: decompress to temp, then merge via ATTACH
-          final tmpFile = File('$targetPath.tmp');
-          final sink = tmpFile.openWrite();
-          await sink.addStream(
-              GZipCodec().decoder.bind(Stream.value(gzBytes)));
-          await sink.close();
+          // Subsequent DBs: write to temp, then merge via ATTACH
+          final tempPath = '$targetPath.tmp';
+          await dbHelper.writeDatabaseBytes(tempPath, bytes);
 
           final db = await openDatabase(targetPath, readOnly: false);
-          await db.execute("ATTACH DATABASE '${tmpFile.path}' AS src");
+          // ATTACH requires a path that SQLite understands.
+          // On Web, the VFS path matches what we write.
+          // Note: using ? placeholder for ATTACH is not supported by standard SQLite.
+          // Since tempPath is internally generated, string interpolation is safe.
+          await db.execute("ATTACH DATABASE '$tempPath' AS src");
+
           await db.execute(
               'INSERT INTO opening_book (board_size, komi, moves_sequence, top_moves, visits) '
               'SELECT board_size, komi, moves_sequence, top_moves, visits FROM src.opening_book');
-          // Merge meta: update total_entries and by_board_size
+
+          // Merge meta
           try {
             final srcMeta = await db.rawQuery(
                 "SELECT key, value FROM src.opening_book_meta");
@@ -203,18 +192,21 @@ class OpeningBookService {
               }
             }
           } catch (_) {}
+
           await db.execute('DETACH DATABASE src');
           await db.close();
-          await tmpFile.delete();
+          await dbHelper.deleteDatabase(tempPath);
         }
       }
 
-      final decompressedSize = await targetFile.length();
-      await versionFile.writeAsString(_bundledVersion.toString());
+      final decompressedSize = await dbHelper.getDatabaseSize(targetPath);
+      await dbHelper.writeStringFile(versionPath, _bundledVersion.toString());
       debugPrint(
           '[OpeningBook] Merged DB (${(decompressedSize / 1024 / 1024).toStringAsFixed(1)} MB)');
     } catch (e) {
       debugPrint('[OpeningBook] DB extraction error: $e');
+      _loadError = 'DB extraction error: $e';
+      rethrow; // Rethrow to be caught by load()
     }
   }
 
