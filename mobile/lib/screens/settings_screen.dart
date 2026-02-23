@@ -9,12 +9,14 @@ library;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../config.dart';
 import '../models/game_record.dart';
 import '../models/models.dart';
 import '../providers/game_provider.dart';
 import '../services/auth_service.dart';
 import '../services/cloud_storage_service.dart';
 import '../services/game_record_service.dart';
+import '../services/settings_service.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -49,6 +51,12 @@ class SettingsScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _showRecordsList(context, records, gameProvider),
               ),
+
+              const Divider(height: 32),
+
+              // Server Settings Section
+              _SectionHeader(title: '伺服器設定'),
+              _ServerSettingsTile(),
 
               const Divider(height: 32),
 
@@ -87,6 +95,114 @@ class SettingsScreen extends StatelessWidget {
             gameProvider: gameProvider,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ServerSettingsTile extends StatefulWidget {
+  @override
+  State<_ServerSettingsTile> createState() => _ServerSettingsTileState();
+}
+
+class _ServerSettingsTileState extends State<_ServerSettingsTile> {
+  String _currentUrl = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUrl = SettingsService().apiBaseUrl;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.dns),
+      title: const Text('API 伺服器'),
+      subtitle: Text(_currentUrl),
+      trailing: const Icon(Icons.edit),
+      onTap: () => _showApiUrlDialog(context),
+    );
+  }
+
+  void _showApiUrlDialog(BuildContext context) {
+    final controller = TextEditingController(text: _currentUrl);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('設定 API 網址'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('請輸入 Go Strategy 後端伺服器網址：'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'http://...',
+                labelText: 'API URL',
+              ),
+              keyboardType: TextInputType.url,
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () {
+                // Determine default URL based on environment via AppConfig logic if possible,
+                // but AppConfig.apiBaseUrl is a static getter based on constants.
+                // We'll just reset to what AppConfig provides.
+                controller.text = AppConfig.apiBaseUrl;
+              },
+              child: const Text('恢復預設值'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newUrl = controller.text.trim();
+              if (newUrl.isNotEmpty) {
+                // If the URL matches default, we can just remove the pref (reset)
+                if (newUrl == AppConfig.apiBaseUrl) {
+                  await SettingsService().resetApiBaseUrl();
+                } else {
+                  await SettingsService().setApiBaseUrl(newUrl);
+                }
+
+                if (mounted) {
+                   setState(() {
+                     _currentUrl = newUrl;
+                   });
+                   Navigator.of(context).pop();
+                   _showRestartDialog(context);
+                }
+              }
+            },
+            child: const Text('儲存'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRestartDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('設定已儲存'),
+        content: const Text('請重新啟動應用程式（或重新整理網頁）以套用新的伺服器設定。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('好'),
+          ),
+        ],
       ),
     );
   }
