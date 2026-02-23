@@ -1,16 +1,9 @@
-# TensorFlow Lite ProGuard rules
-# Keep all TFLite classes
--keep class org.tensorflow.lite.** { *; }
--keep interface org.tensorflow.lite.** { *; }
+# Add project specific ProGuard rules here.
+# By default, the flags in this file are appended to flags specified
+# in /Users/flutter/apps/flutter/packages/flutter_tools/gradle/flutter_proguard_rules.pro
+# as well as the default proguard-android-optimize.txt.
 
-# Keep GPU delegate
--keep class org.tensorflow.lite.gpu.** { *; }
--keep class org.tensorflow.lite.nnapi.** { *; }
-
-# Suppress warnings for missing optional GPU classes
--dontwarn org.tensorflow.lite.gpu.GpuDelegateFactory$Options
-
-# Keep method names for native methods
+# Keep method names for native methods (required for JNI)
 -keepclasseswithmembernames class * {
     native <methods>;
 }
