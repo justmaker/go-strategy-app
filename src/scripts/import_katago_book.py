@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.board import coords_to_gtp, get_zobrist_hasher, GTP_COLUMNS
+from src.board import coords_to_gtp, get_zobrist_hasher
 from src.cache import MoveCandidate
 from src.config import load_config, get_db_path
 
