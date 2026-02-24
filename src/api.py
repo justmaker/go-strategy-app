@@ -273,13 +273,24 @@ state = AppState()
 # Lifespan Management
 # ============================================================================
 
+# Load config immediately to configure CORS
+try:
+    config = load_config()
+except Exception as e:
+    print(f"Warning: Failed to load config at startup: {e}")
+    # Initialize with default/empty config if possible or let it fail later
+    # For now we let it proceed, but CORS might be default if config is None
+    # Actually load_config raises error if not found.
+    # We re-raise to stop startup if config is missing
+    raise e
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle (startup/shutdown)."""
     # Startup
     print("Starting Go Strategy API...")
-    state.config = load_config()
+    state.config = config
 
     # Check for cache-only mode (no GPU/KataGo required)
     cache_only = os.environ.get("GO_API_CACHE_ONLY", "").lower() in ("1", "true", "yes")
@@ -332,7 +343,7 @@ REST API for Go (Weiqi/Baduk) position analysis powered by KataGo.
 # CORS middleware for cross-origin requests (Flutter web, etc.)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=config.server.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
