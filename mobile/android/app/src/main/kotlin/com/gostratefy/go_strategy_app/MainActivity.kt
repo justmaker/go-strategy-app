@@ -31,21 +31,10 @@ class MainActivity : FlutterActivity() {
             Build.HARDWARE.contains("ranchu")
     }
 
-    // REMOVED: Device detection no longer needed
-    // The new ONNX C++ backend + single-threaded mode works on ALL devices
-    // including Snapdragon 8 Gen 3 (pineapple) which previously crashed
-    private fun isProblematicDevice(): Boolean {
-        return false  // No problematic devices with new architecture
-    }
-
     private fun ensureKataGoEngine(): Boolean {
         if (kataGoEngine != null) return true
         if (isEmulator) {
             Log.w(TAG, "Emulator detected, skipping KataGo native engine")
-            return false
-        }
-        if (isProblematicDevice()) {
-            Log.w(TAG, "Problematic device: KataGo disabled (TFLite migration in progress)")
             return false
         }
 

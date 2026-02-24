@@ -90,7 +90,9 @@ def board_to_pixel_coords(col: int, row: int, board_size: int = 9) -> Tuple[int,
 # ============================================================================
 # Coordinate Conversion (GTP format)
 # ============================================================================
-# All coordinate conversion functions are imported from src.board
+
+# Use implementations from src.board to avoid duplication
+# gtp_to_coords and coords_to_gtp are imported from src.board
 
 
 # ============================================================================
