@@ -171,22 +171,6 @@ def parse_moves_fallback(moves_str: str) -> List[Dict[str, Any]]:
 # Coordinate Conversion
 # ============================================================================
 
-def katago_xy_to_gtp(x: int, y: int, board_size: int = 9) -> str:
-    """
-    Convert KataGo 0-indexed coordinates to GTP format.
-
-    KataGo uses (x, y) where:
-    - x is column (0 = left)
-    - y is row (0 = bottom in their visualization)
-
-    GTP uses columns A-J (skip I) and rows 1-9.
-    """
-    # For 9x9: A-J columns (skip I), so use first 9 letters of GTP_COLUMNS
-    col = GTP_COLUMNS[x]
-    row = y + 1
-    return f"{col}{row}"
-
-
 def board_array_to_stones(board: List[int], board_size: int = 9) -> Dict[Tuple[int, int], str]:
     """
     Convert KataGo flat board array to stones dictionary.
@@ -400,7 +384,7 @@ def import_katago_book(
 
                 # Use first coordinate (others are symmetric equivalents)
                 x, y = xy_coords[0]
-                gtp_coord = katago_xy_to_gtp(x, y, board_size)
+                gtp_coord = coords_to_gtp(x, y)
 
                 # KataGo book's 'wl' is the CURRENT player's win-loss
                 # value in [-1, 1] range:
@@ -472,7 +456,7 @@ def import_katago_book(
                 # Calculate the move that leads to this child
                 x = board_idx % board_size
                 y = board_idx // board_size
-                gtp_coord = katago_xy_to_gtp(x, y, board_size)
+                gtp_coord = coords_to_gtp(x, y)
 
                 child_history = move_history + [(next_player, gtp_coord)]
 
