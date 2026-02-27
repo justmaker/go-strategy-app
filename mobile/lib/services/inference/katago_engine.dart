@@ -17,10 +17,21 @@ import 'inference_engine.dart';
 /// Native KataGo engine (desktop platforms)
 class KataGoEngine implements InferenceEngine {
   static const String _tag = '[KataGoEngine]';
-  static const _methodChannel =
+
+  // Android uses app-level channel; iOS uses katago_onnx_mobile plugin channel
+  static const _androidMethodChannel =
       MethodChannel('com.gostratefy.go_strategy_app/katago');
-  static const _eventChannel =
+  static const _androidEventChannel =
       EventChannel('com.gostratefy.go_strategy_app/katago_events');
+  static const _iosMethodChannel =
+      MethodChannel('com.justmaker.katago_onnx_mobile/engine');
+  static const _iosEventChannel =
+      EventChannel('com.justmaker.katago_onnx_mobile/events');
+
+  MethodChannel get _methodChannel =>
+      Platform.isIOS ? _iosMethodChannel : _androidMethodChannel;
+  EventChannel get _eventChannel =>
+      Platform.isIOS ? _iosEventChannel : _androidEventChannel;
 
   StreamSubscription? _progressSubscription;
 

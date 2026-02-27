@@ -352,6 +352,15 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.9.0"
+  katago_onnx_mobile:
+    dependency: "direct main"
+    description:
+      path: "."
+      ref: HEAD
+      resolved-ref: "2d08edb83ca0ec2af967d4c2b2f20128e53e5a41"
+      url: "https://github.com/justmaker/katago-onnx-mobile.git"
+    source: git
+    version: "0.1.0"
   leak_tracker:
     dependency: transitive
     description:

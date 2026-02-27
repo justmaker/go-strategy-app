@@ -386,30 +386,22 @@ def import_katago_book(
                 x, y = xy_coords[0]
                 gtp_coord = coords_to_gtp(x, y)
 
-                # KataGo book's 'wl' is the CURRENT player's win-loss
-                # value in [-1, 1] range:
-                #   wl = 1.0  → current player wins 100%
-                #   wl = -1.0 → current player loses 100%
-                #   wl = 0.0  → 50-50
-                # 'ssM' is the score mean from the current player's perspective.
+                # KataGo book's 'wl' is always from White's perspective,
+                # in [-1, 1] range:
+                #   wl =  1.0 → White wins 100%
+                #   wl = -1.0 → Black wins 100%
+                # 'ssM' is the score mean from White's perspective.
                 #
                 # Convert to Black's win probability [0, 1]:
-                #   current_player_winrate = (1 + wl) / 2
+                #   Black winrate = (1 - wl) / 2
                 wl = move_data.get('wl', 0.0)
                 wl = max(-1.0, min(1.0, wl))  # Clamp to [-1, 1]
                 ssM = move_data.get('ssM', 0.0)
                 visits = int(move_data.get('v', 0))
 
                 # Our winrate is always from Black's perspective
-                if next_player == 'B':
-                    # Black is making the move; wl is Black's perspective
-                    winrate = (1.0 + wl) / 2.0
-                    score_lead = ssM
-                else:
-                    # White is making the move; wl is White's perspective
-                    # Black's winrate = 1 - White's = 1 - (1+wl)/2 = (1-wl)/2
-                    winrate = (1.0 - wl) / 2.0
-                    score_lead = -ssM
+                winrate = (1.0 - wl) / 2.0
+                score_lead = -ssM
 
                 top_moves.append(MoveCandidate(
                     move=gtp_coord,
