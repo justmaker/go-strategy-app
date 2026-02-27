@@ -6,6 +6,7 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'package:archive/archive.dart' as archive;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
@@ -238,7 +239,8 @@ class OpeningBookService {
     debugPrint('[OpeningBook] Web: extracting $assetPath...');
     final data = await rootBundle.load(assetPath);
     final gzBytes = data.buffer.asUint8List();
-    final decompressed = GZipCodec().decode(gzBytes);
+    // Use package:archive for gzip (dart:io GZipCodec is unsupported on web)
+    final decompressed = archive.GZipDecoder().decodeBytes(gzBytes);
     await dbHelper.writeDatabaseBytes(targetPath, decompressed);
     debugPrint(
         '[OpeningBook] Web: extracted ${boardSize}x$boardSize '
