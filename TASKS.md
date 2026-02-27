@@ -4,7 +4,7 @@
 
 ### 抽出 katago-onnx-mobile 到獨立 repo
 
-**狀態**: 🔴 未開始
+**狀態**: 🟡 進行中（iOS/Android ONNX 測試通過，待合併到 main）
 
 **目的**: Go Strategy App 要做第二個獨立的圍棋解題 App，兩個 app 共用 KataGo ONNX 引擎。需要將 ONNX 相關的共用元件抽出到 `https://github.com/justmaker/katago-onnx-mobile` 作為 Flutter plugin。
 
@@ -60,20 +60,34 @@ katago-onnx-mobile/
 **實作步驟**:
 
 1. ✅ 計劃已寫入 TASKS.md
-2. ⬜ 建立新 repo 基本結構 (`flutter create --template=plugin`)
-3. ⬜ 遷移 Dart 程式碼（修改 import paths，移除 app-specific 依賴）
-4. ⬜ 遷移 Android Native（JNI package 名稱、build.gradle plugin 格式）
-5. ⬜ 遷移 iOS Native（podspec、header search paths）
-6. ⬜ 遷移 Model 檔案（Git LFS）
-7. ⬜ 修改原 Go Strategy App（改用 git dependency，移除重複檔案）
-8. ⬜ 驗證（macOS build、Android ONNX、iOS ONNX、plugin example app）
+2. ✅ 建立新 repo 基本結構 (`flutter create --template=plugin`)
+3. ✅ 遷移 Dart 程式碼（修改 import paths，移除 app-specific 依賴）
+4. ✅ 遷移 Android Native（JNI package 名稱、build.gradle plugin 格式）
+5. ✅ 遷移 iOS Native（podspec、header search paths、single-threaded mode）
+6. ✅ 遷移 Model 檔案（改為 regular git，不用 LFS — Flutter pub get 不支援 LFS）
+7. ✅ 修改原 Go Strategy App（改用 git dependency，移除 KataGoMobile pod）
+8. 🟡 驗證:
+   - ✅ macOS build (808.5MB)
+   - ✅ Android ONNX inference (96 次推論，0 error)
+   - ✅ iOS ONNX inference (8+ 次推論，19x19 + 13x13 切換正常)
+   - ✅ iOS 記憶體問題：Signal 9 (SIGKILL) — 拆分 DB + streaming 解壓修復
+   - ✅ iPad 實機 debug mode 部署驗證（opening book + ONNX 推論正常）
+   - ⬜ Plugin example app 獨立 build 測試
+
+**Plugin repo**: `https://github.com/justmaker/katago-onnx-mobile`
+**App branch**: `feature/katago-onnx-mobile-plugin`
+
+**iOS 修復記錄** (2026-02-19):
+1. 移除舊 `KataGoMobile` pod 避免 duplicate symbols
+2. 修正 moves 格式轉換（`["B Q16"]` → `[["B", "Q16"]]`）
+3. 從 Android 移植 `setSingleThreadedMode` 到 iOS KataGo C++（nneval.h/cpp）
+4. 新增 board size 追蹤，切換棋盤大小時重新初始化引擎
 
 **注意事項**:
-- MethodChannel 名稱需改為 plugin 專用（如 `com.justmaker.katago_onnx_mobile/engine`）
-- KataGoEngine.kt 的 package name 需改為 plugin 的
-- JNI 函式名稱與 Java/Kotlin package name 綁定，需同步修改 `native-lib.cpp`
-- iOS EventChannel 進度回報需整合到 plugin 內
-- Plugin assets 路徑與 app assets 不同，需調整 asset lookup
+- Flutter pub get 不支援 Git LFS — plugin 的大檔案必須用 regular git
+- iOS 使用 plugin 的 MethodChannel (`com.justmaker.katago_onnx_mobile/engine`)
+- Android 目前仍用 app 內建的 channel (`com.gostratefy.go_strategy_app/katago`)，之後需遷移
+- macOS 使用 Eigen backend，不受 ONNX plugin 影響
 
 ---
 
@@ -108,6 +122,52 @@ python3 -m src.scripts.build_opening_book_parallel \
 ---
 
 ## 已完成
+
+### 全棋盤 Opening Book 啟用 + 顯示優化 (2026-02-27)
+
+**問題**: 13x13/19x19 opening book 被限制為 9x9-only，ONNX 單次推理在大棋盤效果極差。此外 ONNX 引擎返回大量 0% 勝率的垃圾手淹沒棋盤。
+
+**修正**:
+1. `game_provider.dart`: 移除 `_board.size == 9` 限制，所有棋盤大小都使用 opening book
+2. `go_board_widget.dart`: 過濾勝率 < 1% 或 > 99% 的手，棋盤建議上限 10
+3. `analysis_screen.dart`: 列表同樣過濾 0% 勝率手
+4. `opening_book_service.dart`: 排序改為 winrate → score lead (Black 視角) → visits 三級排序
+
+**驗證結果**:
+- 13x13 空盤: 16 個推薦手，四角完全對稱（K10/K4/D4/D10 各 25.0%）
+- 19x19 空盤: 24 個推薦手，四角完全對稱（Q16/Q4/D4/D16 各 37.1%）
+- iPad 實機 debug mode 部署成功
+
+---
+
+### 9x9 Opening Book 資料全面修正 (2026-02-27)
+
+**問題**: 9x9 opening book 的第一步看似正確，但第二步以後資料完全錯誤 — 邊角手排在最前面，勝率不合理。
+
+**根本原因** (多個 bug):
+1. **wl 視角錯誤**: KataGo book 的 `wl` 永遠是 White 視角，但 import script 在 Black/White 回合用了不同公式，其中一個是錯的
+2. **Y 軸座標反轉**: `katago_xy_to_gtp` 用 `row = y + 1`，但 KataGo 的 y=0 是棋盤上方（非下方），正確應為 `row = board_size - y`
+3. **偶數/奇數 depth 不對稱**: 全面套用 `1 - winrate` 修正了偶數 depth（Black to play），但破壞了原本正確的奇數 depth（White to play）
+
+**修正**:
+1. `import_katago_book.py`:
+   - wl 統一用 `(1 - wl) / 2` 計算 Black winrate（不分 B/W 回合）
+   - Y 軸改為 `row = board_size - y`
+2. `opening_book_9x9.db.gz`: 三階段 DB migration 修正 3,201,154 筆資料
+   - Phase 1: 全面 `1 - winrate` 修正偶數 depth
+   - Phase 2: Y 軸座標翻轉 `new_row = 10 - old_row`
+   - Phase 3: 奇數 depth 再次 `1 - winrate` 恢復原始正確值
+3. `opening_book_service.dart`:
+   - `_bundledVersion` 4→7，強制 app 重新解壓
+   - 排序改為 winrate → score lead → visits 三級排序
+4. 顯示優化:
+   - `go_board_widget.dart`: 過濾勝率 < 1% 的手，棋盤建議上限 10
+   - `analysis_screen.dart`: 列表同樣過濾 0% 勝率手
+
+**驗證結果**:
+- Depth 0: F6 Black=48.4%、E5=48.2%（合理，7.5 komi 下 Black 略劣）
+- Depth 1: F5 Black=49.5%、E6=49.5%（合理，White 最佳回應接近均勢）
+- Depth 2-5: 全部通過合理性檢查
 
 ### macOS Google Sign-In 修復 (2026-02-19)
 
@@ -202,6 +262,8 @@ python3 -m src.scripts.build_opening_book_parallel \
 1. `import_katago_book.py`: `winrate = wl`（不再反轉）、`score_lead = -ssM`
 2. `opening_book.db.gz`: 修正 1,519,000 筆 9x9 資料
 3. `opening_book_service.dart`: 版本號 1→2，強制 app 重新解壓
+
+**後續**: 此修正只解決了第一步（depth 0）的問題，第二步以後仍有 bug，已在 2026-02-27 全面修正（見上方）
 
 ### iOS KataGo ONNX 即時進度更新 (2026-02-17)
 

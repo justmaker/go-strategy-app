@@ -9,7 +9,6 @@ import 'package:onnxruntime/onnxruntime.dart';
 import '../../models/models.dart';
 import 'inference_engine.dart';
 import 'liberty_calculator.dart';
-import 'tactical_evaluator.dart';
 
 const int kNumBinaryFeatures = 22;
 const int kNumGlobalFeatures = 19;
@@ -110,7 +109,7 @@ class OnnxEngine implements InferenceEngine {
     debugPrint('$_tag Analyzing: ${boardSize}x$boardSize, ${moves.length} moves');
 
     try {
-      // Prepare input tensors
+      // Prepare input tensors (identity transform — also sets _occupiedPositions)
       final binaryInput = _prepareBinaryInput(boardSize, moves);
       final globalInput = _prepareGlobalInput(boardSize, komi, moves);
 
@@ -120,74 +119,117 @@ class OnnxEngine implements InferenceEngine {
       debugPrint('$_tag Binary input non-zero: $nonZeroBinary / ${binaryInput.length}');
       debugPrint('$_tag Global input non-zero: $nonZeroGlobal / ${globalInput.length}');
 
-      // Create ONNX tensors
-      final inputBinary = OrtValueTensor.createTensorWithDataList(
-        binaryInput,
-        [1, kNumBinaryFeatures, boardSize, boardSize],
-      );
-      final inputGlobal = OrtValueTensor.createTensorWithDataList(
-        globalInput,
-        [1, kNumGlobalFeatures],
-      );
+      final numPositions = boardSize * boardSize;
 
-      // Run inference
+      // Run inference with all 8 board symmetries and average PROBABILITIES
+      // (averaging logits flattens the distribution; averaging probs preserves it)
+      final avgPolicyProbs = List<double>.filled(numPositions + 1, 0.0);
+      double avgWinrate = 0.0;
       final runOptions = OrtRunOptions();
-      final outputs = session.run(
-        runOptions,
-        {'input_binary': inputBinary, 'input_global': inputGlobal},
-      );
 
-      // Parse outputs - handle dynamic types from ONNX Runtime
-      final policyRaw = outputs[0]!.value;
-      final valueRaw = outputs[1]!.value;
+      for (int sym = 0; sym < 8; sym++) {
+        final transformedInput = sym == 0
+            ? binaryInput
+            : _transformSpatialInput(binaryInput, boardSize, sym);
 
-      debugPrint('$_tag Inference complete');
-      debugPrint('$_tag Policy type: ${policyRaw.runtimeType}');
-      debugPrint('$_tag Value type: ${valueRaw.runtimeType}');
+        final inputBinary = OrtValueTensor.createTensorWithDataList(
+          transformedInput,
+          [1, kNumBinaryFeatures, boardSize, boardSize],
+        );
+        final inputGlobal = OrtValueTensor.createTensorWithDataList(
+          globalInput,
+          [1, kNumGlobalFeatures],
+        );
 
-      // Convert to proper types
-      List<double> policyList;
-      List<double> valueList;
+        final outputs = session.run(
+          runOptions,
+          {'input_binary': inputBinary, 'input_global': inputGlobal},
+        );
 
-      if (policyRaw is List<List<double>>) {
-        policyList = policyRaw[0];
-      } else if (policyRaw is List<dynamic>) {
-        final nested = policyRaw[0];
-        if (nested is List) {
-          policyList = nested.cast<double>();
+        // Parse raw outputs
+        final policyRaw = outputs[0]!.value;
+        final valueRaw = outputs[1]!.value;
+
+        List<double> policyList;
+        List<double> valueList;
+
+        if (policyRaw is List<List<double>>) {
+          policyList = policyRaw[0];
+        } else if (policyRaw is List<dynamic>) {
+          final nested = policyRaw[0];
+          policyList = nested is List ? nested.cast<double>() : policyRaw.cast<double>();
         } else {
-          policyList = policyRaw.cast<double>();
+          throw TypeError();
         }
-      } else {
-        throw TypeError();
+
+        if (valueRaw is List<List<double>>) {
+          valueList = valueRaw[0];
+        } else if (valueRaw is List<dynamic>) {
+          final nested = valueRaw[0];
+          valueList = nested is List ? nested.cast<double>() : valueRaw.cast<double>();
+        } else {
+          throw TypeError();
+        }
+
+        // Softmax policy logits → probabilities (per symmetry)
+        final maxLogit = policyList.reduce(math.max);
+        final expSum = policyList
+            .map((x) => math.exp(x - maxLogit))
+            .reduce((a, b) => a + b);
+        final probs = policyList
+            .map((x) => math.exp(x - maxLogit) / expSum)
+            .toList();
+
+        // Inverse-transform probabilities back to original coordinate space
+        final originalProbs = sym == 0
+            ? probs
+            : _inverseTransformPolicy(probs, boardSize, sym);
+
+        // Accumulate probabilities
+        for (int i = 0; i < originalProbs.length && i < avgPolicyProbs.length; i++) {
+          avgPolicyProbs[i] += originalProbs[i];
+        }
+
+        // Softmax value logits → winrate (per symmetry)
+        final maxVal = valueList.reduce(math.max);
+        final expWin = math.exp(valueList[0] - maxVal);
+        final expLoss = math.exp(valueList[1] - maxVal);
+        final expDraw = math.exp(valueList[2] - maxVal);
+        final valSum = expWin + expLoss + expDraw;
+        final winProb = expWin / valSum;
+        final lossProb = expLoss / valSum;
+        final total = winProb + lossProb;
+        avgWinrate += total > 0 ? winProb / total : 0.5;
+
+        // Cleanup tensors
+        inputBinary.release();
+        inputGlobal.release();
+        for (final v in outputs) {
+          v?.release();
+        }
       }
 
-      if (valueRaw is List<List<double>>) {
-        valueList = valueRaw[0];
-      } else if (valueRaw is List<dynamic>) {
-        final nested = valueRaw[0];
-        if (nested is List) {
-          valueList = nested.cast<double>();
-        } else {
-          valueList = valueRaw.cast<double>();
-        }
-      } else {
-        throw TypeError();
-      }
-
-      debugPrint('$_tag Policy shape: ${policyList.length}');
-      debugPrint('$_tag Value shape: ${valueList.length}');
-
-      // Convert policy to move candidates
-      final topMoves = _parsePolicyOutput(boardSize, policyList, valueList);
-
-      // Cleanup
-      inputBinary.release();
-      inputGlobal.release();
       runOptions.release();
-      for (final value in outputs) {
-        value?.release();
+
+      // Average over 8 symmetries
+      for (int i = 0; i < avgPolicyProbs.length; i++) {
+        avgPolicyProbs[i] /= 8.0;
       }
+      avgWinrate /= 8.0;
+
+      debugPrint('$_tag Symmetry-averaged inference complete (8 transforms)');
+      debugPrint('$_tag Averaged winrate: ${(avgWinrate * 100).toStringAsFixed(1)}%');
+
+      // Log policy quality (symmetry averaging naturally spreads probability
+      // across equivalent positions, so lower max is expected and correct)
+      final maxProb = avgPolicyProbs.reduce(math.max);
+      final avgProb = avgPolicyProbs.reduce((a, b) => a + b) / avgPolicyProbs.length;
+      debugPrint('$_tag Policy: max=$maxProb, avg=$avgProb, ratio=${maxProb / avgProb}');
+
+      final finalProbs = avgPolicyProbs;
+
+      // Create move candidates from averaged probabilities
+      final topMoves = _createMoveCandidates(boardSize, finalProbs, avgWinrate);
 
       return EngineAnalysisResult(
         topMoves: topMoves,
@@ -204,10 +246,6 @@ class OnnxEngine implements InferenceEngine {
   // Store occupied positions to filter them from policy output
   final Set<int> _occupiedPositions = {};
 
-  // Board state for tactical evaluation
-  Set<int> _currentBlackStones = {};
-  Set<int> _currentWhiteStones = {};
-  bool _currentNextIsBlack = true;
 
   Float32List _prepareBinaryInput(int boardSize, List<String> moves) {
     final data = Float32List(kNumBinaryFeatures * boardSize * boardSize);
@@ -258,11 +296,6 @@ class OnnxEngine implements InferenceEngine {
     final opponentStones = nextPlayerIsBlack ? whiteStones : blackStones;
 
     debugPrint('$_tag Next player: ${nextPlayerIsBlack ? "Black" : "White"}');
-
-    // Save for tactical evaluation
-    _currentBlackStones = blackStones;
-    _currentWhiteStones = whiteStones;
-    _currentNextIsBlack = nextPlayerIsBlack;
 
     // Channel 0: On board (all 1s)
     for (var i = 0; i < boardSize * boardSize; i++) {
@@ -416,8 +449,12 @@ class OnnxEngine implements InferenceEngine {
       }
     }
 
-    // Feature 5: Komi normalized by 20.0 (KataGo v7 normalization)
-    data[5] = komi / 20.0;
+    // Feature 5: Self-komi from current player's perspective, normalized by 20.0
+    // Black's turn: negative (black gives komi to white)
+    // White's turn: positive (white receives komi)
+    final isBlackTurn = moves.length % 2 == 0;
+    final selfKomi = isBlackTurn ? -komi : komi;
+    data[5] = selfKomi / 20.0;
 
     // Features 6-7: Ko rule encoding
     // 6 = positional superko, 7 = situational superko
@@ -445,10 +482,9 @@ class OnnxEngine implements InferenceEngine {
     // In normal play, pass doesn't end the phase
     data[14] = 0.0;
 
-    // Feature 15: Komi parity wave (helps with xor-like parity effects)
-    // Triangle wave based on drawable komi distance
-    final komiParity = (komi.abs() % 2.0) / 2.0;
-    data[15] = komiParity;
+    // Feature 15: Komi parity (scaled by board area)
+    final bArea = (boardSize * boardSize).toDouble();
+    data[15] = 0.20 * selfKomi / (bArea * 0.25 + 7.5);
 
     // Features 16-18: Reserved/unused
     data[16] = 0.0;
@@ -460,103 +496,42 @@ class OnnxEngine implements InferenceEngine {
     return data;
   }
 
-  List<MoveCandidate> _parsePolicyOutput(
-    int boardSize,
-    List<double> policyLogits,
-    List<double> valueOutput,
-  ) {
-    debugPrint('$_tag Parsing policy: ${policyLogits.length} logits');
-    debugPrint('$_tag Value output: ${valueOutput.length} values');
 
-    // Check policy logits distribution
-    final maxLogit = policyLogits.reduce(math.max);
-    final minLogit = policyLogits.reduce(math.min);
-    final avgLogit = policyLogits.reduce((a, b) => a + b) / policyLogits.length;
-    final nonNegLogits = policyLogits.where((x) => x > -10).length;
-    debugPrint('$_tag Policy logit stats: min=$minLogit, max=$maxLogit, avg=$avgLogit, >-10: $nonNegLogits');
-
-    // Apply softmax to policy logits
-    final expSum = policyLogits
-        .map((x) => math.exp(x - maxLogit))
-        .reduce((a, b) => a + b);
-    final probabilities =
-        policyLogits.map((x) => math.exp(x - maxLogit) / expSum).toList();
-
-    // Check if policy is too uniform (indicating bad model input)
-    final maxProb = probabilities.reduce(math.max);
-    final avgProb = probabilities.reduce((a, b) => a + b) / probabilities.length;
-    final uniformityRatio = maxProb / (avgProb * 10); // Should be >> 1 for good policy
-    debugPrint('$_tag Policy uniformity: max_prob=$maxProb, avg_prob=$avgProb, ratio=$uniformityRatio');
-
-    List<double> finalProbabilities;
-    if (uniformityRatio < 2.0) {
-      // Policy is too uniform, fall back to tactical heuristic
-      debugPrint('$_tag WARNING: Policy too uniform (ratio=$uniformityRatio), using tactical heuristic');
-      finalProbabilities = _generateTacticalPolicy(boardSize);
-    } else {
-      // Policy looks reasonable, use it
-      debugPrint('$_tag Policy looks good (ratio=$uniformityRatio), using model output');
-      finalProbabilities = probabilities;
-    }
-
-    // Extract winrate from value output
-    // KataGo value output: [win_logit, loss_logit, draw_logit]
-    debugPrint('$_tag Value logits: ${valueOutput[0]}, ${valueOutput[1]}, ${valueOutput[2]}');
-
-    // Apply softmax to value logits
-    final maxVal = [valueOutput[0], valueOutput[1], valueOutput[2]].reduce(math.max);
-    final expWin = math.exp(valueOutput[0] - maxVal);
-    final expLoss = math.exp(valueOutput[1] - maxVal);
-    final expDraw = math.exp(valueOutput[2] - maxVal);
-    final valueExpSum = expWin + expLoss + expDraw;
-
-    final winProb = expWin / valueExpSum;
-    final lossProb = expLoss / valueExpSum;
-    final drawProb = expDraw / valueExpSum;
-
-    // Winrate = win / (win + loss) (excluding draws)
-    final total = winProb + lossProb;
-    final baseWinrate = total > 0 ? winProb / total : 0.5;
-    debugPrint('$_tag Base winrate: ${(baseWinrate * 100).toStringAsFixed(1)}% (win=$winProb, loss=$lossProb, draw=$drawProb)');
-
-    // Create move candidates
-    final candidates = <MoveCandidate>[];
+  /// Create move candidates from pre-computed probabilities and winrate.
+  List<MoveCandidate> _createMoveCandidates(
+      int boardSize, List<double> probs, double baseWinrate) {
     final numBoardPositions = boardSize * boardSize;
+    final candidates = <MoveCandidate>[];
 
-    // Find top probabilities for scaling
+    // Find top probability among legal moves for scaling
     final legalProbs = <double>[];
     for (var i = 0; i < numBoardPositions; i++) {
       if (!_occupiedPositions.contains(i)) {
-        legalProbs.add(finalProbabilities[i]);
+        legalProbs.add(probs[i]);
       }
     }
     legalProbs.sort((a, b) => b.compareTo(a));
     final topProb = legalProbs.isNotEmpty ? legalProbs[0] : 0.001;
 
     for (var i = 0; i < numBoardPositions; i++) {
-      // Skip occupied positions
       if (_occupiedPositions.contains(i)) continue;
 
-      final prob = finalProbabilities[i];
+      final prob = probs[i];
       final row = i ~/ boardSize;
       final col = i % boardSize;
       final gtp = _indexToGtp(row, col, boardSize);
 
-      // Scale winrate based on move probability relative to best move
-      // Better moves should have higher winrate
       final relativeProb = prob / topProb;
-      // Map top move to baseWinrate, weaker moves spread from -10% to baseWinrate
       final moveWinrate = baseWinrate - (1.0 - relativeProb) * 0.15;
 
       candidates.add(MoveCandidate(
         move: gtp,
         winrate: moveWinrate.clamp(0.0, 1.0),
-        scoreLead: 0.0, // TODO: Extract from miscvalue output
+        scoreLead: 0.0,
         visits: 1,
       ));
     }
 
-    // Sort by winrate and return top 20
     candidates.sort((a, b) => b.winrate.compareTo(a.winrate));
     final topMoves = candidates.take(20).toList();
 
@@ -564,38 +539,68 @@ class OnnxEngine implements InferenceEngine {
     if (topMoves.length >= 3) {
       debugPrint('$_tag Top 3 moves:');
       for (var i = 0; i < 3; i++) {
-        debugPrint('$_tag   ${i + 1}. ${topMoves[i].move}: ${(topMoves[i].winrate * 100).toStringAsFixed(1)}%');
+        debugPrint(
+            '$_tag   ${i + 1}. ${topMoves[i].move}: ${(topMoves[i].winrate * 100).toStringAsFixed(1)}%');
       }
     }
 
     return topMoves;
   }
 
-  List<double> _generateTacticalPolicy(int boardSize) {
-    // Generate policy using tactical evaluation based on current board state
-    final evaluator = TacticalEvaluator(
-      boardSize: boardSize,
-      blackStones: _currentBlackStones,
-      whiteStones: _currentWhiteStones,
-      occupiedPositions: _occupiedPositions,
-      nextPlayerIsBlack: _currentNextIsBlack,
-    );
+  /// Apply symmetry transform to binary input spatial dimensions.
+  /// Input shape: [kNumBinaryFeatures × boardSize × boardSize] (flattened).
+  Float32List _transformSpatialInput(Float32List input, int boardSize, int symmetry) {
+    final size = boardSize * boardSize;
+    final result = Float32List(input.length);
 
-    final probs = List<double>.filled(boardSize * boardSize + 1, 0.0);
+    for (int c = 0; c < kNumBinaryFeatures; c++) {
+      final offset = c * size;
+      for (int r = 0; r < boardSize; r++) {
+        for (int col = 0; col < boardSize; col++) {
+          final (newR, newC) = _applySymmetry(r, col, boardSize, symmetry);
+          result[offset + newR * boardSize + newC] =
+              input[offset + r * boardSize + col];
+        }
+      }
+    }
+    return result;
+  }
 
-    // Evaluate each position
-    for (int i = 0; i < boardSize * boardSize; i++) {
-      if (_occupiedPositions.contains(i)) {
-        probs[i] = 0.0; // Can't play on occupied positions
-      } else {
-        final score = evaluator.evaluatePosition(i);
-        probs[i] = math.max(0.001, score);
+  /// Inverse-transform policy from symmetry-transformed space back to original.
+  List<double> _inverseTransformPolicy(
+      List<double> policy, int boardSize, int symmetry) {
+    final size = boardSize * boardSize;
+    final result = List<double>.filled(policy.length, 0.0);
+
+    for (int r = 0; r < boardSize; r++) {
+      for (int col = 0; col < boardSize; col++) {
+        final (symR, symC) = _applySymmetry(r, col, boardSize, symmetry);
+        result[r * boardSize + col] = policy[symR * boardSize + symC];
       }
     }
 
-    // Normalize to probabilities
-    final sum = probs.reduce((a, b) => a + b);
-    return probs.map((p) => p / sum).toList();
+    // Pass move probability unchanged
+    if (policy.length > size) {
+      result[size] = policy[size];
+    }
+    return result;
+  }
+
+  /// Map board coordinates through one of 8 symmetry transforms.
+  static (int, int) _applySymmetry(
+      int row, int col, int boardSize, int symmetry) {
+    final n = boardSize - 1;
+    switch (symmetry) {
+      case 0: return (row, col);         // identity
+      case 1: return (col, n - row);     // rotate 90° CW
+      case 2: return (n - row, n - col); // rotate 180°
+      case 3: return (n - col, row);     // rotate 270° CW
+      case 4: return (row, n - col);     // flip horizontal
+      case 5: return (n - row, col);     // flip vertical
+      case 6: return (col, row);         // flip main diagonal
+      case 7: return (n - col, n - row); // flip anti-diagonal
+      default: return (row, col);
+    }
   }
 
   List<int> _getNeighbors(int position, int boardSize) {

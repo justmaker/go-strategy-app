@@ -311,16 +311,25 @@ class _BoardPainter extends CustomPainter {
   void _drawSuggestions(Canvas canvas, double padding, double cellSize) {
     if (suggestions == null || suggestions!.isEmpty) return;
 
+    // Filter out moves with < 1% winrate for the current player
+    final filtered = suggestions!.where((m) {
+      final playerWr = m.winrate;  // stored from Black's perspective
+      // Keep if either side has >= 1% (i.e., not a 0% garbage move)
+      return playerWr >= 0.01 && playerWr <= 0.99;
+    }).toList();
+
+    if (filtered.isEmpty) return;
+
     // Pre-calculate display ranks to group equivalent moves
     final moveRanks = <int, int>{}; // index -> displayRank
     int currentRank = 0;
     String? lastSignature;
 
-    for (int i = 0; i < suggestions!.length; i++) {
-      final move = suggestions![i];
+    for (int i = 0; i < filtered.length; i++) {
+      final move = filtered[i];
       // Use the same signature logic as the list to group equivalent moves
       final signature = '${move.winratePercent}_${move.scoreLeadFormatted}';
-      
+
       if (signature != lastSignature) {
         currentRank++;
         lastSignature = signature;
@@ -328,8 +337,20 @@ class _BoardPainter extends CustomPainter {
       moveRanks[i] = currentRank;
     }
 
-    for (int i = 0; i < suggestions!.length; i++) {
-      final suggestion = suggestions![i];
+    // Count how many moves per rank to decide which ranks to show
+    final movesPerRank = <int, int>{};
+    for (final entry in moveRanks.entries) {
+      movesPerRank[entry.value] = (movesPerRank[entry.value] ?? 0) + 1;
+    }
+
+    // Show all top 3 ranks (symmetry ensures complete groups)
+    int maxRankToShow = 0;
+    for (int rank = 1; rank <= 3; rank++) {
+      if ((movesPerRank[rank] ?? 0) > 0) maxRankToShow = rank;
+    }
+
+    for (int i = 0; i < filtered.length; i++) {
+      final suggestion = filtered[i];
       final gtpPoint = BoardPoint.fromGtp(suggestion.move, board.size);
       if (gtpPoint == null) continue;
 
@@ -338,8 +359,8 @@ class _BoardPainter extends CustomPainter {
 
       final displayRank = moveRanks[i]!;
 
-      // Only show top 3 ranks on the board to avoid clutter
-      if (displayRank > 3) continue;
+      // Only show complete rank groups (never cut a rank in half)
+      if (displayRank > maxRankToShow) continue;
 
       // Determine color based on rank
       // Rank 1: Blue (Best), Rank 2: Green (Good), Rank 3: Orange
@@ -387,6 +408,7 @@ class _BoardPainter extends CustomPainter {
         canvas,
         Offset(x - textPainter.width / 2, y - textPainter.height / 2),
       );
+
     }
   }
 
