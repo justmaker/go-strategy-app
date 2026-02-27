@@ -433,8 +433,10 @@ class KataGoGTP:
             move_name = words[0].upper()
 
             visits_match = re.search(r"visits\s+(\d+)", part)
-            winrate_match = re.search(r"winrate\s+([\d.]+)", part)
-            score_match = re.search(r"scoreLead\s+(-?[\d.]+)", part)
+            # Use regex that supports scientific notation (e.g. 1.5e-2)
+            # winrate is typically positive but let's be robust
+            winrate_match = re.search(r"winrate\s+(-?[\d.]+(?:[eE][+-]?\d+)?)", part)
+            score_match = re.search(r"scoreLead\s+(-?[\d.]+(?:[eE][+-]?\d+)?)", part)
 
             if visits_match and winrate_match:
                 try:
@@ -513,8 +515,8 @@ class KataGoGTP:
         patterns = {
             "move": r"move\s+(\S+)",
             "visits": r"visits\s+(\d+)",
-            "winrate": r"winrate\s+([\d.]+)",
-            "scoreLead": r"scoreLead\s+(-?[\d.]+)",
+            "winrate": r"winrate\s+(-?[\d.]+(?:[eE][+-]?\d+)?)",
+            "scoreLead": r"scoreLead\s+(-?[\d.]+(?:[eE][+-]?\d+)?)",
         }
 
         values = {}

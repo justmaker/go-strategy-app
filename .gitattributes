@@ -1,6 +1,4 @@
-mobile/assets/data/opening_book_9x9.db.gz filter=lfs diff=lfs merge=lfs -text
-mobile/assets/data/opening_book_13x13.db.gz filter=lfs diff=lfs merge=lfs -text
-mobile/assets/data/opening_book_19x19.db.gz filter=lfs diff=lfs merge=lfs -text
+mobile/assets/data/opening_book_*.db.gz filter=lfs diff=lfs merge=lfs -text
 mobile/assets/katago/model.onnx filter=lfs diff=lfs merge=lfs -text
 mobile/assets/katago/model.bin filter=lfs diff=lfs merge=lfs -text
 mobile/assets/katago/model.bin.gz filter=lfs diff=lfs merge=lfs -text

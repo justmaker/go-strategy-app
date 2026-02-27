@@ -2,14 +2,11 @@
 library;
 
 import 'dart:io';
-import 'dart:typed_data';
-import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-// TODO: Uncomment when tflite_flutter is added
-// import 'package:tflite_flutter/tflite_flutter.dart';
+import 'package:tflite_flutter/tflite_flutter.dart';
 import '../../models/models.dart';
 import 'inference_engine.dart';
 
@@ -26,8 +23,7 @@ class TFLiteEngineImpl implements InferenceEngine {
   static const String _tag = '[TFLiteEngine]';
   static const String _modelAsset = 'assets/katago/model.tflite';
 
-  // TODO: Uncomment when tflite_flutter is available
-  // Interpreter? _interpreter;
+  Interpreter? _interpreter;
   bool _isRunning = false;
 
   @override
@@ -40,7 +36,7 @@ class TFLiteEngineImpl implements InferenceEngine {
   bool get isRunning => _isRunning;
 
   @override
-  Future<bool> start() async {
+  Future<bool> start({int boardSize = 19}) async {
     if (!isAvailable) {
       debugPrint('$_tag Not available on ${Platform.operatingSystem}');
       return false;
@@ -52,16 +48,18 @@ class TFLiteEngineImpl implements InferenceEngine {
       debugPrint('$_tag Loading TFLite model...');
 
       // TODO: Implement actual model loading
-      // final modelPath = await _extractModel();
-      // final options = InterpreterOptions()
-      //   ..addDelegate(NnApiDelegate()); // Hardware acceleration
-      // _interpreter = await Interpreter.fromFile(
-      //   File(modelPath),
-      //   options: options,
-      // );
+      final modelPath = await _extractModel();
+      final options = InterpreterOptions();
+      // if (Platform.isAndroid) {
+      //   options.addDelegate(NnApiDelegate()); // Hardware acceleration
+      // }
+      _interpreter = Interpreter.fromFile(
+        File(modelPath),
+        options: options,
+      );
 
-      // debugPrint('$_tag Model loaded: ${_interpreter!.getInputTensors()}');
-      // debugPrint('$_tag Outputs: ${_interpreter!.getOutputTensors()}');
+      debugPrint('$_tag Model loaded: ${_interpreter!.getInputTensors()}');
+      debugPrint('$_tag Outputs: ${_interpreter!.getOutputTensors()}');
 
       _isRunning = true;
       debugPrint('$_tag TFLite engine started with NNAPI');
@@ -76,7 +74,7 @@ class TFLiteEngineImpl implements InferenceEngine {
   Future<void> stop() async {
     if (!_isRunning) return;
 
-    // TODO: _interpreter?.close();
+    _interpreter?.close();
     _isRunning = false;
     debugPrint('$_tag Stopped');
   }

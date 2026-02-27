@@ -104,7 +104,9 @@ class AnalyzeRequest(BaseModel):
         default=19, description="Board size (9, 13, or 19)"
     )
     moves: List[str] = Field(
-        default=[], description="List of moves in GTP format (e.g., ['B Q16', 'W D4'])"
+        default=[],
+        max_length=600,
+        description="List of moves in GTP format (e.g., ['B Q16', 'W D4'])",
     )
     handicap: int = Field(
         default=0, ge=0, le=9, description="Number of handicap stones (0-9)"
@@ -113,7 +115,7 @@ class AnalyzeRequest(BaseModel):
         default=None, description="Komi value (default: 7.5, or 0.5 for handicap)"
     )
     visits: Optional[int] = Field(
-        default=None, ge=1, description="Override default visit count"
+        default=None, ge=1, le=100000, description="Override default visit count"
     )
     force_refresh: bool = Field(
         default=False, description="Bypass cache and force new analysis"
@@ -150,7 +152,9 @@ class QueryRequest(BaseModel):
     board_size: Literal[9, 13, 19] = Field(
         default=19, description="Board size (9, 13, or 19)"
     )
-    moves: List[str] = Field(default=[], description="List of moves in GTP format")
+    moves: List[str] = Field(
+        default=[], max_length=600, description="List of moves in GTP format"
+    )
     handicap: int = Field(
         default=0, ge=0, le=9, description="Number of handicap stones"
     )
@@ -269,13 +273,24 @@ state = AppState()
 # Lifespan Management
 # ============================================================================
 
+# Load config immediately to configure CORS
+try:
+    config = load_config()
+except Exception as e:
+    print(f"Warning: Failed to load config at startup: {e}")
+    # Initialize with default/empty config if possible or let it fail later
+    # For now we let it proceed, but CORS might be default if config is None
+    # Actually load_config raises error if not found.
+    # We re-raise to stop startup if config is missing
+    raise e
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle (startup/shutdown)."""
     # Startup
     print("Starting Go Strategy API...")
-    state.config = load_config()
+    state.config = config
 
     # Check for cache-only mode (no GPU/KataGo required)
     cache_only = os.environ.get("GO_API_CACHE_ONLY", "").lower() in ("1", "true", "yes")
@@ -328,7 +343,7 @@ REST API for Go (Weiqi/Baduk) position analysis powered by KataGo.
 # CORS middleware for cross-origin requests (Flutter web, etc.)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=config.server.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

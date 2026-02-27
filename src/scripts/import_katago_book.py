@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.board import coords_to_gtp, get_zobrist_hasher, GTP_COLUMNS
+from src.board import coords_to_gtp, get_zobrist_hasher
 from src.cache import MoveCandidate
 from src.config import load_config, get_db_path
 
@@ -170,21 +170,6 @@ def parse_moves_fallback(moves_str: str) -> List[Dict[str, Any]]:
 # ============================================================================
 # Coordinate Conversion
 # ============================================================================
-
-def katago_xy_to_gtp(x: int, y: int, board_size: int = 9) -> str:
-    """
-    Convert KataGo 0-indexed coordinates to GTP format.
-
-    KataGo uses (x, y) where:
-    - x is column (0 = left)
-    - y is row (0 = TOP, increases downward)
-
-    GTP uses columns A-J (skip I) and rows 1-N (1 = bottom).
-    """
-    col = GTP_COLUMNS[x]
-    row = board_size - y
-    return f"{col}{row}"
-
 
 def board_array_to_stones(board: List[int], board_size: int = 9) -> Dict[Tuple[int, int], str]:
     """
@@ -399,7 +384,7 @@ def import_katago_book(
 
                 # Use first coordinate (others are symmetric equivalents)
                 x, y = xy_coords[0]
-                gtp_coord = katago_xy_to_gtp(x, y, board_size)
+                gtp_coord = coords_to_gtp(x, y)
 
                 # KataGo book's 'wl' is always from White's perspective,
                 # in [-1, 1] range:
@@ -463,7 +448,7 @@ def import_katago_book(
                 # Calculate the move that leads to this child
                 x = board_idx % board_size
                 y = board_idx // board_size
-                gtp_coord = katago_xy_to_gtp(x, y, board_size)
+                gtp_coord = coords_to_gtp(x, y)
 
                 child_history = move_history + [(next_player, gtp_coord)]
 

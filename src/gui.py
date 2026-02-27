@@ -28,7 +28,7 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.board import BoardState
+from src.board import BoardState, gtp_to_coords, coords_to_gtp, GTP_COLUMNS
 from src.analyzer import GoAnalyzer
 from src.cache import MoveCandidate
 from src.sgf_handler import parse_sgf, create_sgf
@@ -91,48 +91,8 @@ def board_to_pixel_coords(col: int, row: int, board_size: int = 9) -> Tuple[int,
 # Coordinate Conversion (GTP format)
 # ============================================================================
 
-def gtp_to_coords(gtp_move: str, board_size: int) -> Tuple[int, int]:
-    """
-    Convert GTP coordinate (e.g., 'Q16') to (col, row) indices.
-    GTP: A-T (skip I), 1-19 from bottom-left
-    Returns: (x, y) where y=0 is BOTTOM (same as board.py)
-    """
-    if not gtp_move or gtp_move.upper() == "PASS":
-        return (-1, -1)
-    
-    col_letter = gtp_move[0].upper()
-    row_num = int(gtp_move[1:])
-    
-    # A=0, B=1, ..., H=7, J=8 (skip I)
-    if col_letter >= 'J':
-        col = ord(col_letter) - ord('A') - 1
-    else:
-        col = ord(col_letter) - ord('A')
-    
-    # GTP row 1 = y=0 (bottom), consistent with board.py
-    y = row_num - 1
-    
-    return (col, y)
-
-
-def coords_to_gtp(col: int, row: int, board_size: int) -> str:
-    """Convert (col, row) to GTP coordinate."""
-    # Skip 'I'
-    if col >= 8:
-        letter = chr(ord('A') + col + 1)
-    else:
-        letter = chr(ord('A') + col)
-    
-    # row is 0-based from bottom
-    number = row + 1
-    return f"{letter}{number}"
-
-
-def col_to_letter(col: int) -> str:
-    """Convert column index to letter (skip I)."""
-    if col >= 8:
-        return chr(ord('A') + col + 1)
-    return chr(ord('A') + col)
+# Use implementations from src.board to avoid duplication
+# gtp_to_coords and coords_to_gtp are imported from src.board
 
 
 # ============================================================================
@@ -245,7 +205,7 @@ def draw_board_pil(
     
     # Draw coordinate labels
     for i in range(board_size):
-        letter = col_to_letter(i)
+        letter = GTP_COLUMNS[i]
         row_num = str(board_size - i)
         
         x = BOARD_PADDING + i * CELL_SIZE
@@ -1101,7 +1061,7 @@ def main():
 
             if col >= 0 and row >= 0 and (col, row) not in board_obj.stones:
                 next_player = get_next_player(st.session_state.moves, st.session_state.handicap)
-                gtp_coord = coords_to_gtp(col, row, st.session_state.board_size)
+                gtp_coord = coords_to_gtp(col, row)
                 st.session_state.moves.append(f"{next_player} {gtp_coord}")
                 st.session_state.analysis_result = None
                 st.session_state.pending_analysis = True  # Trigger analysis on next render

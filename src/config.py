@@ -55,11 +55,18 @@ class DatabaseConfig:
 
 
 @dataclass
+class ServerConfig:
+    """Server configuration."""
+    allowed_origins: list[str] = field(default_factory=lambda: ["http://localhost:8501"])
+
+
+@dataclass
 class AppConfig:
     """Main application configuration."""
     katago: KataGoConfig
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
+    server: ServerConfig = field(default_factory=ServerConfig)
     
     def get_visits(self, board_size: int) -> int:
         """
@@ -168,11 +175,27 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
     db_config = DatabaseConfig(
         path=db_data.get("path", "data/analysis.db"),
     )
+
+    # Parse server config (optional, has defaults)
+    server_data = data.get("server", {})
+    allowed_origins = server_data.get("allowed_origins", [])
+
+    # Override with env var
+    env_origins = os.environ.get("GO_API_ALLOWED_ORIGINS")
+    if env_origins:
+        allowed_origins = [o.strip() for o in env_origins.split(",") if o.strip()]
+
+    # Set default if empty
+    if not allowed_origins:
+        allowed_origins = ["http://localhost:8501"]
+
+    server_config = ServerConfig(allowed_origins=allowed_origins)
     
     return AppConfig(
         katago=katago_config,
         analysis=analysis_config,
         database=db_config,
+        server=server_config,
     )
 
 

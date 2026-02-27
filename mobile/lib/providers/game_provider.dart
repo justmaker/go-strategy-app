@@ -45,7 +45,7 @@ class GameProvider extends ChangeNotifier {
   bool _openingBookLoaded = false;
 
   // Local engine state
-  bool _localEngineEnabled = true;
+  bool _localEngineEnabled = !kIsWeb;
   String? _engineError;
   AnalysisProgress? _analysisProgress;
   DesktopAnalysisProgress? _desktopAnalysisProgress;
@@ -455,7 +455,6 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final boardHash = _computeSimpleHash();
 
       // Test mode disabled - opening book works perfectly
       const bool FORCE_NATIVE_TEST = false;
@@ -488,20 +487,6 @@ class GameProvider extends ChangeNotifier {
         debugPrint('[TEST] === FORCING NATIVE ENGINE (SKIP OPENING BOOK) ===');
       }
 
-      // Step 2: Cache lookup disabled — only use opening book + live engine
-      // if (!forceRefresh) {
-      //   final cachedResult = await _cache.get(
-      //     boardHash: boardHash,
-      //     komi: _board.komi,
-      //   );
-      //   if (cachedResult != null) {
-      //     _lastAnalysis = cachedResult;
-      //     _lastAnalysisSource = AnalysisSource.localCache;
-      //     _isAnalyzing = false;
-      //     notifyListeners();
-      //     return;
-      //   }
-      // }
 
       // Step 3: Try local engine (Offline-first key principle)
       debugPrint('[GameProvider] Step 3: localEngineEnabled=$_localEngineEnabled, isAndroid=${!kIsWeb && Platform.isAndroid}');
@@ -536,8 +521,6 @@ class GameProvider extends ChangeNotifier {
 
           _lastAnalysis = result;
           _lastAnalysisSource = AnalysisSource.api;
-          // Cache save disabled
-          // await _cache.put(result);
           _isAnalyzing = false;
           notifyListeners();
           return;
@@ -600,8 +583,6 @@ class GameProvider extends ChangeNotifier {
       _lastAnalysisSource = AnalysisSource.localEngine;
       _isAnalyzing = false;
 
-      // Cache save disabled
-      // await _cache.put(_lastAnalysis!);
 
       notifyListeners();
       debugPrint('[GameProvider] Inference engine analysis complete');
@@ -632,8 +613,6 @@ class GameProvider extends ChangeNotifier {
         _analysisProgress = null;
         _isAnalyzing = false;
         
-        // Cache save disabled
-        // _cache.put(result);
         
         notifyListeners();
         if (!completer.isCompleted) completer.complete();
@@ -679,8 +658,6 @@ class GameProvider extends ChangeNotifier {
         _lastAnalysisSource = AnalysisSource.localEngine;
         _desktopAnalysisProgress = null;
         _isAnalyzing = false;
-        // Cache save disabled
-        // _cache.put(result);
         notifyListeners();
         if (!completer.isCompleted) completer.complete();
       },
