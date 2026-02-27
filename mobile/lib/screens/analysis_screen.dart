@@ -688,7 +688,10 @@ class _AnalysisView extends StatelessWidget {
 
                         for (final move in analysis.topMoves) {
                           // Only deduplicate exact same move coordinates
-                          if (!seenMoves.contains(move.move)) {
+                          // Filter out moves with < 1% winrate for either side
+                          if (!seenMoves.contains(move.move) &&
+                              move.winrate >= 0.01 &&
+                              move.winrate <= 0.99) {
                             seenMoves.add(move.move);
                             uniqueMoves.add(move);
                           }
@@ -712,7 +715,7 @@ class _AnalysisView extends StatelessWidget {
                           moveRanks[i] = currentRank;
                         }
 
-                        // Display all moves with grouped ranks
+                        // Display moves with grouped ranks
                         return uniqueMoves.asMap().entries.map((entry) {
                           final i = entry.key;
                           final move = entry.value;

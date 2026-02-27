@@ -54,7 +54,7 @@ class OpeningBookEntry {
 
 /// Service for managing bundled opening book data via SQLite
 class OpeningBookService {
-  static const int _bundledVersion = 4;
+  static const int _bundledVersion = 7;
   /// Per-board-size databases, lazily loaded on first query
   final Map<int, Database> _databases = {};
 
@@ -431,9 +431,8 @@ class OpeningBookService {
       injectIfMissing(const BoardPoint(2, 2), 0.96, 0.4);
     }
 
-    // Sort by visits (KataGo MCTS preference), but push clearly bad moves
-    // to the end. Winrate is stored from Black's perspective, so we need to
-    // know whose turn it is to determine "current player's winrate".
+    // Sort by current player's winrate (best moves first), with visits as
+    // tiebreaker. Winrate is stored from Black's perspective.
     final moveCount = entry.movesSequence.isEmpty
         ? 0
         : entry.movesSequence.split(';').length;
@@ -442,9 +441,13 @@ class OpeningBookService {
     expandedMoves.sort((a, b) {
       final aPlayerWr = isBlackTurn ? a.winrate : 1.0 - a.winrate;
       final bPlayerWr = isBlackTurn ? b.winrate : 1.0 - b.winrate;
-      final aGood = aPlayerWr > 0.3;
-      final bGood = bPlayerWr > 0.3;
-      if (aGood != bGood) return aGood ? -1 : 1;
+      // Primary: higher winrate first
+      final wrCmp = bPlayerWr.compareTo(aPlayerWr);
+      if (wrCmp != 0) return wrCmp;
+      // Secondary: higher score lead first (from Black's perspective, matching display)
+      final leadCmp = b.scoreLead.compareTo(a.scoreLead);
+      if (leadCmp != 0) return leadCmp;
+      // Tertiary: more visits first
       return b.visits.compareTo(a.visits);
     });
 

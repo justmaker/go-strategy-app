@@ -177,13 +177,12 @@ def katago_xy_to_gtp(x: int, y: int, board_size: int = 9) -> str:
 
     KataGo uses (x, y) where:
     - x is column (0 = left)
-    - y is row (0 = bottom in their visualization)
+    - y is row (0 = TOP, increases downward)
 
-    GTP uses columns A-J (skip I) and rows 1-9.
+    GTP uses columns A-J (skip I) and rows 1-N (1 = bottom).
     """
-    # For 9x9: A-J columns (skip I), so use first 9 letters of GTP_COLUMNS
     col = GTP_COLUMNS[x]
-    row = y + 1
+    row = board_size - y
     return f"{col}{row}"
 
 
@@ -402,30 +401,22 @@ def import_katago_book(
                 x, y = xy_coords[0]
                 gtp_coord = katago_xy_to_gtp(x, y, board_size)
 
-                # KataGo book's 'wl' is the CURRENT player's win-loss
-                # value in [-1, 1] range:
-                #   wl = 1.0  → current player wins 100%
-                #   wl = -1.0 → current player loses 100%
-                #   wl = 0.0  → 50-50
-                # 'ssM' is the score mean from the current player's perspective.
+                # KataGo book's 'wl' is always from White's perspective,
+                # in [-1, 1] range:
+                #   wl =  1.0 → White wins 100%
+                #   wl = -1.0 → Black wins 100%
+                # 'ssM' is the score mean from White's perspective.
                 #
                 # Convert to Black's win probability [0, 1]:
-                #   current_player_winrate = (1 + wl) / 2
+                #   Black winrate = (1 - wl) / 2
                 wl = move_data.get('wl', 0.0)
                 wl = max(-1.0, min(1.0, wl))  # Clamp to [-1, 1]
                 ssM = move_data.get('ssM', 0.0)
                 visits = int(move_data.get('v', 0))
 
                 # Our winrate is always from Black's perspective
-                if next_player == 'B':
-                    # Black is making the move; wl is Black's perspective
-                    winrate = (1.0 + wl) / 2.0
-                    score_lead = ssM
-                else:
-                    # White is making the move; wl is White's perspective
-                    # Black's winrate = 1 - White's = 1 - (1+wl)/2 = (1-wl)/2
-                    winrate = (1.0 - wl) / 2.0
-                    score_lead = -ssM
+                winrate = (1.0 - wl) / 2.0
+                score_lead = -ssM
 
                 top_moves.append(MoveCandidate(
                     move=gtp_coord,
