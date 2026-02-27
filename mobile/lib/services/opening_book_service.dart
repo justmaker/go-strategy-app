@@ -54,7 +54,7 @@ class OpeningBookEntry {
 
 /// Service for managing bundled opening book data via SQLite
 class OpeningBookService {
-  static const int _bundledVersion = 7;
+  static const int _bundledVersion = 10;
   /// Per-board-size databases, lazily loaded on first query
   final Map<int, Database> _databases = {};
 
@@ -570,7 +570,11 @@ class OpeningBookService {
     debugPrint(
         '[OpeningBook] Looking up: ${moves.length} moves, ${boardSize}x$boardSize');
 
-    // Try all 8 symmetry transformations
+    // Try all 8 symmetry transformations, pick the one with highest visits
+    int bestSymType = -1;
+    int bestVisits = -1;
+    List<MoveCandidate>? bestTopMoves;
+
     for (int type = 0; type < 8; type++) {
       final tMoves =
           moves.map((m) => _transformGtp(m, boardSize, type)).toList();
@@ -591,49 +595,57 @@ class OpeningBookService {
 
         if (results.isNotEmpty) {
           final row = results.first;
-          debugPrint('[OpeningBook] HIT on symmetry $type');
-
-          final topMoves =
-              _parseCompactTopMoves(row['top_moves'] as String);
           final visits = row['visits'] as int;
+          debugPrint('[OpeningBook] HIT on symmetry $type (visits=$visits)');
 
-          // Inverse-transform result moves back to original orientation
-          final inverseType = _getInverseSymmetry(type);
-          final transformedMoves = topMoves.map((m) {
-            final tMove = _transformGtp(m.move, boardSize, inverseType);
-            return MoveCandidate(
-              move: tMove,
-              winrate: m.winrate,
-              scoreLead: m.scoreLead,
-              visits: m.visits,
-            );
-          }).toList();
-
-          final entry = OpeningBookEntry(
-            hash: '',
-            boardSize: boardSize,
-            komi: komi,
-            movesSequence: moves.join(';'),
-            topMoves: transformedMoves,
-            visits: visits,
-          );
-
-          final finalEntry = _expandSymmetryWithMoves(entry, moves);
-
-          return AnalysisResult(
-            boardHash: '',
-            boardSize: boardSize,
-            komi: komi,
-            movesSequence: moves.join(';'),
-            topMoves: finalEntry.topMoves,
-            engineVisits: finalEntry.visits,
-            modelName: 'bundled_opening_book (sym$type)',
-            fromCache: true,
-          );
+          if (visits > bestVisits) {
+            bestVisits = visits;
+            bestSymType = type;
+            bestTopMoves =
+                _parseCompactTopMoves(row['top_moves'] as String);
+          }
         }
       } catch (e) {
         debugPrint('[OpeningBook] Query error on sym$type: $e');
       }
+    }
+
+    if (bestTopMoves != null) {
+      debugPrint('[OpeningBook] Best match: symmetry $bestSymType (visits=$bestVisits)');
+
+      // Inverse-transform result moves back to original orientation
+      final inverseType = _getInverseSymmetry(bestSymType);
+      final transformedMoves = bestTopMoves.map((m) {
+        final tMove = _transformGtp(m.move, boardSize, inverseType);
+        return MoveCandidate(
+          move: tMove,
+          winrate: m.winrate,
+          scoreLead: m.scoreLead,
+          visits: m.visits,
+        );
+      }).toList();
+
+      final entry = OpeningBookEntry(
+        hash: '',
+        boardSize: boardSize,
+        komi: komi,
+        movesSequence: moves.join(';'),
+        topMoves: transformedMoves,
+        visits: bestVisits,
+      );
+
+      final finalEntry = _expandSymmetryWithMoves(entry, moves);
+
+      return AnalysisResult(
+        boardHash: '',
+        boardSize: boardSize,
+        komi: komi,
+        movesSequence: moves.join(';'),
+        topMoves: finalEntry.topMoves,
+        engineVisits: finalEntry.visits,
+        modelName: 'bundled_opening_book (sym$bestSymType)',
+        fromCache: true,
+      );
     }
 
     debugPrint('[OpeningBook] MISS after checking all symmetries');

@@ -337,8 +337,17 @@ class _BoardPainter extends CustomPainter {
       moveRanks[i] = currentRank;
     }
 
-    int drawnCount = 0;
-    const maxSuggestionsOnBoard = 10;
+    // Count how many moves per rank to decide which ranks to show
+    final movesPerRank = <int, int>{};
+    for (final entry in moveRanks.entries) {
+      movesPerRank[entry.value] = (movesPerRank[entry.value] ?? 0) + 1;
+    }
+
+    // Show all top 3 ranks (symmetry ensures complete groups)
+    int maxRankToShow = 0;
+    for (int rank = 1; rank <= 3; rank++) {
+      if ((movesPerRank[rank] ?? 0) > 0) maxRankToShow = rank;
+    }
 
     for (int i = 0; i < filtered.length; i++) {
       final suggestion = filtered[i];
@@ -350,9 +359,8 @@ class _BoardPainter extends CustomPainter {
 
       final displayRank = moveRanks[i]!;
 
-      // Only show top 3 ranks on the board, and cap total to avoid clutter
-      if (displayRank > 3) continue;
-      if (drawnCount >= maxSuggestionsOnBoard) continue;
+      // Only show complete rank groups (never cut a rank in half)
+      if (displayRank > maxRankToShow) continue;
 
       // Determine color based on rank
       // Rank 1: Blue (Best), Rank 2: Green (Good), Rank 3: Orange
@@ -401,7 +409,6 @@ class _BoardPainter extends CustomPainter {
         Offset(x - textPainter.width / 2, y - textPainter.height / 2),
       );
 
-      drawnCount++;
     }
   }
 

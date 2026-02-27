@@ -71,6 +71,7 @@ katago-onnx-mobile/
    - ✅ Android ONNX inference (96 次推論，0 error)
    - ✅ iOS ONNX inference (8+ 次推論，19x19 + 13x13 切換正常)
    - ✅ iOS 記憶體問題：Signal 9 (SIGKILL) — 拆分 DB + streaming 解壓修復
+   - ✅ iPad 實機 debug mode 部署驗證（opening book + ONNX 推論正常）
    - ⬜ Plugin example app 獨立 build 測試
 
 **Plugin repo**: `https://github.com/justmaker/katago-onnx-mobile`
@@ -121,6 +122,23 @@ python3 -m src.scripts.build_opening_book_parallel \
 ---
 
 ## 已完成
+
+### 全棋盤 Opening Book 啟用 + 顯示優化 (2026-02-27)
+
+**問題**: 13x13/19x19 opening book 被限制為 9x9-only，ONNX 單次推理在大棋盤效果極差。此外 ONNX 引擎返回大量 0% 勝率的垃圾手淹沒棋盤。
+
+**修正**:
+1. `game_provider.dart`: 移除 `_board.size == 9` 限制，所有棋盤大小都使用 opening book
+2. `go_board_widget.dart`: 過濾勝率 < 1% 或 > 99% 的手，棋盤建議上限 10
+3. `analysis_screen.dart`: 列表同樣過濾 0% 勝率手
+4. `opening_book_service.dart`: 排序改為 winrate → score lead (Black 視角) → visits 三級排序
+
+**驗證結果**:
+- 13x13 空盤: 16 個推薦手，四角完全對稱（K10/K4/D4/D10 各 25.0%）
+- 19x19 空盤: 24 個推薦手，四角完全對稱（Q16/Q4/D4/D16 各 37.1%）
+- iPad 實機 debug mode 部署成功
+
+---
 
 ### 9x9 Opening Book 資料全面修正 (2026-02-27)
 
