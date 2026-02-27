@@ -460,8 +460,8 @@ class GameProvider extends ChangeNotifier {
       // Test mode disabled - opening book works perfectly
       const bool FORCE_NATIVE_TEST = false;
 
-      // Step 1: Try bundled opening book first (9x9 only — 13x13/19x19 data too sparse)
-      if (!FORCE_NATIVE_TEST && !forceRefresh && _openingBookLoaded && _board.size == 9) {
+      // Step 1: Try bundled opening book first
+      if (!FORCE_NATIVE_TEST && !forceRefresh && _openingBookLoaded) {
         final bookResult = await _openingBook.lookupByMoves(
           _board.size,
           _board.komi,
