@@ -46,3 +46,39 @@ UI 提供兩個滑桿來控制分析行為：
 ## 4. 防呆與規則
 - **打劫 (KO)**: 必須包含在 Hash 計算中，防止在打劫點循環分析。
 - **Pass 處理**: 連續兩次 Pass 應停止分析。
+
+## 5. Move Ranking Architecture
+
+### 5.1 資料流
+1. Service layer → 產生 `List<MoveCandidate>`（按 winrate 排序）
+2. `MoveRanking.rank()` → 依 signature 分群賦予 1-based rank → `List<RankedMove>`
+3. Display layers（board widget、analysis panel）→ 消費 `RankedMove`，不做排名計算
+
+`RankedMove` 是 wrapper class，不修改 `MoveCandidate`。Rank 是暫態 display state，不參與持久化。
+
+### 5.2 Board Symmetry
+`utils/board_symmetry.dart`：純幾何工具，8 種對稱變換（4 旋轉 + 4 鏡射）。
+
+| Method | 用途 |
+|--------|------|
+| `transformPoint` | 座標變換 |
+| `inverseSymmetry` | 取得反變換 type |
+| `transformGtp` | GTP 字串變換（支援 "B Q16" 和 "B[Q16]"） |
+| `validSymmetries` | 計算保持棋子位置不變的有效對稱 |
+
+用途：DB 查詢（變換 query）、結果展開（變換 result）。
+
+### 5.3 Standard Openings
+`utils/standard_openings.dart`：空盤開局注入。
+
+在空盤時注入 hoshi (4-4)、komoku (3-4)、san-san (3-3) 的對稱等價點，
+使用 calibrated winrate ratio（1.02, 0.98, 0.96）形成不同 rank group。
+
+| 棋盤大小 | 注入內容 |
+|----------|---------|
+| 9x9 | komoku + san-san |
+| 13x13, 19x19 | hoshi + komoku + san-san |
+
+### 5.4 Ranking 一致性保證
+棋盤 widget 和分析面板都透過 `MoveRanking.rank()` 計算 rank，
+確保同一 move 在兩處的 rank 數字完全一致。
