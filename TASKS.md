@@ -100,8 +100,8 @@ katago-onnx-mobile/
 | Board Size | Entries | Depth | Visits | 說明 |
 |------------|---------|-------|--------|------|
 | 9x9 | 1,519,000 | 0-18 | 90K+ avg | KataGo 官方 book，已完成 |
-| 13x13 | 139,235 | 0-14 | 500 | b18c384 模型 |
-| 19x19 | 404,473 | 0-14 | 500 | b18c384 模型，淺層已補強 |
+| 13x13 | 345,055 | 0-15 | 500 | b18c384 模型 |
+| 19x19 | 1,071,874 | 0-15 | 500 | b18c384 模型，淺層已補強 |
 
 可繼續擴充 depth 15+，需在 GPU server 上執行：
 ```bash
@@ -122,6 +122,26 @@ python3 -m src.scripts.build_opening_book_parallel \
 ---
 
 ## 已完成
+
+### Opening Book 職責分離重構 (2026-02-27)
+
+**PR**: #23
+
+**問題**: `opening_book_service.dart`（706 行）混合 5 種職責，ranking 邏輯在 3 個地方重複實作（service、board widget、analysis screen），導致反覆出現的不一致 bug。
+
+**修正**:
+1. **`utils/board_symmetry.dart`** (127 行): 純 8-way 對稱數學（transformPoint, inverseSymmetry, transformGtp, validSymmetries）
+2. **`utils/standard_openings.dart`** (76 行): 空盤開局注入（hoshi/komoku/san-san + calibrated winrate ratio）
+3. **`utils/move_ranking.dart`** (64 行): `RankedMove` wrapper + `MoveRanking.rank()` — 排名的**單一真相來源**
+4. **`opening_book_service.dart`** (706→555 行): 瘦身，改用新模組
+5. **`go_board_widget.dart`**: 用 `MoveRanking.rank()` 取代手動 signature grouping
+6. **`analysis_screen.dart`**: 同上
+
+**新增測試**: 30 個單元測試（對稱變換、開局注入、排名一致性），包含 board-panel consistency 迴歸測試。
+
+**文件**: `docs/spec/LOGIC.md` 新增 Move Ranking Architecture 章節。
+
+---
 
 ### 全棋盤 Opening Book 啟用 + 顯示優化 (2026-02-27)
 
