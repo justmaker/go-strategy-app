@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/models.dart';
 import '../utils/utils.dart';
+import 'db_helper/db_helper.dart';
 
 // Conditional import for FFI (desktop only, not web)
 import 'cache_service_ffi_stub.dart'
@@ -87,13 +88,13 @@ class OpeningBookService {
   Future<void> load() async {
     if (_isLoaded) return;
 
-    if (kIsWeb) {
-      _loadError = 'SQLite not supported on web';
-      return;
-    }
-
     try {
-      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      if (kIsWeb) {
+        // Web: use DbHelper for SQLite (sqflite_common_ffi_web)
+        await dbHelper.init();
+        _dbBasePath = await dbHelper.getDatabasesPath();
+        _ffiInitialized = true;
+      } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
         if (!_ffiInitialized) {
           initFfiDatabase();
           _ffiInitialized = true;
@@ -122,6 +123,9 @@ class OpeningBookService {
   Future<void> _ensureBoardSizeLoaded(int boardSize) async {
     if (_databases.containsKey(boardSize)) return;
 
+    // Skip 9x9 on web (152MB compressed, too large for browser)
+    if (kIsWeb && boardSize == 9) return;
+
     // Prevent concurrent loads for the same board size
     if (_loadingFutures.containsKey(boardSize)) {
       await _loadingFutures[boardSize];
@@ -140,17 +144,26 @@ class OpeningBookService {
   Future<void> _loadBoardSize(int boardSize) async {
     if (_dbBasePath == null) return;
 
-    final dbPath = p.join(_dbBasePath!, _dbFileName(boardSize));
+    final dbPath = kIsWeb
+        ? _dbFileName(boardSize) // Web: flat path under '/'
+        : p.join(_dbBasePath!, _dbFileName(boardSize));
     final sw = Stopwatch()..start();
 
     debugPrint('[OpeningBook] Loading ${boardSize}x$boardSize DB...');
 
     await _extractAssetIfNeeded(boardSize, dbPath);
 
-    final file = File(dbPath);
-    if (!await file.exists() || await file.length() < 1024) {
-      debugPrint('[OpeningBook] DB file not found for ${boardSize}x$boardSize');
-      return;
+    if (kIsWeb) {
+      if (!await dbHelper.databaseExists(dbPath)) {
+        debugPrint('[OpeningBook] DB file not found for ${boardSize}x$boardSize');
+        return;
+      }
+    } else {
+      final file = File(dbPath);
+      if (!await file.exists() || await file.length() < 1024) {
+        debugPrint('[OpeningBook] DB file not found for ${boardSize}x$boardSize');
+        return;
+      }
     }
 
     final db = await openDatabase(dbPath, readOnly: false);
@@ -166,6 +179,27 @@ class OpeningBookService {
 
   /// Extract a board-size-specific asset if not already present or outdated
   Future<void> _extractAssetIfNeeded(int boardSize, String targetPath) async {
+    if (kIsWeb) {
+      // Web: check version via SharedPreferences (no dart:io File access)
+      final versionStr = await dbHelper.readStringFile('$targetPath.version');
+      final currentVersion = int.tryParse(versionStr ?? '') ?? 0;
+      if (await dbHelper.databaseExists(targetPath) &&
+          currentVersion >= _bundledVersion) {
+        debugPrint(
+            '[OpeningBook] Web: ${boardSize}x$boardSize DB exists, version $currentVersion');
+        return;
+      }
+      try {
+        await _extractAssetWeb(boardSize, targetPath);
+        await dbHelper.writeStringFile(
+            '$targetPath.version', _bundledVersion.toString());
+      } catch (e) {
+        debugPrint(
+            '[OpeningBook] Web extraction failed for ${boardSize}x$boardSize: $e');
+      }
+      return;
+    }
+
     final targetFile = File(targetPath);
     final versionFile = File('$targetPath.version');
 
@@ -195,6 +229,20 @@ class OpeningBookService {
     } catch (e) {
       debugPrint('[OpeningBook] Extraction failed for ${boardSize}x$boardSize: $e');
     }
+  }
+
+  /// Extract and decompress a gzipped asset for Web platform.
+  /// Uses rootBundle + GZipCodec + dbHelper.writeDatabaseBytes.
+  Future<void> _extractAssetWeb(int boardSize, String targetPath) async {
+    final assetPath = _assetPath(boardSize);
+    debugPrint('[OpeningBook] Web: extracting $assetPath...');
+    final data = await rootBundle.load(assetPath);
+    final gzBytes = data.buffer.asUint8List();
+    final decompressed = GZipCodec().decode(gzBytes);
+    await dbHelper.writeDatabaseBytes(targetPath, decompressed);
+    debugPrint(
+        '[OpeningBook] Web: extracted ${boardSize}x$boardSize '
+        '(${decompressed.length} bytes)');
   }
 
   /// Stream-decompress a gzipped asset to a target file.
