@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import '../models/models.dart';
+import '../utils/utils.dart';
 
 /// Configuration for board appearance
 class BoardTheme {
@@ -311,36 +312,13 @@ class _BoardPainter extends CustomPainter {
   void _drawSuggestions(Canvas canvas, double padding, double cellSize) {
     if (suggestions == null || suggestions!.isEmpty) return;
 
-    // Filter out moves with < 1% winrate for the current player
-    final filtered = suggestions!.where((m) {
-      final playerWr = m.winrate;  // stored from Black's perspective
-      // Keep if either side has >= 1% (i.e., not a 0% garbage move)
-      return playerWr >= 0.01 && playerWr <= 0.99;
-    }).toList();
-
-    if (filtered.isEmpty) return;
-
-    // Pre-calculate display ranks to group equivalent moves
-    final moveRanks = <int, int>{}; // index -> displayRank
-    int currentRank = 0;
-    String? lastSignature;
-
-    for (int i = 0; i < filtered.length; i++) {
-      final move = filtered[i];
-      // Use the same signature logic as the list to group equivalent moves
-      final signature = '${move.winratePercent}_${move.scoreLeadFormatted}';
-
-      if (signature != lastSignature) {
-        currentRank++;
-        lastSignature = signature;
-      }
-      moveRanks[i] = currentRank;
-    }
+    final rankedMoves = MoveRanking.rank(suggestions!);
+    if (rankedMoves.isEmpty) return;
 
     // Count how many moves per rank to decide which ranks to show
     final movesPerRank = <int, int>{};
-    for (final entry in moveRanks.entries) {
-      movesPerRank[entry.value] = (movesPerRank[entry.value] ?? 0) + 1;
+    for (final rm in rankedMoves) {
+      movesPerRank[rm.rank] = (movesPerRank[rm.rank] ?? 0) + 1;
     }
 
     // Show all top 3 ranks (symmetry ensures complete groups)
@@ -349,18 +327,14 @@ class _BoardPainter extends CustomPainter {
       if ((movesPerRank[rank] ?? 0) > 0) maxRankToShow = rank;
     }
 
-    for (int i = 0; i < filtered.length; i++) {
-      final suggestion = filtered[i];
-      final gtpPoint = BoardPoint.fromGtp(suggestion.move, board.size);
+    for (final rm in rankedMoves) {
+      if (rm.rank > maxRankToShow) continue;
+
+      final gtpPoint = BoardPoint.fromGtp(rm.candidate.move, board.size);
       if (gtpPoint == null) continue;
 
       // Convert GTP coordinates to display coordinates for rendering
       final point = gtpPoint.toDisplayCoords(board.size);
-
-      final displayRank = moveRanks[i]!;
-
-      // Only show complete rank groups (never cut a rank in half)
-      if (displayRank > maxRankToShow) continue;
 
       // Determine color based on rank
       // Rank 1: Blue (Best), Rank 2: Green (Good), Rank 3: Orange
@@ -370,7 +344,7 @@ class _BoardPainter extends CustomPainter {
         Colors.orange,      // Rank 3
       ];
 
-      final colorIndex = (displayRank - 1).clamp(0, rankColors.length - 1);
+      final colorIndex = (rm.rank - 1).clamp(0, rankColors.length - 1);
       final color = rankColors[colorIndex];
 
       final x = padding + point.x * cellSize;
@@ -393,7 +367,7 @@ class _BoardPainter extends CustomPainter {
       // Draw rank number (using the grouped rank)
       final textPainter = TextPainter(
         text: TextSpan(
-          text: '$displayRank',
+          text: '${rm.rank}',
           style: TextStyle(
             color: Colors.white,
             fontSize: (cellSize * 0.45).clamp(10.0, 18.0),
@@ -408,7 +382,6 @@ class _BoardPainter extends CustomPainter {
         canvas,
         Offset(x - textPainter.width / 2, y - textPainter.height / 2),
       );
-
     }
   }
 

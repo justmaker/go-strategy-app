@@ -6,13 +6,13 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/models.dart';
+import '../utils/utils.dart';
 
 // Conditional import for FFI (desktop only, not web)
 import 'cache_service_ffi_stub.dart'
@@ -299,40 +299,6 @@ class OpeningBookService {
     return '$boardSize:$komi:$movesSequence';
   }
 
-  /// Compute which symmetry transforms preserve the given stone positions.
-  List<int> _computeValidSymmetries(int size, List<String> moves) {
-    if (moves.isEmpty) {
-      return [0, 1, 2, 3, 4, 5, 6, 7];
-    }
-
-    final stones = <Point<int>>[];
-    for (final move in moves) {
-      final parts = move.split(' ');
-      if (parts.length != 2) continue;
-      final point = BoardPoint.fromGtp(parts[1], size);
-      if (point != null) {
-        stones.add(Point(point.x, point.y));
-      }
-    }
-
-    final validSymmetries = <int>[];
-    for (int type = 0; type < 8; type++) {
-      bool isValid = true;
-      for (final stone in stones) {
-        final transformed = _transformPoint(stone.x, stone.y, size, type);
-        if (transformed.x != stone.x || transformed.y != stone.y) {
-          isValid = false;
-          break;
-        }
-      }
-      if (isValid) {
-        validSymmetries.add(type);
-      }
-    }
-
-    return validSymmetries.isEmpty ? [0] : validSymmetries;
-  }
-
   /// Expand moves using symmetry for display
   OpeningBookEntry _expandSymmetryWithMoves(
       OpeningBookEntry entry, List<String> existingMoves) {
@@ -340,7 +306,7 @@ class OpeningBookService {
     final expandedMoves = <MoveCandidate>[];
     final seenMoves = <String>{};
 
-    final validSymmetries = _computeValidSymmetries(size, existingMoves);
+    final validSymmetries = BoardSymmetry.validSymmetries(size, existingMoves);
 
     final occupiedPositions = <String>{};
     for (final move in existingMoves) {
@@ -372,7 +338,7 @@ class OpeningBookService {
 
       for (final symType in validSymmetries) {
         final transformed =
-            _transformPoint(point.x, point.y, size, symType);
+            BoardSymmetry.transformPoint(point.x, point.y, size, symType);
         addCandidate(transformed.x, transformed.y, move);
       }
     }
@@ -381,54 +347,12 @@ class OpeningBookService {
     if (entry.movesSequence.isEmpty &&
         (size == 9 || size == 13 || size == 19) &&
         entry.topMoves.isNotEmpty) {
-      final bestMove = entry.topMoves.first;
-
-      void injectIfMissing(
-          BoardPoint basePoint, double winrateRatio, double scoreDrop) {
-        final candidate = MoveCandidate(
-          move: basePoint.toGtp(size),
-          winrate: bestMove.winrate * winrateRatio,
-          scoreLead: bestMove.scoreLead - scoreDrop,
-          visits: (bestMove.visits * 0.8).round(),
-        );
-
-        final x = basePoint.x;
-        final y = basePoint.y;
-
-        final candidatesToAdd = [
-          BoardPoint(x, y),
-          BoardPoint(size - 1 - x, y),
-          BoardPoint(x, size - 1 - y),
-          BoardPoint(size - 1 - x, size - 1 - y),
-          BoardPoint(y, x),
-          BoardPoint(y, size - 1 - x),
-          BoardPoint(size - 1 - y, x),
-          BoardPoint(size - 1 - y, size - 1 - x),
-        ];
-
-        for (final pt in candidatesToAdd) {
-          final s = pt.toGtp(size);
-          if (!seenMoves.contains(s)) {
-            seenMoves.add(s);
-            expandedMoves.add(MoveCandidate(
-              move: s,
-              winrate: candidate.winrate,
-              scoreLead: candidate.scoreLead,
-              visits: candidate.visits,
-            ));
-          }
-        }
-      }
-
-      // 4-4 star point (hoshi) — standard opening for 13x13 and 19x19
-      // Use slightly higher winrate than DB komoku to form a separate rank
-      if (size >= 13) {
-        injectIfMissing(const BoardPoint(3, 3), 1.02, -0.1);
-      }
-      // 3-4 komoku
-      injectIfMissing(const BoardPoint(2, 3), 0.98, 0.2);
-      // 3-3 san-san
-      injectIfMissing(const BoardPoint(2, 2), 0.96, 0.4);
+      StandardOpenings.inject(
+        boardSize: size,
+        bestMove: entry.topMoves.first,
+        expandedMoves: expandedMoves,
+        seenMoves: seenMoves,
+      );
     }
 
     // Sort by current player's winrate (best moves first), with visits as
@@ -463,80 +387,6 @@ class OpeningBookService {
 
   OpeningBookEntry _expandSymmetry(OpeningBookEntry entry) {
     return _expandSymmetryWithMoves(entry, []);
-  }
-
-  /// Transform a GTP move string based on symmetry type (0-7)
-  String _transformGtp(String move, int boardSize, int type) {
-    if (move == 'pass' || move.isEmpty) return move;
-
-    String? color;
-    String coordStr;
-
-    if (move.contains('[')) {
-      final parts = move.split('[');
-      color = parts[0];
-      coordStr = parts[1].replaceAll(']', '');
-    } else {
-      final parts = move.split(' ');
-      if (parts.length == 2) {
-        color = parts[0];
-        coordStr = parts[1];
-      } else {
-        coordStr = move;
-      }
-    }
-
-    final point = BoardPoint.fromGtp(coordStr, boardSize);
-    if (point == null) return move;
-
-    final tPoint = _transformPoint(point.x, point.y, boardSize, type);
-    final tCoord =
-        BoardPoint(tPoint.x.toInt(), tPoint.y.toInt()).toGtp(boardSize);
-
-    if (color != null) {
-      if (move.contains('[')) {
-        return '$color[$tCoord]';
-      } else {
-        return '$color $tCoord';
-      }
-    }
-    return tCoord;
-  }
-
-  /// Transform coordinates (0-indexed)
-  Point<int> _transformPoint(int x, int y, int size, int type) {
-    switch (type) {
-      case 0:
-        return Point(x, y);
-      case 1:
-        return Point(y, size - 1 - x);
-      case 2:
-        return Point(size - 1 - x, size - 1 - y);
-      case 3:
-        return Point(size - 1 - y, x);
-      case 4:
-        return Point(size - 1 - x, y);
-      case 5:
-        return Point(x, size - 1 - y);
-      case 6:
-        return Point(y, x);
-      case 7:
-        return Point(size - 1 - y, size - 1 - x);
-      default:
-        return Point(x, y);
-    }
-  }
-
-  /// Get the inverse symmetry type
-  int _getInverseSymmetry(int type) {
-    switch (type) {
-      case 1:
-        return 3;
-      case 3:
-        return 1;
-      default:
-        return type;
-    }
   }
 
   /// Parse compact top_moves JSON from SQLite: [{m, w, s, v}, ...]
@@ -577,7 +427,7 @@ class OpeningBookService {
 
     for (int type = 0; type < 8; type++) {
       final tMoves =
-          moves.map((m) => _transformGtp(m, boardSize, type)).toList();
+          moves.map((m) => BoardSymmetry.transformGtp(m, boardSize, type)).toList();
 
       // Build the moves_sequence string matching DB format: "B[Q16];W[D4]"
       final movesSequence = tMoves.map((m) {
@@ -614,9 +464,9 @@ class OpeningBookService {
       debugPrint('[OpeningBook] Best match: symmetry $bestSymType (visits=$bestVisits)');
 
       // Inverse-transform result moves back to original orientation
-      final inverseType = _getInverseSymmetry(bestSymType);
+      final inverseType = BoardSymmetry.inverseSymmetry(bestSymType);
       final transformedMoves = bestTopMoves.map((m) {
-        final tMove = _transformGtp(m.move, boardSize, inverseType);
+        final tMove = BoardSymmetry.transformGtp(m.move, boardSize, inverseType);
         return MoveCandidate(
           move: tMove,
           winrate: m.winrate,

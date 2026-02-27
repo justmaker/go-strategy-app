@@ -12,6 +12,7 @@ import '../config.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/services.dart';
+import '../utils/utils.dart';
 import '../widgets/widgets.dart';
 import 'settings_screen.dart';
 import '../models/game_record.dart' as record;
@@ -681,47 +682,19 @@ class _AnalysisView extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       ...() {
-                        // Show all moves without limitation
-                        // Go players understand symmetry, so seeing all equivalent moves is informative
+                        // Deduplicate by move coordinate for the list view
                         final uniqueMoves = <MoveCandidate>[];
                         final seenMoves = <String>{};
-
                         for (final move in analysis.topMoves) {
-                          // Only deduplicate exact same move coordinates
-                          // Filter out moves with < 1% winrate for either side
-                          if (!seenMoves.contains(move.move) &&
-                              move.winrate >= 0.01 &&
-                              move.winrate <= 0.99) {
+                          if (!seenMoves.contains(move.move)) {
                             seenMoves.add(move.move);
                             uniqueMoves.add(move);
                           }
                         }
 
-                        // Calculate display ranks based on winrate grouping
-                        // This matches the logic in go_board_widget.dart
-                        final moveRanks = <int, int>{}; // index -> displayRank
-                        int currentRank = 0;
-                        String? lastSignature;
-
-                        for (int i = 0; i < uniqueMoves.length; i++) {
-                          final move = uniqueMoves[i];
-                          // Group by winrate and scoreLead signature
-                          final signature = '${move.winratePercent}_${move.scoreLeadFormatted}';
-
-                          if (signature != lastSignature) {
-                            currentRank++;
-                            lastSignature = signature;
-                          }
-                          moveRanks[i] = currentRank;
-                        }
-
-                        // Display moves with grouped ranks
-                        return uniqueMoves.asMap().entries.map((entry) {
-                          final i = entry.key;
-                          final move = entry.value;
-                          final displayRank = moveRanks[i]!;
-                          return _MoveRow(rank: displayRank, move: move);
-                        });
+                        final rankedMoves = MoveRanking.rank(uniqueMoves);
+                        return rankedMoves.map((rm) =>
+                            _MoveRow(rank: rm.rank, move: rm.candidate));
                       }(),
                     ],
                   ),
