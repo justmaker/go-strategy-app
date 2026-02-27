@@ -70,7 +70,7 @@ katago-onnx-mobile/
    - ✅ macOS build (808.5MB)
    - ✅ Android ONNX inference (96 次推論，0 error)
    - ✅ iOS ONNX inference (8+ 次推論，19x19 + 13x13 切換正常)
-   - ⬠iOS 記憶體問題：Signal 9 (SIGKILL)，opening_book.db 過大
+   - ✅ iOS 記憶體問題：Signal 9 (SIGKILL) — 拆分 DB + streaming 解壓修復
    - ⬜ Plugin example app 獨立 build 測試
 
 **Plugin repo**: `https://github.com/justmaker/katago-onnx-mobile`
@@ -121,6 +121,35 @@ python3 -m src.scripts.build_opening_book_parallel \
 ---
 
 ## 已完成
+
+### 9x9 Opening Book 資料全面修正 (2026-02-27)
+
+**問題**: 9x9 opening book 的第一步看似正確，但第二步以後資料完全錯誤 — 邊角手排在最前面，勝率不合理。
+
+**根本原因** (多個 bug):
+1. **wl 視角錯誤**: KataGo book 的 `wl` 永遠是 White 視角，但 import script 在 Black/White 回合用了不同公式，其中一個是錯的
+2. **Y 軸座標反轉**: `katago_xy_to_gtp` 用 `row = y + 1`，但 KataGo 的 y=0 是棋盤上方（非下方），正確應為 `row = board_size - y`
+3. **偶數/奇數 depth 不對稱**: 全面套用 `1 - winrate` 修正了偶數 depth（Black to play），但破壞了原本正確的奇數 depth（White to play）
+
+**修正**:
+1. `import_katago_book.py`:
+   - wl 統一用 `(1 - wl) / 2` 計算 Black winrate（不分 B/W 回合）
+   - Y 軸改為 `row = board_size - y`
+2. `opening_book_9x9.db.gz`: 三階段 DB migration 修正 3,201,154 筆資料
+   - Phase 1: 全面 `1 - winrate` 修正偶數 depth
+   - Phase 2: Y 軸座標翻轉 `new_row = 10 - old_row`
+   - Phase 3: 奇數 depth 再次 `1 - winrate` 恢復原始正確值
+3. `opening_book_service.dart`:
+   - `_bundledVersion` 4→7，強制 app 重新解壓
+   - 排序改為 winrate → score lead → visits 三級排序
+4. 顯示優化:
+   - `go_board_widget.dart`: 過濾勝率 < 1% 的手，棋盤建議上限 10
+   - `analysis_screen.dart`: 列表同樣過濾 0% 勝率手
+
+**驗證結果**:
+- Depth 0: F6 Black=48.4%、E5=48.2%（合理，7.5 komi 下 Black 略劣）
+- Depth 1: F5 Black=49.5%、E6=49.5%（合理，White 最佳回應接近均勢）
+- Depth 2-5: 全部通過合理性檢查
 
 ### macOS Google Sign-In 修復 (2026-02-19)
 
@@ -215,6 +244,8 @@ python3 -m src.scripts.build_opening_book_parallel \
 1. `import_katago_book.py`: `winrate = wl`（不再反轉）、`score_lead = -ssM`
 2. `opening_book.db.gz`: 修正 1,519,000 筆 9x9 資料
 3. `opening_book_service.dart`: 版本號 1→2，強制 app 重新解壓
+
+**後續**: 此修正只解決了第一步（depth 0）的問題，第二步以後仍有 bug，已在 2026-02-27 全面修正（見上方）
 
 ### iOS KataGo ONNX 即時進度更新 (2026-02-17)
 
