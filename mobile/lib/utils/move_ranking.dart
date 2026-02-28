@@ -32,11 +32,15 @@ class MoveRanking {
     double minWinrate = 0.01,
     double maxWinrate = 0.99,
   }) {
-    final filtered = moves.where((m) {
+    var filtered = moves.where((m) {
       return m.winrate >= minWinrate && m.winrate <= maxWinrate;
     }).toList();
 
-    if (filtered.isEmpty) return [];
+    // In losing positions all moves may fall below minWinrate.
+    // Always show at least the top 3 moves so the player sees suggestions.
+    if (filtered.isEmpty && moves.isNotEmpty) {
+      filtered = moves.take(3).toList();
+    }
 
     final result = <RankedMove>[];
     int currentRank = 0;

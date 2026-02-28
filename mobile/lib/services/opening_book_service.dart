@@ -56,7 +56,7 @@ class OpeningBookEntry {
 
 /// Service for managing bundled opening book data via SQLite
 class OpeningBookService {
-  static const int _bundledVersion = 10;
+  static const int _bundledVersion = 11;
   /// Per-board-size databases, lazily loaded on first query
   final Map<int, Database> _databases = {};
 
@@ -424,6 +424,19 @@ class OpeningBookService {
       // Tertiary: more visits first
       return b.visits.compareTo(a.visits);
     });
+
+    // Drop moves whose player-perspective winrate is far below the best.
+    // The 9x9 KataGo book stores ALL legal moves (including terrible ones);
+    // after symmetry expansion this can flood the board with 80+ suggestions.
+    if (expandedMoves.isNotEmpty) {
+      final bestPlayerWr = isBlackTurn
+          ? expandedMoves.first.winrate
+          : 1.0 - expandedMoves.first.winrate;
+      expandedMoves.removeWhere((m) {
+        final playerWr = isBlackTurn ? m.winrate : 1.0 - m.winrate;
+        return playerWr < bestPlayerWr * 0.5;
+      });
+    }
 
     return OpeningBookEntry(
       hash: entry.hash,

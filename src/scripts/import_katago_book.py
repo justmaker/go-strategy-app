@@ -445,10 +445,12 @@ def import_katago_book(
             # Add children to queue
             html_parent = Path(html_path).parent
             for board_idx, rel_path in position.links.items():
-                # Calculate the move that leads to this child
-                x = board_idx % board_size
-                y = board_idx // board_size
-                gtp_coord = coords_to_gtp(x, y)
+                # KataGo book link index uses x-major: idx = x * boardSize + y_top
+                # See: docs/spec/COORDINATES.md
+                x = board_idx // board_size
+                y_top = board_idx % board_size
+                y_bottom = board_size - 1 - y_top  # coords_to_gtp expects y_bottom
+                gtp_coord = coords_to_gtp(x, y_bottom)
 
                 child_history = move_history + [(next_player, gtp_coord)]
 
