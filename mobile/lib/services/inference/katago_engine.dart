@@ -18,20 +18,11 @@ import 'inference_engine.dart';
 class KataGoEngine implements InferenceEngine {
   static const String _tag = '[KataGoEngine]';
 
-  // Android uses app-level channel; iOS uses katago_onnx_mobile plugin channel
-  static const _androidMethodChannel =
-      MethodChannel('com.gostratefy.go_strategy_app/katago');
-  static const _androidEventChannel =
-      EventChannel('com.gostratefy.go_strategy_app/katago_events');
-  static const _iosMethodChannel =
+  // Both Android and iOS use katago_onnx_mobile plugin channel
+  static const _methodChannel =
       MethodChannel('com.justmaker.katago_onnx_mobile/engine');
-  static const _iosEventChannel =
+  static const _eventChannel =
       EventChannel('com.justmaker.katago_onnx_mobile/events');
-
-  MethodChannel get _methodChannel =>
-      Platform.isIOS ? _iosMethodChannel : _androidMethodChannel;
-  EventChannel get _eventChannel =>
-      Platform.isIOS ? _iosEventChannel : _androidEventChannel;
 
   StreamSubscription? _progressSubscription;
 
@@ -226,8 +217,9 @@ class KataGoEngine implements InferenceEngine {
   void cancelAnalysis() {
     _progressSubscription?.cancel();
     _progressSubscription = null;
-    if (!_isDesktop && Platform.isIOS) {
-      _methodChannel.invokeMethod('cancelAnalysisOnnx');
+    if (!_isDesktop) {
+      final method = Platform.isIOS ? 'cancelAnalysisOnnx' : 'cancelAnalysis';
+      _methodChannel.invokeMethod(method);
     }
   }
 
