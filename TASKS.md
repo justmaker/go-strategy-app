@@ -99,7 +99,7 @@ katago-onnx-mobile/
 
 | Board Size | Entries | Depth | Visits | 說明 |
 |------------|---------|-------|--------|------|
-| 9x9 | 1,519,000 | 0-18 | 90K+ avg | KataGo 官方 book，已完成 |
+| 9x9 | 3,201,154 | 0-50 | 10K+ | KataGo 官方 book，座標修正後重新匯入 |
 | 13x13 | 345,055 | 0-15 | 500 | b18c384 模型 |
 | 19x19 | 1,071,874 | 0-15 | 500 | b18c384 模型，淺層已補強 |
 
@@ -122,6 +122,24 @@ python3 -m src.scripts.build_opening_book_parallel \
 ---
 
 ## 已完成
+
+### 9x9 Opening Book 座標修正 — link index x/y 反轉 (2026-03-01)
+
+**問題**: 9x9 opening book 在 depth ≥ 1 的 `moves_sequence` 全部是錯的座標，導致 App 查不到任何深層局面，9x9 book 形同虛設。
+
+**根本原因**: `import_katago_book.py` 在解析 KataGo book HTML 的 `links`（子節點連結）時，把 `board_idx` 用 **y-major** 拆解（`x = idx % size, y = idx // size`），但 KataGo book link index 實際使用 **x-major** 排列（`idx = x * size + y_top`）。此外缺少 `y_top → y_bottom` 轉換（`coords_to_gtp` 預期 y_bottom）。
+
+**修正**:
+1. `import_katago_book.py:449-452`: 改為 x-major 拆解 + y_bottom 轉換
+2. 重新匯入 9x9 KataGo book（3,201,154 筆，min-visits=10000）
+3. 重新導出 `opening_book_9x9.db.gz`（150MB 壓縮）
+4. `opening_book_service.dart`: 新增低勝率對稱手過濾 + `_bundledVersion` 10→11
+5. `move_ranking.dart`: 劣勢局面至少顯示 top 3 建議手
+6. `docs/spec/COORDINATES.md`: 改寫為中文版座標規範，標註 x-major 陷阱
+
+**驗證**: B[E5] 23T visits ✅、B[D7]（舊 bug 值）不存在 ✅、depth 1-3 資料連續 ✅
+
+---
 
 ### Opening Book 職責分離重構 (2026-02-27)
 
