@@ -564,9 +564,14 @@ class OpeningBookService {
     debugPrint('[OpeningBook] MISS after checking all symmetries');
 
     // Synthesize for empty board if missed
-    if (moves.isEmpty && (boardSize == 13 || boardSize == 19)) {
+    if (moves.isEmpty && (boardSize == 9 || boardSize == 13 || boardSize == 19)) {
       debugPrint(
           '[OpeningBook] Synthesizing moves for empty $boardSize board');
+
+      String bestMove = 'K10'; // 19x19
+      if (boardSize == 13) bestMove = 'G7';
+      if (boardSize == 9) bestMove = 'E5';
+
       final entry = OpeningBookEntry(
         hash: 'synthetic_empty',
         boardSize: boardSize,
@@ -574,7 +579,7 @@ class OpeningBookService {
         movesSequence: '',
         topMoves: [
           MoveCandidate(
-            move: boardSize == 19 ? 'K10' : 'G7',
+            move: bestMove,
             winrate: 0.5,
             scoreLead: 0.0,
             visits: 1000,
