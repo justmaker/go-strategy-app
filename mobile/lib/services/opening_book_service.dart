@@ -476,9 +476,6 @@ class OpeningBookService {
     // Lazy load the DB for this board size
     await _ensureBoardSizeLoaded(boardSize);
     final db = _databases[boardSize];
-    if (db == null) {
-      return null;
-    }
 
     debugPrint(
         '[OpeningBook] Looking up: ${moves.length} moves, ${boardSize}x$boardSize');
@@ -488,38 +485,40 @@ class OpeningBookService {
     int bestVisits = -1;
     List<MoveCandidate>? bestTopMoves;
 
-    for (int type = 0; type < 8; type++) {
-      final tMoves =
-          moves.map((m) => BoardSymmetry.transformGtp(m, boardSize, type)).toList();
+    if (db != null) {
+      for (int type = 0; type < 8; type++) {
+        final tMoves =
+            moves.map((m) => BoardSymmetry.transformGtp(m, boardSize, type)).toList();
 
-      // Build the moves_sequence string matching DB format: "B[Q16];W[D4]"
-      final movesSequence = tMoves.map((m) {
-        final parts = m.split(' ');
-        return parts.length == 2 ? '${parts[0]}[${parts[1]}]' : m;
-      }).join(';');
+        // Build the moves_sequence string matching DB format: "B[Q16];W[D4]"
+        final movesSequence = tMoves.map((m) {
+          final parts = m.split(' ');
+          return parts.length == 2 ? '${parts[0]}[${parts[1]}]' : m;
+        }).join(';');
 
-      try {
-        final results = await db.rawQuery(
-          'SELECT top_moves, visits FROM opening_book '
-          'WHERE board_size = ? AND komi = ? AND moves_sequence = ? '
-          'ORDER BY visits DESC LIMIT 1',
-          [boardSize, komi, movesSequence],
-        );
+        try {
+          final results = await db.rawQuery(
+            'SELECT top_moves, visits FROM opening_book '
+            'WHERE board_size = ? AND komi = ? AND moves_sequence = ? '
+            'ORDER BY visits DESC LIMIT 1',
+            [boardSize, komi, movesSequence],
+          );
 
-        if (results.isNotEmpty) {
-          final row = results.first;
-          final visits = row['visits'] as int;
-          debugPrint('[OpeningBook] HIT on symmetry $type (visits=$visits)');
+          if (results.isNotEmpty) {
+            final row = results.first;
+            final visits = row['visits'] as int;
+            debugPrint('[OpeningBook] HIT on symmetry $type (visits=$visits)');
 
-          if (visits > bestVisits) {
-            bestVisits = visits;
-            bestSymType = type;
-            bestTopMoves =
-                _parseCompactTopMoves(row['top_moves'] as String);
+            if (visits > bestVisits) {
+              bestVisits = visits;
+              bestSymType = type;
+              bestTopMoves =
+                  _parseCompactTopMoves(row['top_moves'] as String);
+            }
           }
+        } catch (e) {
+          debugPrint('[OpeningBook] Query error on sym$type: $e');
         }
-      } catch (e) {
-        debugPrint('[OpeningBook] Query error on sym$type: $e');
       }
     }
 

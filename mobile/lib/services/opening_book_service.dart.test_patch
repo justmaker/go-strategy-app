@@ -1,0 +1,10 @@
+--- opening_book_service.dart
++++ opening_book_service.dart
+@@ -46,6 +46,9 @@
+   Map<int, int> get entriesByBoardSize => Map.unmodifiable(_entriesByBoardSize);
+   String? get loadError => _loadError;
+
++  // FOR TESTING
++  void setLoadedForTest(bool value) { _isLoaded = value; }
++
+   /// Asset path for a given board size
