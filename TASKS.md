@@ -2,96 +2,6 @@
 
 ## 待處理
 
-### 抽出 katago-onnx-mobile 到獨立 repo
-
-**狀態**: ✅ 完成（feature branch 已合併，Android MethodChannel 已遷移到 plugin）
-
-**目的**: Go Strategy App 要做第二個獨立的圍棋解題 App，兩個 app 共用 KataGo ONNX 引擎。需要將 ONNX 相關的共用元件抽出到 `https://github.com/justmaker/katago-onnx-mobile` 作為 Flutter plugin。
-
-**新 App 規格**:
-- 輸入方式: 手動擺棋 + 拍照辨識 + 匯入圖片/SGF + GTP
-- 引擎: 手機平板用 KataGo ONNX，桌機用 KataGo Eigen
-- 目標: 提供局部或整盤棋局，算出 top N 次一手
-
-**要抽出的元件**:
-
-| 類別 | 檔案 | 來源路徑 |
-|------|------|---------|
-| Dart | `inference_engine.dart` | `mobile/lib/services/inference/` |
-| Dart | `onnx_engine.dart` | 同上 |
-| Dart | `onnx_engine_stub.dart` | 同上 |
-| Dart | `katago_engine.dart` | 同上 |
-| Dart | `liberty_calculator.dart` | 同上 |
-| Dart | `tactical_evaluator.dart` | 同上 |
-| iOS | `KataGoOnnxBridge.h/mm` | `mobile/ios/KataGoMobile/Sources/` |
-| iOS | `KataGoWrapper.h/mm` | 同上 |
-| iOS | `stubs.cpp` | 同上 |
-| iOS | KataGo C++ core | `mobile/ios/KataGoMobile/Sources/katago/cpp/` |
-| Android | `native-lib.cpp` | `mobile/android/app/src/main/cpp/` |
-| Android | `stubs.cpp` | 同上 |
-| Android | `CMakeLists.txt` | 同上 |
-| Android | `KataGoEngine.kt` | `mobile/android/.../go_strategy_app/` |
-| Android | KataGo C++ core | `mobile/android/app/src/main/cpp/katago/` |
-| Android | Eigen headers | `mobile/android/app/src/main/cpp/eigen/` |
-| Android | ONNX Runtime libs | `mobile/android/app/src/main/cpp/onnxruntime/` |
-| Model | `model.onnx`, `model.bin.gz`, `model.bin` | `mobile/assets/` |
-
-**Plugin 目標結構**:
-
-```
-katago-onnx-mobile/
-├── pubspec.yaml
-├── lib/
-│   ├── katago_onnx_mobile.dart     # Public API
-│   └── src/                        # Dart inference 檔案
-├── android/
-│   ├── build.gradle
-│   └── src/main/
-│       ├── kotlin/.../KataGoEngine.kt
-│       └── cpp/                    # native-lib, katago, eigen, onnxruntime
-├── ios/
-│   ├── Classes/                    # OnnxBridge, Wrapper, stubs
-│   ├── katago/cpp/                 # KataGo core
-│   └── katago_onnx_mobile.podspec
-├── assets/                         # model.onnx, model.bin, model.bin.gz
-└── example/
-```
-
-**實作步驟**:
-
-1. ✅ 計劃已寫入 TASKS.md
-2. ✅ 建立新 repo 基本結構 (`flutter create --template=plugin`)
-3. ✅ 遷移 Dart 程式碼（修改 import paths，移除 app-specific 依賴）
-4. ✅ 遷移 Android Native（JNI package 名稱、build.gradle plugin 格式）
-5. ✅ 遷移 iOS Native（podspec、header search paths、single-threaded mode）
-6. ✅ 遷移 Model 檔案（改為 regular git，不用 LFS — Flutter pub get 不支援 LFS）
-7. ✅ 修改原 Go Strategy App（改用 git dependency，移除 KataGoMobile pod）
-8. ✅ 驗證:
-   - ✅ macOS build (808.5MB)
-   - ✅ Android ONNX inference (96 次推論，0 error)
-   - ✅ iOS ONNX inference (8+ 次推論，19x19 + 13x13 切換正常)
-   - ✅ iOS 記憶體問題：Signal 9 (SIGKILL) — 拆分 DB + streaming 解壓修復
-   - ✅ iPad 實機 debug mode 部署驗證（opening book + ONNX 推論正常）
-   - ✅ Plugin example app 獨立 build 測試（Android APK + iOS 均成功）
-
-**Plugin repo**: `https://github.com/justmaker/katago-onnx-mobile`
-**App branch**: `feature/katago-onnx-mobile-plugin`
-
-**iOS 修復記錄** (2026-02-19):
-1. 移除舊 `KataGoMobile` pod 避免 duplicate symbols
-2. 修正 moves 格式轉換（`["B Q16"]` → `[["B", "Q16"]]`）
-3. 從 Android 移植 `setSingleThreadedMode` 到 iOS KataGo C++（nneval.h/cpp）
-4. 新增 board size 追蹤，切換棋盤大小時重新初始化引擎
-
-**注意事項**:
-- Flutter pub get 不支援 Git LFS — plugin 的大檔案必須用 regular git
-- iOS 和 Android 都使用 plugin 的 MethodChannel (`com.justmaker.katago_onnx_mobile/engine`)
-- macOS 使用 Eigen backend，不受 ONNX plugin 影響
-- App 的 `MainActivity.kt` 已精簡為空殼，KataGo 邏輯完全由 plugin 處理
-- App 的 Android native code (`src/main/cpp/`) 和 `KataGoEngine.kt` 已移除
-
----
-
 ### Opening Book: 13x13 / 19x19 擴充
 
 **狀態**: 🟡 可繼續擴充
@@ -100,304 +10,87 @@ katago-onnx-mobile/
 
 | Board Size | Opening Book | analysis_cache | Depth | Visits | 說明 |
 |------------|-------------|----------------|-------|--------|------|
-| 9x9 | 3,201,154 | 3,201,154 | 0-50 | 10K+ | KataGo 官方 book，座標修正後重新匯入 |
-| 13x13 | 345,055 | 1,498,567 | 0-15 | 500 | b18c384 模型，depth 8-12 擴展中 |
+| 9x9 | 3,201,154 | 3,201,154 | 0-50 | 10K+ | KataGo 官方 book，已完成 |
+| 13x13 | 256,867 | 1,673,962 | 0-14 | 250-1000 | b18c384 模型，dead move filter 後 |
 | 19x19 | 1,071,874 | 1,071,874 | 0-15 | 500 | b18c384 模型 |
 
-13x13 需先補齊 depth 8-12 擴展的子節點（depth 13-14），再重新匯出 opening book。
-可繼續擴充 depth 15+，需在 GPU server 上執行：
-```bash
-python3 -m src.scripts.build_opening_book_parallel \
-    --board-size 19 --depth 15 --visits 500 --batch-size 64 --branching 7
-```
+**13x13 現況**:
+- analysis_cache 有 1,673,962 筆，但 depth 8-12 的廣度擴展缺少子節點（depth 13-14 只有 277,645 筆）
+- Dead move filter 後 opening book 僅保留 256,867 筆（有完整後續路徑的局面）
+- 要增加 opening book 覆蓋率，需在 GPU server 補齊 depth 13-15 的子節點
 
-本機也可補充淺層資料（需 `/opt/homebrew/bin/katago`）：
+可繼續擴充 depth 16+，需在 GPU server 上執行：
 ```bash
 python3 -m src.scripts.build_opening_book_parallel \
-    --board-size 19 --depth 3 --visits 500 --batch-size 4 --branching 7 \
-    --min-cache-visits 500 \
-    --katago-path /opt/homebrew/bin/katago \
-    --model-path /opt/homebrew/share/katago/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz \
-    --config-path katago/analysis.cfg
+    --board-size 13 --depth 15 --visits 500 --batch-size 64 --branching 7
 ```
 
 ---
 
 ## 已完成
 
-### 9x9 Opening Book 座標修正 — link index x/y 反轉 (2026-03-01)
+### 13x13 Opening Book 重新匯出 (2026-03-06)
 
-**問題**: 9x9 opening book 在 depth ≥ 1 的 `moves_sequence` 全部是錯的座標，導致 App 查不到任何深層局面，9x9 book 形同虛設。
+從 analysis_cache (1,673,962 筆) 重新匯出 13x13 opening book。Dead move filter 後保留 256,867 筆（有完整後續的局面）。檔案大小從 107 KB 增長至 16 MB。
 
-**根本原因**: `import_katago_book.py` 在解析 KataGo book HTML 的 `links`（子節點連結）時，把 `board_idx` 用 **y-major** 拆解（`x = idx % size, y = idx // size`），但 KataGo book link index 實際使用 **x-major** 排列（`idx = x * size + y_top`）。此外缺少 `y_top → y_bottom` 轉換（`coords_to_gtp` 預期 y_bottom）。
+### 9x9 Opening Book 座標修正 (2026-03-01)
 
-**修正**:
-1. `import_katago_book.py:449-452`: 改為 x-major 拆解 + y_bottom 轉換
-2. 重新匯入 9x9 KataGo book（3,201,154 筆，min-visits=10000）
-3. 重新導出 `opening_book_9x9.db.gz`（150MB 壓縮）
-4. `opening_book_service.dart`: 新增低勝率對稱手過濾 + `_bundledVersion` 10→11
-5. `move_ranking.dart`: 劣勢局面至少顯示 top 3 建議手
-6. `docs/spec/COORDINATES.md`: 改寫為中文版座標規範，標註 x-major 陷阱
-
-**驗證**: B[E5] 23T visits ✅、B[D7]（舊 bug 值）不存在 ✅、depth 1-3 資料連續 ✅
-
----
+`import_katago_book.py` 的 link index 使用 y-major 拆解，但 KataGo book 實際用 x-major。修正後重新匯入 3,201,154 筆。
 
 ### Opening Book 職責分離重構 (2026-02-27)
 
-**PR**: #23
+PR #23。`opening_book_service.dart` (706→555 行) 拆分為 `board_symmetry.dart`、`standard_openings.dart`、`move_ranking.dart`，建立排名單一真相來源。新增 30 個單元測試。
 
-**問題**: `opening_book_service.dart`（706 行）混合 5 種職責，ranking 邏輯在 3 個地方重複實作（service、board widget、analysis screen），導致反覆出現的不一致 bug。
+### 全棋盤 Opening Book 啟用 (2026-02-27)
 
-**修正**:
-1. **`utils/board_symmetry.dart`** (127 行): 純 8-way 對稱數學（transformPoint, inverseSymmetry, transformGtp, validSymmetries）
-2. **`utils/standard_openings.dart`** (76 行): 空盤開局注入（hoshi/komoku/san-san + calibrated winrate ratio）
-3. **`utils/move_ranking.dart`** (64 行): `RankedMove` wrapper + `MoveRanking.rank()` — 排名的**單一真相來源**
-4. **`opening_book_service.dart`** (706→555 行): 瘦身，改用新模組
-5. **`go_board_widget.dart`**: 用 `MoveRanking.rank()` 取代手動 signature grouping
-6. **`analysis_screen.dart`**: 同上
-
-**新增測試**: 30 個單元測試（對稱變換、開局注入、排名一致性），包含 board-panel consistency 迴歸測試。
-
-**文件**: `docs/spec/LOGIC.md` 新增 Move Ranking Architecture 章節。
-
----
-
-### 全棋盤 Opening Book 啟用 + 顯示優化 (2026-02-27)
-
-**問題**: 13x13/19x19 opening book 被限制為 9x9-only，ONNX 單次推理在大棋盤效果極差。此外 ONNX 引擎返回大量 0% 勝率的垃圾手淹沒棋盤。
-
-**修正**:
-1. `game_provider.dart`: 移除 `_board.size == 9` 限制，所有棋盤大小都使用 opening book
-2. `go_board_widget.dart`: 過濾勝率 < 1% 或 > 99% 的手，棋盤建議上限 10
-3. `analysis_screen.dart`: 列表同樣過濾 0% 勝率手
-4. `opening_book_service.dart`: 排序改為 winrate → score lead (Black 視角) → visits 三級排序
-
-**驗證結果**:
-- 13x13 空盤: 16 個推薦手，四角完全對稱（K10/K4/D4/D10 各 25.0%）
-- 19x19 空盤: 24 個推薦手，四角完全對稱（Q16/Q4/D4/D16 各 37.1%）
-- iPad 實機 debug mode 部署成功
-
----
+移除 9x9-only 限制，13x13/19x19 都使用 opening book。過濾 0% 勝率的垃圾手。
 
 ### 9x9 Opening Book 資料全面修正 (2026-02-27)
 
-**問題**: 9x9 opening book 的第一步看似正確，但第二步以後資料完全錯誤 — 邊角手排在最前面，勝率不合理。
+修正 wl 視角（統一用 Black winrate）、Y 軸座標反轉、偶數/奇數 depth 不對稱問題。三階段 DB migration 修正 3,201,154 筆。
 
-**根本原因** (多個 bug):
-1. **wl 視角錯誤**: KataGo book 的 `wl` 永遠是 White 視角，但 import script 在 Black/White 回合用了不同公式，其中一個是錯的
-2. **Y 軸座標反轉**: `katago_xy_to_gtp` 用 `row = y + 1`，但 KataGo 的 y=0 是棋盤上方（非下方），正確應為 `row = board_size - y`
-3. **偶數/奇數 depth 不對稱**: 全面套用 `1 - winrate` 修正了偶數 depth（Black to play），但破壞了原本正確的奇數 depth（White to play）
+### 抽出 katago-onnx-mobile 到獨立 repo (2026-02-27)
 
-**修正**:
-1. `import_katago_book.py`:
-   - wl 統一用 `(1 - wl) / 2` 計算 Black winrate（不分 B/W 回合）
-   - Y 軸改為 `row = board_size - y`
-2. `opening_book_9x9.db.gz`: 三階段 DB migration 修正 3,201,154 筆資料
-   - Phase 1: 全面 `1 - winrate` 修正偶數 depth
-   - Phase 2: Y 軸座標翻轉 `new_row = 10 - old_row`
-   - Phase 3: 奇數 depth 再次 `1 - winrate` 恢復原始正確值
-3. `opening_book_service.dart`:
-   - `_bundledVersion` 4→7，強制 app 重新解壓
-   - 排序改為 winrate → score lead → visits 三級排序
-4. 顯示優化:
-   - `go_board_widget.dart`: 過濾勝率 < 1% 的手，棋盤建議上限 10
-   - `analysis_screen.dart`: 列表同樣過濾 0% 勝率手
+PR #22。將 KataGo ONNX 引擎（Dart + Android JNI + iOS Bridge + C++ core + 模型）抽出為 Flutter plugin `katago-onnx-mobile`。App 改用 git dependency。驗證：macOS / Android / iOS / iPad 全通過。
 
-**驗證結果**:
-- Depth 0: F6 Black=48.4%、E5=48.2%（合理，7.5 komi 下 Black 略劣）
-- Depth 1: F5 Black=49.5%、E6=49.5%（合理，White 最佳回應接近均勢）
-- Depth 2-5: 全部通過合理性檢查
+Plugin repo: `https://github.com/justmaker/katago-onnx-mobile`
 
 ### macOS Google Sign-In 修復 (2026-02-19)
 
-**問題**: OAuth 回調後 `_googleSignIn.signIn()` 不返回，UI 仍顯示未登入。
-
-**根本原因**: OAuth Client ID 類型為 **Desktop**，但 GoogleSignIn SDK（google_sign_in_ios）預期 **iOS** 類型。Desktop 類型的 redirect URI 是 loopback (`http://localhost:PORT`)，與 SDK 構建的 custom URL scheme redirect 不匹配。
-
-**修正**:
-1. 在 Google Cloud Console 建立 **iOS 類型** OAuth Client ID（Bundle ID: `com.gostratefy.goStrategyApp`）
-2. 更新 `Info.plist` 的 `GIDClientID` 和 `CFBundleURLTypes` 使用新 Client ID
-3. `AppDelegate.swift` 加入 `application(_:open:)` override 和 debug logging
-4. 啟用 Google Drive API 支援 Cloud Sync
+OAuth Client ID 從 Desktop 類型改為 iOS 類型，修正回調不返回的問題。
 
 ### Web Deploy: dart:ffi 編譯修復 (2026-02-19)
 
-**問題**: `Deploy Flutter Web to GitHub Pages` workflow 持續失敗，因為 `onnx_engine.dart` 無條件 import `package:onnxruntime`（依賴 `dart:ffi`），Wasm 編譯時不可用。
-
-**修正**:
-- 新增 `onnx_engine_stub.dart`：Web 平台用的空實作（`isAvailable = false`）
-- `game_provider.dart`：改用 conditional import `if (dart.library.ffi)` 選擇真實 vs stub
-- 本地 `flutter build web` 驗證通過，CI 已綠 ✅
+新增 `onnx_engine_stub.dart` 解決 Wasm 編譯時 `dart:ffi` 不可用的問題。
 
 ### 19x19 Opening Book 淺層覆蓋改善 (2026-02-19)
 
-**問題**: 19x19 開局只顯示 2 個 rank（小目 + 三三），缺少星位（4-4 hoshi）；opening book tree 在 depth 0 只有 3 個候選且全為小目等價點，BFS 展開因 branching factor=3 導致樹極窄。
+注入星位為標準開局，build script 新增 `--branching` 參數，depth 0 展開所有候選。
 
-**修正**:
-1. **`opening_book_service.dart`**:
-   - 注入 4-4 星位（hoshi）為 13x13/19x19 的標準開局
-   - 星位、小目、三三使用不同 winrate ratio 確保 3 個獨立 rank 顯示
-   - Opening book 版本 2→3，強制 app 重新解壓
+### ONNX 模型統一 (2026-02-18)
 
-2. **`build_opening_book_parallel.py`**:
-   - 新增 `--branching`（default 7）、`--shallow-branching` CLI 參數
-   - Depth 0：展開所有候選（無 branching/winrate 限制）
-   - Depth 1-2：寬展開（shallow branching）、放寬 winrate 門檻至 0.20
-   - 儲存 top 20 候選（原 10），避免對稱等價點佔滿名額
-   - 新增 `--katago-path`、`--model-path`、`--config-path` 支援本機執行
-   - 新增 `--min-cache-visits` 過濾低品質 cache 條目
-
-3. **`export_opening_book.py`**:
-   - Dead move filter 跳過 depth 0-3，保留淺層所有候選
-
-4. **`analysis.cfg`**:
-   - 加入 `numAnalysisThreads`（analysis mode 必要參數）
-   - 修正 `reportAnalysisWinratesAs = BLACK`（與 GPU config 一致）
-
-5. **Opening Book 數據補強**:
-   - 本機用 KataGo Metal (500 visits) 重新分析 depth 0-2
-   - 初始位置從 3 候選 → 20 候選（星位、小目、高目全覆蓋）
-   - 合併 25 筆新數據到 opening_book.db.gz
-
-### ONNX 模型統一與最佳化 (2026-02-18)
-
-**任務**: 統一 ONNX 模型為單一 b20c256 變體，取代 3 個 size-specific 模型。
-
-**完成項目**:
-1. **模型合併**:
-   - 刪除 `model_9x9.onnx`、`model_13x13.onnx`、`model_19x19.onnx`
-   - 統一使用 `model.onnx` (b20c256)
-   - b20c256 對所有棋盤大小具有更好的泛化能力
-
-2. **模型加載優先順序調整**:
-   - Android (`KataGoEngine.kt`): 優先 `model.onnx`，備用 size-specific 模型
-   - iOS (`AppDelegate.swift`): 優先 `model.onnx` (b20c256) 用於 native MCTS，備用 b6c96 variants
-
-3. **Opening Book 排序邏輯改善**:
-   - 考慮當前玩家的輪次（黑白交替）
-   - 根據當前玩家的實際勝率評估：黑手為直接勝率，白手則反轉
-   - 優先按 visits 排序（MCTS 偏好），將低於 30% 當前玩家勝率的手段推至末尾
-   - 結果：更準確的手段排名，符合 KataGo MCTS 搜尋的自然偏好
-
-4. **Git LFS 配置擴充**:
-   - 新增 `model.onnx` (4.5 MB)、`model.bin` (4.1 MB)、`model.bin.gz` (3.8 MB) 到 LFS 追蹤
-
-5. **構建腳本格式規範**:
-   - `build_opening_book_parallel.py` 更新為括號式記譜 (e.g., `B[Q16];W[D4]`)
-   - 與 `import_katago_book.py` 保持一致
-
-**影響**:
-- App 資產包體積優化（3 個模型 → 1 個）
-- 推論品質提升（b20c256 對小棋盤更好）
-- 更準確的手段排名
+3 個 size-specific 模型合併為單一 `model.onnx` (b20c256)。
 
 ### 9x9 Opening Book 勝率修正 (2026-02-17)
 
-**問題**: 9x9 opening book 的勝率顯示反轉 — 邊角 99.8%、中央 3.5%。
+修正 `wl` 轉換（不再反轉）和 `score_lead` 取反。後續在 2026-02-27 全面修正。
 
-**根本原因**: `import_katago_book.py` 誤將 `wl` 當作對手勝率做 `1.0 - wl` 轉換，但 KataGo book 的 `wl` 本身就是當前玩家勝率。同時 `ssM` 是對手的 score lead，需要取反。
+### iOS KataGo ONNX 整合 (2026-02-17)
 
-**修正**:
-1. `import_katago_book.py`: `winrate = wl`（不再反轉）、`score_lead = -ssM`
-2. `opening_book.db.gz`: 修正 1,519,000 筆 9x9 資料
-3. `opening_book_service.dart`: 版本號 1→2，強制 app 重新解壓
+Native KataGo C++ + ONNX Runtime 整合，即時進度回報，ONNX Engine input features 修正。
 
-**後續**: 此修正只解決了第一步（depth 0）的問題，第二步以後仍有 bug，已在 2026-02-27 全面修正（見上方）
+### iOS Simulator ONNX Fallback (2026-02-15)
 
-### iOS KataGo ONNX 即時進度更新 (2026-02-17)
+Simulator 上 native KataGo 崩潰，自動 fallback 到 ONNX Runtime。
 
-使用大型模型（20b+）時 ONNX 推論耗時較長，新增即時進度回報和取消功能：
-- `KataGoOnnxBridge.mm`: 透過 atomic `getRootVisits()` 讀取搜尋進度，支援 `requestStop()` 取消
-- `AppDelegate.swift`: GCD timer 每 0.3 秒輪詢進度，透過 EventChannel 串流到 Dart
-- `katago_engine.dart`: 監聽 EventChannel 的 `onnx_progress` 事件
-- `game_provider.dart`: 傳遞 `onProgress` callback 更新 UI
+### UI 改善 (2026-02-14)
 
-**待驗證**: 需要大型模型實機測試（目前小模型推論太快，看不到進度變化）
+Pass 按鈕、Clear 確認對話框、19 路棋盤加大。
 
-### iOS Native KataGo-ONNX 整合 (2026-02-17)
+### CI/CD 多平台發布 (2026-02-10)
 
-在 iOS 上整合 native KataGo C++ 引擎搭配 ONNX Runtime，支援完整 MCTS 搜尋。
-- 編譯 KataGo search/core/game 模組為 Objective-C++ bridge
-- 透過 MethodChannel 呼叫 `analyzeOnnx`、EventChannel 回傳結果
-- 支援可配置的 visits 數和模型路徑
+GitHub Actions workflow，5 平台並行建置（Android / iOS / macOS / Windows / Linux）。
 
-### ONNX Engine Input Features Fix (2026-02-17)
+### Android pthread Crash Fix (2026-02-14)
 
-**問題**: ONNX 引擎的 policy 輸出過度均勻，無法區分好壞手，所有候選手勝率相同（約 60%）。
-
-**根本原因**:
-1. Move history 編碼錯誤：應使用 channels 6-10，卻用了 9-13
-2. Global features 幾乎全空：只有 komi 和 board size，缺少 pass indicators 等 19 個特徵
-3. Territory estimation 過度簡化
-
-**修正** (`mobile/lib/services/inference/onnx_engine.dart`):
-1. 修正 binary features (22 channels) 按照 KataGo v7 規格：
-   - Channels 0-2: on-board, current player, opponent
-   - Channels 3-5: ko-ban, encore ko features
-   - Channels 6-10: move history (last 5 moves)
-   - Channels 14-17: ladder features (atari detection)
-   - Channels 18-19: territory estimation (flood-fill based)
-2. 補齊 global features (19 values)：
-   - 0-4: pass indicators for last 5 turns
-   - 5: komi / 20.0 (v7 normalization)
-   - 6-7: ko rule encoding
-   - 8: multi-stone suicide legality
-   - 9: territory scoring flag
-   - 10-14: tax rules, encore phase, komi parity
-3. 改進 policy 評估：
-   - 增加 uniformity ratio 檢測（max_prob / avg_prob * 10）
-   - ratio > 2.0 時使用模型輸出，否則 fallback 到 tactical heuristic
-   - 候選手勝率基於相對 policy probability 調整
-
-**測試結果** (Android ONNX):
-- 修正前：uniformity ratio < 2.0，所有手勝率 ~60%
-- 修正後：uniformity ratio 2.5-6.5，勝率範圍 38%-99%
-- Top moves 現在有明確差異，分析結果合理
-
-**參考資料**:
-- [KataGo paper - Accelerating Self-Play Learning in Go](https://arxiv.org/pdf/1902.10565)
-- [KataGo GitHub](https://github.com/lightvector/KataGo) - `cpp/neuralnet/nninputs.cpp` (fillRowV7)
-
-### iOS Simulator: ONNX Fallback (2026-02-15)
-
-iOS Simulator 上 native KataGo 會崩潰。修復方式：
-1. `AppDelegate.swift` 加入 `#if targetEnvironment(simulator)` 阻止 native 引擎啟動
-2. `game_provider.dart` 在 native 失敗時自動 fallback 到 ONNX Runtime
-3. iOS 真機仍使用 native KataGo（完整 MCTS），Simulator 使用 ONNX（單次推理）
-
-### 棋盤建議顯示修正: Top 3 一致 (2026-02-15)
-
-棋盤上只畫 Rank 1 建議，但分析清單顯示 Top 3。修正 `go_board_widget.dart`，移除勝率過濾並限制顯示前 3 個 rank，與清單一致。
-
-### Repo 清理: 刪除 22 個過時 MD 檔案 (2026-02-15)
-
-刪除開發過程中的中間文件（APPROACHES_TRIED.md、CRASH_ROOT_CAUSE.md 等），保留 CLAUDE.md、TASKS.md 和 docs/spec/ 下的規範文件。
-
-### UI 改善: Pass 按鈕 / Clear 確認 / 棋盤加大 (2026-02-14)
-
-- Pass 按鈕：支援圍棋虛手，手數編號不跳號
-- Clear 按鈕：加入確認對話框防誤觸
-- 19 路棋盤：減少 padding、調整 flex 比例，棋盤更大
-
-### CI/CD 修復 (2026-02-14)
-
-- Android build：CI 自動從 Maven Central 下載 ONNX Runtime `.so`
-- Web deploy：移除未使用的 `onnx_engine` import（避免 `dart:ffi` 錯誤）
-
-### CI/CD: GitHub Actions 多平台發布 (2026-02-10)
-
-`.github/workflows/release.yml` — workflow_dispatch 觸發，5 平台並行建置：
-
-| Job | Runner | 產出 |
-|-----|--------|------|
-| build-android | ubuntu-latest | APK |
-| build-ios | macos-latest | Runner.app.zip (unsigned) |
-| build-macos | macos-latest | go_strategy_app.app.zip |
-| build-windows | windows-latest | go-strategy-windows.zip |
-| build-linux | ubuntu-latest | linux-app.tar.gz |
-
-### Android pthread Crash Fix: ONNX Runtime Migration (2026-02-14)
-
-Android 16 + Snapdragon 8 Gen 3 的 pthread crash 問題，改用 ONNX Runtime 1.23.2 + NNAPI 解決。
-詳見 `docs/spec/ARCHITECTURE.md` §9.4。
+改用 ONNX Runtime 1.23.2 + NNAPI 解決 Android 16 + Snapdragon 8 Gen 3 的 pthread crash。
