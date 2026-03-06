@@ -98,12 +98,13 @@ katago-onnx-mobile/
 
 目前 Opening Book 資料量：
 
-| Board Size | Entries | Depth | Visits | 說明 |
-|------------|---------|-------|--------|------|
-| 9x9 | 3,201,154 | 0-50 | 10K+ | KataGo 官方 book，座標修正後重新匯入 |
-| 13x13 | 345,055 | 0-15 | 500 | b18c384 模型 |
-| 19x19 | 1,071,874 | 0-15 | 500 | b18c384 模型，淺層已補強 |
+| Board Size | Opening Book | analysis_cache | Depth | Visits | 說明 |
+|------------|-------------|----------------|-------|--------|------|
+| 9x9 | 3,201,154 | 3,201,154 | 0-50 | 10K+ | KataGo 官方 book，座標修正後重新匯入 |
+| 13x13 | 345,055 | 1,498,567 | 0-15 | 500 | b18c384 模型，depth 8-12 擴展中 |
+| 19x19 | 1,071,874 | 1,071,874 | 0-15 | 500 | b18c384 模型 |
 
+13x13 需先補齊 depth 8-12 擴展的子節點（depth 13-14），再重新匯出 opening book。
 可繼續擴充 depth 15+，需在 GPU server 上執行：
 ```bash
 python3 -m src.scripts.build_opening_book_parallel \

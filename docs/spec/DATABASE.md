@@ -307,78 +307,13 @@ cache.delete(hash)   # 刪除特定局面
 
 ---
 
-## 7. Opening Book JSON 格式
+## 7. Opening Book 格式
 
-Opening Book 是從 `analysis.db` 匯出的壓縮 JSON 檔案，內建於 App 中供離線使用。
+Opening Book 的完整格式規格已移至獨立文件：**[OPENING_BOOK_FORMAT.md](OPENING_BOOK_FORMAT.md)**
 
-### 7.1 檔案結構
+內容包含：SQLite schema、compact JSON 格式、各棋盤大小差異、匯出流程、App 載入與查詢邏輯。
 
-```json
-{
-  "version": 2,
-  "generated_at": "2026-02-10T15:30:00",
-  "stats": {
-    "total_entries": 31590,
-    "by_board_size": {"9": 10230, "13": 8543, "19": 12817},
-    "min_visits": 50,
-    "filtered_dead_moves": 1234
-  },
-  "entries": [
-    {
-      "h": "a1b2c3d4e5f60718",
-      "s": 9,
-      "k": 7.5,
-      "m": "B[E5];W[C3]",
-      "t": [
-        {"move": "G7", "winrate": 0.52, "scoreLead": 1.2, "visits": 500}
-      ],
-      "v": 500
-    }
-  ]
-}
-```
-
-### 7.2 Entry 欄位對照
-
-| JSON Key | Full Name | Type | Description |
-|----------|-----------|------|-------------|
-| `h` | hash | string | Zobrist Hash（非 canonical，因已展開對稱） |
-| `s` | board_size | int | 棋盤大小 |
-| `k` | komi | float | 貼目值 |
-| `m` | moves_sequence | string | 著手序列：`B[E5];W[C3]` |
-| `t` | top_moves | array | 候選著手陣列 |
-| `v` | visits | int | engine_visits |
-
-### 7.3 匯出流程
-
-```bash
-# 從 analysis.db 匯出（含 gzip 壓縮，過濾無後續資料的死路著手）
-python -m src.scripts.export_opening_book --compress --min-visits 50
-```
-
-匯出時會：
-1. 展開所有 8 種對稱變換，生成每個局面的 8 個 entry
-2. 過濾 dead moves（沒有後續資料的著手）
-3. 以 `size:komi:moves_sequence` 為 key 去重
-
-### 7.4 匯入 KataGo Book
-
-```bash
-# 從 KataGo 官方 book 匯入到 analysis.db
-python -m src.scripts.import_katago_book \
-  --book-path katago/books/book9x9tt-20241105.tar.gz \
-  --min-visits 10000
-```
-
-**KataGo winrate 轉換**：KataGo book 的 `wl` 欄位是對手勝率，匯入時需轉換：
-
-```python
-winrate = 1.0 - wl  # 轉為己方勝率
-# 若當前玩家是白方，再翻轉為黑方視角：
-if next_player == 'W':
-    winrate = 1.0 - winrate
-    score_lead = -score_lead
-```
+> **注意**：目前 App 使用 SQLite 格式（`.db.gz`），舊的 JSON 格式已不再使用。
 
 ---
 
@@ -447,13 +382,13 @@ Board hash 是快取查詢的核心 key，使用 Zobrist Hashing 演算法：
 
 ## 11. 目前資料量統計
 
-截至最後一次更新：
+截至 2026-03-03 更新（詳見 [OPENING_BOOK_FORMAT.md](OPENING_BOOK_FORMAT.md) Section 4）：
 
-| 棋盤大小 | 筆數 | Visits | 貼目 |
-|----------|------|--------|------|
-| 9x9 | 10,230 | 500v | 7.5 |
-| 13x13 | 8,543 | 500v | 7.5 |
-| 19x19 | 12,817 | 500v | 7.5 |
-| **合計** | **31,590** | | |
+| 棋盤大小 | Opening Book | Depth | Visits | 來源 |
+|----------|-------------|-------|--------|------|
+| 9x9 | 1,519,000 | 0-18 | 90K+ | KataGo 官方 book |
+| 13x13 | 345,055 | 0-14 | 500 | b18c384 模型 |
+| 19x19 | 1,071,874 | 0-14 | 500 | b18c384 模型 |
+| **合計** | **2,935,929** | | | |
 
-資料庫檔案大小：約 14 MB
+打包資產大小：9x9 (55 MB) + 13x13 (19 MB) + 19x19 (57 MB) = 131 MB

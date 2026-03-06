@@ -70,10 +70,15 @@ analysis:
   visits_small: 500
 ```
 
-資料庫狀態（2026-03-01 更新）：
+Opening Book 狀態（2026-03-06 更新）：
 - 9x9: 3,201,154 筆 (depth 0-50, KataGo 官方 book, 10K+ visits, 座標已修正)
 - 13x13: 345,055 筆 (depth 0-15, b18c384 模型, 500v)
 - 19x19: 1,071,874 筆 (depth 0-15, b18c384 模型, 500v)
+
+analysis_cache 原始資料狀態：
+- 9x9: 3,201,154 筆（與 opening book 一致）
+- 13x13: 1,498,567 筆（含 depth 8-12 廣度擴展，子節點尚未完整，待補齊後重新匯出）
+- 19x19: 1,071,874 筆（與 opening book 一致）
 
 ## 資料匯入注意事項
 
@@ -158,5 +163,6 @@ python3 -m src.scripts.build_opening_book_parallel \
 
 - [docs/spec/TEST.md](docs/spec/TEST.md) - 測試規範
 - [docs/spec/LOGIC.md](docs/spec/LOGIC.md) - 核心邏輯
+- [docs/spec/OPENING_BOOK_FORMAT.md](docs/spec/OPENING_BOOK_FORMAT.md) - Opening Book 格式規格
 - [docs/UI_SPEC.md](docs/UI_SPEC.md) - UI 設計規範
 - [mobile/BUILD_OUTPUTS.md](mobile/BUILD_OUTPUTS.md) - 建置輸出說明
