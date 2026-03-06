@@ -2,27 +2,54 @@
 
 ## 待處理
 
-### Opening Book: 13x13 / 19x19 擴充
+### Opening Book: 13x13 depth 13-15 補齊
+
+**狀態**: 🟢 進行中（GPU server 運行中）
+
+**問題**: 13x13 的 depth 8-12 廣度擴展產生了大量局面，但缺少 depth 13+ 的子節點。492K depth 12 局面只有 72K depth 13 子節點（ratio 0.15），導致 dead move filter 過濾大量資料。
+
+**工具**: 新建 `src/scripts/fill_depth_gaps.py`，直接對指定 depth 的父局面生成子節點，跳過 BFS 從 root 遍歷（比 `build_opening_book_parallel.py` 快數十倍）。
+
+**目前進度** (depth 12→13, branching=3, RTX 5060):
+```bash
+python3 -m src.scripts.fill_depth_gaps --board-size 13 --parent-depth 12 --branching 3 --batch-size 64
+```
+- 速率: ~2.5/s（b18c384 模型, 500 visits）
+- 預估總量: ~700K-1.4M 個新局面（考慮 transposition 去重）
+- 預估時間: 3-7 天
+
+**後續步驟**:
+1. ⬜ depth 12→13 補齊完成後，重新匯出 opening book
+2. ⬜ depth 13→14 補齊
+3. ⬜ depth 14→15 補齊
+4. ⬜ 最終重新匯出 opening_book_13x13.db.gz
+
+**監控指令**:
+```bash
+# 檢查 depth 13 進度
+python3 -c "
+import sqlite3; conn = sqlite3.connect('data/analysis.db')
+print(conn.execute(\"\"\"SELECT COUNT(*) FROM analysis_cache WHERE board_size=13 AND
+  (CASE WHEN moves_sequence='' THEN 0 ELSE length(moves_sequence)-length(replace(moves_sequence,';',''))+1 END)=13
+\"\"\").fetchone()[0])
+"
+# 檢查 KataGo 是否存活
+ps aux | grep katago | grep -v grep
+```
+
+---
+
+### Opening Book: 19x19 擴充
 
 **狀態**: 🟡 可繼續擴充
 
-目前 Opening Book 資料量：
-
-| Board Size | Opening Book | analysis_cache | Depth | Visits | 說明 |
-|------------|-------------|----------------|-------|--------|------|
-| 9x9 | 3,201,154 | 3,201,154 | 0-50 | 10K+ | KataGo 官方 book，已完成 |
-| 13x13 | 256,867 | 1,673,962 | 0-14 | 250-1000 | b18c384 模型，dead move filter 後 |
-| 19x19 | 1,071,874 | 1,071,874 | 0-15 | 500 | b18c384 模型 |
-
-**13x13 現況**:
-- analysis_cache 有 1,673,962 筆，但 depth 8-12 的廣度擴展缺少子節點（depth 13-14 只有 277,645 筆）
-- Dead move filter 後 opening book 僅保留 256,867 筆（有完整後續路徑的局面）
-- 要增加 opening book 覆蓋率，需在 GPU server 補齊 depth 13-15 的子節點
+| Board Size | Opening Book | analysis_cache | Depth | Visits |
+|------------|-------------|----------------|-------|--------|
+| 19x19 | 1,071,874 | 1,071,874 | 0-15 | 500 |
 
 可繼續擴充 depth 16+，需在 GPU server 上執行：
 ```bash
-python3 -m src.scripts.build_opening_book_parallel \
-    --board-size 13 --depth 15 --visits 500 --batch-size 64 --branching 7
+python3 -m src.scripts.fill_depth_gaps --board-size 19 --parent-depth 15 --branching 3 --batch-size 64
 ```
 
 ---
